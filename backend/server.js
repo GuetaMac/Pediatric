@@ -222,11 +222,12 @@ app.post("/api/appointments", auth, async (req, res) => {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    // check if slot is already booked
+    // Check if slot is already booked (only approved/pending appointments)
     const existing = await pool.query(
-      "SELECT * FROM appointments WHERE appointment_date = $1 AND appointment_time = $2",
+      "SELECT * FROM appointments WHERE appointment_date = $1 AND appointment_time = $2 AND (status = 'approved' OR status = 'pending')",
       [date, time]
     );
+
     if (existing.rows.length > 0) {
       return res
         .status(400)
@@ -234,7 +235,7 @@ app.post("/api/appointments", auth, async (req, res) => {
     }
 
     const result = await pool.query(
-      "INSERT INTO appointments (user_id, appointment_date, appointment_time, appointment_type) VALUES ($1,$2,$3,$4) RETURNING *",
+      "INSERT INTO appointments (user_id, appointment_date, appointment_time, appointment_type, status) VALUES ($1,$2,$3,$4,'pending') RETURNING *",
       [userId, date, time, type]
     );
 
@@ -244,7 +245,6 @@ app.post("/api/appointments", auth, async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 });
-
 // GET appointments for logged-in user
 app.get("/api/get/appointments", auth, async (req, res) => {
   try {

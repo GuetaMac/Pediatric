@@ -185,7 +185,7 @@ function Doctor() {
                 </div>
 
                 <div className="flex space-x-2">
-                  {appt.status === "Pending" && (
+                  {appt.status === "pending" && (
                     <button
                       onClick={() =>
                         updateStatus(appt.appointment_id, "Approved")
