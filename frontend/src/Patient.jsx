@@ -40,20 +40,7 @@ function Patient() {
     const [loading, setLoading] = useState(false);
     const [appointments, setAppointments] = useState([]);
 
-    // Kunin mga booked slots para sa selected date
-    // Kunin mga booked slots para sa selected date (approved or pending lang)
-    const getBookedSlots = () => {
-      if (!selectedDate) return [];
-      const dateStr = selectedDate.toISOString().split("T")[0];
-      return appointments
-        .filter(
-          (appt) =>
-            appt.appointment_date === dateStr &&
-            (appt.status === "approved" || appt.status === "pending")
-        )
-        .map((appt) => appt.appointment_time.trim()); // siguraduhin walang extra space
-    };
-
+    // Appointment types at duration (minutes)
     const appointmentTypes = {
       Vaccination: 30,
       "Check-up": 60,
@@ -64,7 +51,25 @@ function Patient() {
 
     const clinicHours = { start: 7, end: 15 }; // 7AM - 3PM
 
-    // Generate time slots
+    // Format slot (12-hour format with AM/PM)
+    const formatSlot = (h, m, duration) => {
+      const start = new Date();
+      start.setHours(h, m, 0, 0);
+
+      const end = new Date(start.getTime() + duration * 60000);
+
+      const to12Hr = (date) => {
+        let hours = date.getHours();
+        const minutes = date.getMinutes().toString().padStart(2, "0");
+        const ampm = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12 || 12;
+        return `${hours}:${minutes} ${ampm}`;
+      };
+
+      return `${to12Hr(start)} - ${to12Hr(end)}`;
+    };
+
+    // Generate available slots
     const generateTimeSlots = () => {
       if (!appointmentType) return [];
       const duration = appointmentTypes[appointmentType];
@@ -82,15 +87,7 @@ function Patient() {
 
         if (endHour > clinicHours.end) break;
 
-        const formatTime = (h, m) =>
-          `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
-
-        slots.push(
-          `${formatTime(startHour, startMinute)} - ${formatTime(
-            endHour,
-            endMinute
-          )}`
-        );
+        slots.push(formatSlot(startHour, startMinute, duration));
 
         startHour = endHour;
         startMinute = endMinute;
@@ -99,13 +96,26 @@ function Patient() {
       return slots;
     };
 
+    // Get booked slots for the selected date (all types, only pending/approved)
+    const getBookedSlots = () => {
+      if (!selectedDate) return [];
+      const dateStr = selectedDate.toLocaleDateString("en-CA"); // YYYY-MM-DD
+      return appointments
+        .filter(
+          (appt) =>
+            appt.appointment_date === dateStr &&
+            (appt.status === "approved" || appt.status === "pending")
+        )
+        .map((appt) => appt.appointment_time.trim());
+    };
+
     // Disable Sundays
     const isClinicOpen = (date) => {
       const day = date.getDay();
       return day !== 0;
     };
 
-    // Format date as "Month Day, Year"
+    // Format date for display
     const formatDate = (dateStr) => {
       const date = new Date(dateStr);
       return date.toLocaleDateString("en-US", {
@@ -115,7 +125,7 @@ function Patient() {
       });
     };
 
-    // Fetch appointments
+    // Fetch all appointments
     const fetchAppointments = async () => {
       try {
         const res = await fetch("http://localhost:5001/api/get/appointments", {
@@ -147,7 +157,7 @@ function Patient() {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
           body: JSON.stringify({
-            date: selectedDate.toLocaleDateString("en-CA"), // YYYY-MM-DD pero local timezone
+            date: selectedDate.toLocaleDateString("en-CA"), // YYYY-MM-DD
             time: selectedTime,
             type: appointmentType,
           }),
@@ -159,9 +169,7 @@ function Patient() {
           setSelectedDate(null);
           setAppointmentType("");
           setSelectedTime("");
-
-          // refresh list agad
-          fetchAppointments();
+          fetchAppointments(); // refresh list
         } else {
           alert("❌ " + data.error);
         }
@@ -235,7 +243,7 @@ function Patient() {
                   <option
                     key={idx}
                     value={slot}
-                    disabled={isBooked} // Disable kung booked na
+                    disabled={isBooked}
                     style={{
                       backgroundColor: isBooked ? "#f3f4f6" : "white",
                       color: isBooked ? "#9ca3af" : "black",
@@ -277,7 +285,6 @@ function Patient() {
                   <p>
                     <b>Date:</b> {formatDate(appt.appointment_date)}
                   </p>
-
                   <p>
                     <b>Time:</b> {appt.appointment_time}
                   </p>
@@ -304,7 +311,6 @@ function Patient() {
       </div>
     );
   };
-
   // MANAGE ACCOUNT PAGE
   const ManageAccountPage = () => (
     <div className="space-y-6">
@@ -379,19 +385,6 @@ function Patient() {
               );
             })}
           </nav>
-        </div>
-
-        {/* Bottom section */}
-        <div className="absolute bottom-0 left-0 right-0 w-72 p-6 bg-blue-800 bg-opacity-50">
-          <div className="flex items-center">
-            <div className="w-10 h-10 bg-pink-500 rounded-full flex items-center justify-center mr-3">
-              <Stethoscope className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <p className="font-semibold">Dr. Pediatrician</p>
-              <p className="text-blue-200 text-sm">Pediatric Specialist</p>
-            </div>
-          </div>
         </div>
       </div>
 
