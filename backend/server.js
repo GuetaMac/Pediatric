@@ -18,6 +18,18 @@ const pool = new Pool({
   port: 5432,
 });
 
+// 🔑 Auth middleware
+const auth = (req, res, next) => {
+  const token = req.headers["authorization"]?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "No token provided" });
+
+  jwt.verify(token, "mysecretkey", (err, decoded) => {
+    if (err) return res.status(401).json({ error: "Invalid token" });
+    req.user = decoded; // contains { id, role }
+    next();
+  });
+};
+
 // 🔑 SIGNUP (default role: patient)
 app.post("/api/signup", async (req, res) => {
   const { full_name, email, password } = req.body;
@@ -184,6 +196,54 @@ app.delete("/api/users/:user_id", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// POST /api/appointments
+app.post("/api/appointments", auth, async (req, res) => {
+  try {
+    const { date, time, type } = req.body;
+    const userId = req.user.id;
+
+    if (!date || !time || !type) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+
+    // check if slot is already booked
+    const existing = await pool.query(
+      "SELECT * FROM appointments WHERE appointment_date = $1 AND appointment_time = $2",
+      [date, time]
+    );
+    if (existing.rows.length > 0) {
+      return res
+        .status(400)
+        .json({ error: "This time slot is already booked" });
+    }
+
+    const result = await pool.query(
+      "INSERT INTO appointments (user_id, appointment_date, appointment_time, appointment_type) VALUES ($1,$2,$3,$4) RETURNING *",
+      [userId, date, time, type]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: "Server Error" });
+  }
+});
+
+// GET appointments for logged-in user
+app.get("/api/get/appointments", auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await pool.query(
+      "SELECT * FROM appointments WHERE user_id = $1 ORDER BY appointment_date, appointment_time",
+      [userId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: "Server Error" });
   }
 });
 
