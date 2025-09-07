@@ -51,62 +51,95 @@ function Patient() {
 
     const clinicHours = { start: 7, end: 15 }; // 7AM - 3PM
 
+    // Convert time string like "7:00 AM" to minutes since midnight
+    const timeStringToMinutes = (timeStr) => {
+      const [time, period] = timeStr.split(" ");
+      let [hours, minutes] = time.split(":").map(Number);
+
+      if (period === "PM" && hours !== 12) hours += 12;
+      if (period === "AM" && hours === 12) hours = 0;
+
+      return hours * 60 + minutes;
+    };
+
+    // Convert minutes since midnight to time string like "7:00 AM"
+    const minutesToTimeString = (minutes) => {
+      let hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12 || 12;
+      return `${hours}:${mins.toString().padStart(2, "0")} ${ampm}`;
+    };
+
     // Format slot (12-hour format with AM/PM)
-    const formatSlot = (h, m, duration) => {
-      const start = new Date();
-      start.setHours(h, m, 0, 0);
+    const formatSlot = (startMinutes, duration) => {
+      const endMinutes = startMinutes + duration;
+      return `${minutesToTimeString(startMinutes)} - ${minutesToTimeString(
+        endMinutes
+      )}`;
+    };
 
-      const end = new Date(start.getTime() + duration * 60000);
+    // Parse appointment time slot to get start and end minutes
+    const parseAppointmentSlot = (appointmentTime, appointmentType) => {
+      // appointmentTime format: "7:00 AM - 7:30 AM"
+      const [startStr] = appointmentTime.split(" - ");
+      const startMinutes = timeStringToMinutes(startStr);
+      const duration = appointmentTypes[appointmentType] || 30;
 
-      const to12Hr = (date) => {
-        let hours = date.getHours();
-        const minutes = date.getMinutes().toString().padStart(2, "0");
-        const ampm = hours >= 12 ? "PM" : "AM";
-        hours = hours % 12 || 12;
-        return `${hours}:${minutes} ${ampm}`;
+      return {
+        start: startMinutes,
+        end: startMinutes + duration,
       };
+    };
 
-      return `${to12Hr(start)} - ${to12Hr(end)}`;
+    // Check if a new slot conflicts with existing appointments
+    const hasConflict = (newSlotStart, newSlotDuration) => {
+      if (!selectedDate) return false;
+
+      const dateStr = selectedDate.toLocaleDateString("en-CA");
+      const newSlotEnd = newSlotStart + newSlotDuration;
+
+      return appointments.some((appt) => {
+        if (appt.appointment_date !== dateStr) return false;
+        if (appt.status !== "approved" && appt.status !== "pending")
+          return false;
+
+        const existing = parseAppointmentSlot(
+          appt.appointment_time,
+          appt.appointment_type
+        );
+
+        // Check if slots overlap
+        return newSlotStart < existing.end && existing.start < newSlotEnd;
+      });
     };
 
     // Generate available slots
     const generateTimeSlots = () => {
       if (!appointmentType) return [];
+
       const duration = appointmentTypes[appointmentType];
       const slots = [];
-      let startHour = clinicHours.start;
-      let startMinute = 0;
+      const startMinutes = clinicHours.start * 60; // 7:00 AM = 420 minutes
+      const endMinutes = clinicHours.end * 60; // 3:00 PM = 900 minutes
 
-      while (startHour < clinicHours.end) {
-        let endHour = startHour;
-        let endMinute = startMinute + duration;
-        if (endMinute >= 60) {
-          endHour += Math.floor(endMinute / 60);
-          endMinute = endMinute % 60;
-        }
+      // Generate slots every 30 minutes
+      for (
+        let currentMinutes = startMinutes;
+        currentMinutes + duration <= endMinutes;
+        currentMinutes += 30
+      ) {
+        const slotText = formatSlot(currentMinutes, duration);
+        const isAvailable = !hasConflict(currentMinutes, duration);
 
-        if (endHour > clinicHours.end) break;
-
-        slots.push(formatSlot(startHour, startMinute, duration));
-
-        startHour = endHour;
-        startMinute = endMinute;
+        slots.push({
+          text: slotText,
+          value: slotText,
+          available: isAvailable,
+        });
       }
 
       return slots;
-    };
-
-    // Get booked slots for the selected date (all types, only pending/approved)
-    const getBookedSlots = () => {
-      if (!selectedDate) return [];
-      const dateStr = selectedDate.toLocaleDateString("en-CA"); // YYYY-MM-DD
-      return appointments
-        .filter(
-          (appt) =>
-            appt.appointment_date === dateStr &&
-            (appt.status === "approved" || appt.status === "pending")
-        )
-        .map((appt) => appt.appointment_time.trim());
     };
 
     // Disable Sundays
@@ -180,6 +213,9 @@ function Patient() {
       }
     };
 
+    // Get available time slots for display
+    const availableSlots = generateTimeSlots();
+
     return (
       <div className="space-y-6 p-6">
         <div className="flex items-center justify-between">
@@ -196,7 +232,10 @@ function Patient() {
           </label>
           <DatePicker
             selected={selectedDate}
-            onChange={(date) => setSelectedDate(date)}
+            onChange={(date) => {
+              setSelectedDate(date);
+              setSelectedTime(""); // Reset time when date changes
+            }}
             filterDate={isClinicOpen}
             minDate={new Date()}
             className="border p-2 rounded w-full"
@@ -211,7 +250,10 @@ function Patient() {
           </label>
           <select
             value={appointmentType}
-            onChange={(e) => setAppointmentType(e.target.value)}
+            onChange={(e) => {
+              setAppointmentType(e.target.value);
+              setSelectedTime(""); // Reset selected time when type changes
+            }}
             className="border p-2 rounded w-full"
           >
             <option value="">-- Select --</option>
@@ -224,7 +266,7 @@ function Patient() {
         </div>
 
         {/* Time Slots */}
-        {appointmentType && (
+        {appointmentType && selectedDate && (
           <div>
             <label className="block text-gray-700 font-medium mb-2">
               Available Time Slots
@@ -235,25 +277,26 @@ function Patient() {
               className="border p-2 rounded w-full"
             >
               <option value="">-- Select Time --</option>
-              {generateTimeSlots().map((slot, idx) => {
-                const bookedSlots = getBookedSlots();
-                const isBooked = bookedSlots.includes(slot);
-
-                return (
-                  <option
-                    key={idx}
-                    value={slot}
-                    disabled={isBooked}
-                    style={{
-                      backgroundColor: isBooked ? "#f3f4f6" : "white",
-                      color: isBooked ? "#9ca3af" : "black",
-                    }}
-                  >
-                    {slot} {isBooked ? "(Already Booked)" : ""}
-                  </option>
-                );
-              })}
+              {availableSlots.map((slot, idx) => (
+                <option
+                  key={idx}
+                  value={slot.value}
+                  disabled={!slot.available}
+                  style={{
+                    backgroundColor: !slot.available ? "#f3f4f6" : "white",
+                    color: !slot.available ? "#9ca3af" : "black",
+                  }}
+                >
+                  {slot.text} {!slot.available ? "(Already Booked)" : ""}
+                </option>
+              ))}
             </select>
+            {availableSlots.filter((slot) => slot.available).length === 0 && (
+              <p className="text-red-500 text-sm mt-1">
+                No available slots for this appointment type on the selected
+                date.
+              </p>
+            )}
           </div>
         )}
 
@@ -263,7 +306,7 @@ function Patient() {
           disabled={
             !selectedDate || !appointmentType || !selectedTime || loading
           }
-          className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50"
+          className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-blue-600 transition-colors"
         >
           {loading ? "Booking..." : "Book Appointment"}
         </button>
@@ -277,34 +320,41 @@ function Patient() {
             <p className="text-gray-600">No appointments booked yet.</p>
           ) : (
             <ul className="space-y-2">
-              {appointments.map((appt) => (
-                <li
-                  key={appt.id}
-                  className="p-3 border rounded bg-gray-50 shadow-sm"
-                >
-                  <p>
-                    <b>Date:</b> {formatDate(appt.appointment_date)}
-                  </p>
-                  <p>
-                    <b>Time:</b> {appt.appointment_time}
-                  </p>
-                  <p>
-                    <b>Type:</b> {appt.appointment_type}
-                  </p>
-                  <p>
-                    <b>Status:</b>{" "}
-                    <span
-                      className={
-                        appt.status === "approved"
-                          ? "text-green-600 font-semibold"
-                          : "text-yellow-600 font-semibold"
-                      }
-                    >
-                      {appt.status}
-                    </span>
-                  </p>
-                </li>
-              ))}
+              {appointments
+                .sort(
+                  (a, b) =>
+                    new Date(a.appointment_date) - new Date(b.appointment_date)
+                )
+                .map((appt) => (
+                  <li
+                    key={appt.id}
+                    className="p-3 border rounded bg-gray-50 shadow-sm"
+                  >
+                    <p>
+                      <b>Date:</b> {formatDate(appt.appointment_date)}
+                    </p>
+                    <p>
+                      <b>Time:</b> {appt.appointment_time}
+                    </p>
+                    <p>
+                      <b>Type:</b> {appt.appointment_type}
+                    </p>
+                    <p>
+                      <b>Status:</b>{" "}
+                      <span
+                        className={
+                          appt.status === "approved"
+                            ? "text-green-600 font-semibold"
+                            : appt.status === "pending"
+                            ? "text-yellow-600 font-semibold"
+                            : "text-red-600 font-semibold"
+                        }
+                      >
+                        {appt.status}
+                      </span>
+                    </p>
+                  </li>
+                ))}
             </ul>
           )}
         </div>

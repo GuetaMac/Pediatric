@@ -13,7 +13,7 @@ app.use(express.json());
 const pool = new Pool({
   user: "postgres", // adjust kung iba user mo
   host: "localhost",
-  database: "Pediatric", // dapat existing DB
+  database: "Pediatric", // dapat existing pool
   password: "12345",
   port: 5432,
 });
@@ -337,6 +337,70 @@ function authMiddleware(req, res, next) {
     res.status(401).json({ msg: "Invalid token" });
   }
 }
+
+// Get all products - FIXED ROUTE with /api prefix
+app.get("/api/inventory", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM inventory ORDER BY created_at DESC"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch inventory" });
+  }
+});
+
+// Add product - FIXED ROUTE with /api prefix
+app.post("/api/inventory/add", async (req, res) => {
+  const { name, stock } = req.body;
+  if (!name || stock == null)
+    return res.status(400).json({ error: "Missing fields" });
+
+  try {
+    const result = await pool.query(
+      "INSERT INTO inventory (name, stock) VALUES ($1, $2) RETURNING *",
+      [name, stock]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to add product" });
+  }
+});
+
+// Update product - FIXED ROUTE with /api prefix
+app.put("/api/inventory/update/:inventory_id", async (req, res) => {
+  const { inventory_id } = req.params;
+  const { name, stock } = req.body;
+  if (!name || stock == null)
+    return res.status(400).json({ error: "Missing fields" });
+
+  try {
+    const result = await pool.query(
+      "UPDATE inventory SET name = $1, stock = $2 WHERE inventory_id = $3 RETURNING *",
+      [name, stock, inventory_id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update product" });
+  }
+});
+
+// Delete product - FIXED ROUTE with /api prefix
+app.delete("/api/inventory/:inventory_id", async (req, res) => {
+  const { inventory_id } = req.params;
+  try {
+    await pool.query("DELETE FROM inventory WHERE inventory_id = $1", [
+      inventory_id,
+    ]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete product" });
+  }
+});
 
 app.listen(port, () => {
   console.log(`✅ Server running on http://localhost:${port}`);
