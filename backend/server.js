@@ -18,14 +18,15 @@ const pool = new Pool({
   port: 5432,
 });
 
-// 🔑 Auth middleware
 const auth = (req, res, next) => {
   const token = req.headers["authorization"]?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "No token provided" });
 
   jwt.verify(token, "mysecretkey", (err, decoded) => {
     if (err) return res.status(401).json({ error: "Invalid token" });
-    req.user = decoded; // contains { id, role }
+
+    console.log("Decoded token:", decoded);
+    req.user = decoded;
     next();
   });
 };
@@ -65,12 +66,24 @@ app.post("/api/login", async (req, res) => {
       return res.status(400).json({ msg: "Invalid credentials" });
 
     const user = result.rows[0];
+
+    // Add this debug line
+    console.log("User from database:", user);
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ msg: "Invalid credentials" });
 
-    const token = jwt.sign({ id: user.id, role: user.role }, "mysecretkey", {
-      expiresIn: "1h",
-    });
+    // Fix this line - use the correct column name
+    const token = jwt.sign(
+      {
+        id: user.user_id, // Changed from user.id to user.user_id
+        role: user.role,
+      },
+      "mysecretkey",
+      {
+        expiresIn: "1h",
+      }
+    );
 
     res.json({ token, role: user.role, full_name: user.full_name });
   } catch (err) {
@@ -244,6 +257,70 @@ app.get("/api/get/appointments", auth, async (req, res) => {
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: "Server Error" });
+  }
+});
+
+// GET all appointments with patient info
+app.get("/api/appointments/nurse", auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT a.appointment_id, a.appointment_date, a.appointment_time, a.appointment_type, 
+              a.status, u.full_name, u.email
+       FROM appointments a
+       JOIN users u ON a.user_id = u.user_id
+       ORDER BY a.appointment_date, a.appointment_time`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Update status (approve/completed)
+app.put("/api/appointments/:id/status", auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!["Approved", "Completed"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+
+    const result = await pool.query(
+      "UPDATE appointments SET status = $1 WHERE appointment_id = $2 RETURNING appointment_id, status",
+      [status, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    res.json(result.rows[0]); // return only id and status
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Delete appointment
+app.delete("/api/appointments/:id", auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      "DELETE FROM appointments WHERE appointment_id = $1 RETURNING *",
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    res.json({ message: "Appointment deleted", id });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: "Server error" });
   }
 });
 

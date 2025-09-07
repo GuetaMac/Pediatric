@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import {
   Heart,
   Users,
@@ -39,6 +39,20 @@ function Patient() {
     const [selectedTime, setSelectedTime] = useState("");
     const [loading, setLoading] = useState(false);
     const [appointments, setAppointments] = useState([]);
+
+    // Kunin mga booked slots para sa selected date
+    // Kunin mga booked slots para sa selected date (approved or pending lang)
+    const getBookedSlots = () => {
+      if (!selectedDate) return [];
+      const dateStr = selectedDate.toISOString().split("T")[0];
+      return appointments
+        .filter(
+          (appt) =>
+            appt.appointment_date === dateStr &&
+            (appt.status === "approved" || appt.status === "pending")
+        )
+        .map((appt) => appt.appointment_time.trim()); // siguraduhin walang extra space
+    };
 
     const appointmentTypes = {
       Vaccination: 30,
@@ -203,11 +217,24 @@ function Patient() {
               className="border p-2 rounded w-full"
             >
               <option value="">-- Select Time --</option>
-              {generateTimeSlots().map((slot, idx) => (
-                <option key={idx} value={slot}>
-                  {slot}
-                </option>
-              ))}
+              {generateTimeSlots().map((slot, idx) => {
+                const bookedSlots = getBookedSlots();
+                const isBooked = bookedSlots.includes(slot);
+
+                return (
+                  <option
+                    key={idx}
+                    value={slot}
+                    disabled={isBooked} // Disable kung booked na
+                    style={{
+                      backgroundColor: isBooked ? "#f3f4f6" : "white",
+                      color: isBooked ? "#9ca3af" : "black",
+                    }}
+                  >
+                    {slot} {isBooked ? "(Already Booked)" : ""}
+                  </option>
+                );
+              })}
             </select>
           </div>
         )}

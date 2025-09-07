@@ -293,6 +293,10 @@ function Doctor() {
         alert("Please fill required fields");
         return;
       }
+      if (editForm.password && editForm.password.length < 8) {
+        alert("Password must be at least 8 characters long");
+        return;
+      }
 
       try {
         setLoading(true);
@@ -428,7 +432,22 @@ function Doctor() {
                           className="flex-1 px-2 py-1 border rounded"
                           value={editForm.email}
                           onChange={(e) =>
-                            setEditForm({ ...editForm, email: e.target.value })
+                            setEditForm({
+                              ...editForm,
+                              email: e.target.value,
+                            })
+                          }
+                        />
+                        <input
+                          type="password"
+                          placeholder="New Password (optional)"
+                          className="flex-1 px-2 py-1 border rounded"
+                          value={editForm.password}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              password: e.target.value,
+                            })
                           }
                         />
                         <div className="flex space-x-2">
