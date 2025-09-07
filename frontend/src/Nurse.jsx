@@ -38,6 +38,17 @@ function Doctor() {
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(false);
 
+    // Format date as "Month Day, Year"
+    const formatDate = (dateStr) => {
+      if (!dateStr) return "";
+      const date = new Date(dateStr);
+      return date.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+    };
+
     // Fetch appointments
     const fetchAppointments = async () => {
       try {
@@ -151,7 +162,7 @@ function Doctor() {
                     <b>Patient:</b> {appt.full_name} ({appt.email})
                   </p>
                   <p>
-                    <b>Date:</b> {appt.appointment_date} -{" "}
+                    <b>Date:</b> {formatDate(appt.appointment_date)} -{" "}
                     {appt.appointment_time}
                   </p>
                   <p>

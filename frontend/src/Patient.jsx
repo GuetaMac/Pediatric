@@ -105,6 +105,16 @@ function Patient() {
       return day !== 0;
     };
 
+    // Format date as "Month Day, Year"
+    const formatDate = (dateStr) => {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+    };
+
     // Fetch appointments
     const fetchAppointments = async () => {
       try {
@@ -137,7 +147,7 @@ function Patient() {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
           body: JSON.stringify({
-            date: selectedDate.toISOString().split("T")[0],
+            date: selectedDate.toLocaleDateString("en-CA"), // YYYY-MM-DD pero local timezone
             time: selectedTime,
             type: appointmentType,
           }),
@@ -265,8 +275,9 @@ function Patient() {
                   className="p-3 border rounded bg-gray-50 shadow-sm"
                 >
                   <p>
-                    <b>Date:</b> {appt.appointment_date}
+                    <b>Date:</b> {formatDate(appt.appointment_date)}
                   </p>
+
                   <p>
                     <b>Time:</b> {appt.appointment_time}
                   </p>
