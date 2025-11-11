@@ -23,11 +23,11 @@ app.use(cors());
 app.use(express.json());
 
 const pool = new Pool({
-  user: "postgres", // adjust kung iba user mo
-  host: "localhost",
-  database: "Pediatric", // dapat existing pool
-  password: "password",
-  port: 5432,
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT,
 });
 
 const transporter = nodemailer.createTransport({
@@ -40,9 +40,7 @@ const transporter = nodemailer.createTransport({
 
 // Test email connection on startup
 transporter.verify(function (error, success) {
-  if (error) {
-    console.log("❌ Email configuration error:", error);
-  } else {
+  if (process.env.NODE_ENV === "development") {
     console.log("✅ Email server is ready to send messages");
   }
 });
@@ -60,7 +58,7 @@ const auth = (req, res, next) => {
   });
 };
 
-app.post("/api/send-verification", async (req, res) => {
+app.post("/send-verification", async (req, res) => {
   const { email } = req.body;
 
   try {
@@ -115,7 +113,7 @@ app.post("/api/send-verification", async (req, res) => {
 });
 
 // 🔹 STEP 2: Verify Code & Complete Signup
-app.post("/api/verify-and-signup", async (req, res) => {
+app.post("/verify-and-signup", async (req, res) => {
   const {
     email,
     code,
@@ -228,7 +226,7 @@ app.post("/api/verify-and-signup", async (req, res) => {
 
 // 🔑 SIGNUP (default role: patient)
 // 🔑 SIGNUP (default role: patient)
-app.post("/api/signup", async (req, res) => {
+app.post("/signup", async (req, res) => {
   const {
     full_name,
     email,
@@ -324,7 +322,7 @@ app.post("/api/signup", async (req, res) => {
 });
 
 // 🔑 LOGIN
-app.post("/api/login", async (req, res) => {
+app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   try {
@@ -374,7 +372,7 @@ app.post("/api/login", async (req, res) => {
 });
 
 // DOCTOR SIGNUP FOR STAFF (CREATE USER)
-app.post("/api/users", async (req, res) => {
+app.post("/users", async (req, res) => {
   try {
     const { full_name, email, password, role } = req.body;
 
@@ -409,7 +407,7 @@ app.post("/api/users", async (req, res) => {
 });
 
 // GET Users
-app.get("/api/users", async (req, res) => {
+app.get("/users", async (req, res) => {
   try {
     const role = req.query.role;
     let query = "SELECT user_id, full_name, email, role FROM users";
@@ -429,7 +427,7 @@ app.get("/api/users", async (req, res) => {
 });
 
 // UPDATE User (Fixed route path)
-app.put("/api/users/:user_id", async (req, res) => {
+app.put("/users/:user_id", async (req, res) => {
   try {
     const { user_id } = req.params;
     const { full_name, email, password } = req.body;
@@ -470,7 +468,7 @@ app.put("/api/users/:user_id", async (req, res) => {
 });
 
 // DELETE User
-app.delete("/api/users/:user_id", async (req, res) => {
+app.delete("/users/:user_id", async (req, res) => {
   try {
     const { user_id } = req.params;
 
@@ -492,8 +490,8 @@ app.delete("/api/users/:user_id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-// ✅ POST /api/appointments
-app.post("/api/appointments", auth, async (req, res) => {
+// ✅ POST //appointments
+app.post("/appointments", auth, async (req, res) => {
   try {
     const { date, time, type, concerns, additional_services } = req.body;
     const userId = req.user.id;
@@ -523,7 +521,7 @@ app.post("/api/appointments", auth, async (req, res) => {
 });
 
 // GET appointments for logged-in user
-app.get("/api/get/appointments", auth, async (req, res) => {
+app.get("/get/appointments", auth, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await pool.query(
@@ -538,15 +536,15 @@ app.get("/api/get/appointments", auth, async (req, res) => {
 });
 
 // GET all appointments with patient info
-app.get("/api/appointments/nurse", auth, async (req, res) => {
+app.get("/appointments/nurse", auth, async (req, res) => {
   try {
     const result = await pool.query(
-  `SELECT a.appointment_id, a.appointment_date, a.appointment_time, a.appointment_type, a.concerns,
+      `SELECT a.appointment_id, a.appointment_date, a.appointment_time, a.appointment_type, a.concerns,
           a.status, a.additional_services, u.full_name, u.email
    FROM appointments a
    JOIN users u ON a.user_id = u.user_id
    ORDER BY a.appointment_date, a.appointment_time`
-);
+    );
     res.json(result.rows);
   } catch (err) {
     console.error(err.message);
@@ -555,7 +553,7 @@ app.get("/api/appointments/nurse", auth, async (req, res) => {
 });
 
 // 🩺 GET specific patient profile by user_id
-app.get("/api/patients/:user_id/profile", async (req, res) => {
+app.get("/patients/:user_id/profile", async (req, res) => {
   const { user_id } = req.params;
 
   try {
@@ -589,13 +587,13 @@ app.get("/api/patients/:user_id/profile", async (req, res) => {
     res.json(result.rows[0]);
   } catch (err) {
     console.error("Error fetching patient profile:", err.message);
-    res.status(500).json({ error: "Server error while fetching patient profile" });
+    res
+      .status(500)
+      .json({ error: "Server error while fetching patient profile" });
   }
 });
 
-
-
-app.get("/api/appointments/doctor", auth, async (req, res) => {
+app.get("/appointments/doctor", auth, async (req, res) => {
   try {
     console.log("Fetching appointments for today...");
 
@@ -631,7 +629,7 @@ app.get("/api/appointments/doctor", auth, async (req, res) => {
   }
 });
 // Update status (approve/completed)
-app.put("/api/appointments/:id/status", auth, async (req, res) => {
+app.put("/appointments/:id/status", auth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -657,7 +655,7 @@ app.put("/api/appointments/:id/status", auth, async (req, res) => {
 });
 
 // Delete appointment
-app.delete("/api/appointments/:id", auth, async (req, res) => {
+app.delete("/appointments/:id", auth, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -691,8 +689,8 @@ function authMiddleware(req, res, next) {
   }
 }
 
-// Get all products - FIXED ROUTE with /api prefix
-app.get("/api/inventory", async (req, res) => {
+// Get all products - FIXED ROUTE with  prefix
+app.get("/inventory", async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM inventory ORDER BY created_at DESC"
@@ -704,8 +702,8 @@ app.get("/api/inventory", async (req, res) => {
   }
 });
 
-// Add product - FIXED ROUTE with /api prefix
-app.post("/api/inventory/add", async (req, res) => {
+// Add product - FIXED ROUTE with  prefix
+app.post("/inventory/add", async (req, res) => {
   const { name, stock } = req.body;
   if (!name || stock == null)
     return res.status(400).json({ error: "Missing fields" });
@@ -722,8 +720,8 @@ app.post("/api/inventory/add", async (req, res) => {
   }
 });
 
-// Update product - FIXED ROUTE with /api prefix
-app.put("/api/inventory/update/:inventory_id", async (req, res) => {
+// Update product - FIXED ROUTE with  prefix
+app.put("/inventory/update/:inventory_id", async (req, res) => {
   const { inventory_id } = req.params;
   const { name, stock } = req.body;
   if (!name || stock == null)
@@ -741,8 +739,8 @@ app.put("/api/inventory/update/:inventory_id", async (req, res) => {
   }
 });
 
-// Delete product - FIXED ROUTE with /api prefix
-app.delete("/api/inventory/:inventory_id", async (req, res) => {
+// Delete product - FIXED ROUTE with  prefix
+app.delete("/inventory/:inventory_id", async (req, res) => {
   const { inventory_id } = req.params;
   try {
     await pool.query("DELETE FROM inventory WHERE inventory_id = $1", [
@@ -755,7 +753,7 @@ app.delete("/api/inventory/:inventory_id", async (req, res) => {
   }
 });
 
-app.get("/api/patients", auth, async (req, res) => {
+app.get("/patients", auth, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT 
@@ -793,11 +791,9 @@ app.get("/api/patients", auth, async (req, res) => {
   }
 });
 
-
-
 // ✅ Route: Get all appointments with patient full_name
 // GET route for nurse dashboard
-app.get("/api/appointments/nurse", async (req, res) => {
+app.get("/appointments/nurse", async (req, res) => {
   try {
     const query = `
       SELECT 
@@ -822,9 +818,8 @@ app.get("/api/appointments/nurse", async (req, res) => {
   }
 });
 
-
 // 📅 Get current patient's latest approved appointment
-app.get("/api/appointments/latest-approved", auth, async (req, res) => {
+app.get("/appointments/latest-approved", auth, async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -877,9 +872,7 @@ app.get("/api/appointments/latest-approved", auth, async (req, res) => {
   }
 });
 
-
-
-app.post("/api/patients/add", auth, async (req, res) => {
+app.post("/patients/add", auth, async (req, res) => {
   const {
     full_name,
     email,
@@ -976,7 +969,6 @@ app.post("/api/patients/add", auth, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 
 // 📍 GET patient info + latest vitals by QR code
 app.get("/patients/qr/:qr_code", async (req, res) => {
@@ -1098,7 +1090,7 @@ app.get("/vitals", async (req, res) => {
 });
 
 // 🩺 Save or update medical record
-app.post("/api/medical-records", auth, async (req, res) => {
+app.post("/medical-records", auth, async (req, res) => {
   try {
     let {
       appointment_id,
@@ -1165,7 +1157,7 @@ app.post("/api/medical-records", auth, async (req, res) => {
 });
 
 // 🧾 Get all medical records for logged-in patient
-app.get("/api/patient/medical-records", auth, async (req, res) => {
+app.get("/patient/medical-records", auth, async (req, res) => {
   try {
     console.log("req.user:", req.user);
     const userId = req.user.id; // ✅ Correct field from token
@@ -1216,7 +1208,7 @@ app.get("/api/patient/medical-records", auth, async (req, res) => {
 });
 
 // Record a sale
-app.post("/api/sales", async (req, res) => {
+app.post("/sales", async (req, res) => {
   const { inventory_id, quantity } = req.body;
   if (!inventory_id || !quantity) {
     return res.status(400).json({ error: "Missing fields" });
@@ -1263,7 +1255,7 @@ app.post("/api/sales", async (req, res) => {
   }
 });
 
-app.get("/api/sales/summary", async (req, res) => {
+app.get("/sales/summary", async (req, res) => {
   try {
     const result = await pool.query(`
         SELECT i.name, SUM(s.quantity) as total_sold
@@ -1279,7 +1271,7 @@ app.get("/api/sales/summary", async (req, res) => {
   }
 });
 
-app.get("/api/analytics", auth, async (req, res) => {
+app.get("/analytics", auth, async (req, res) => {
   try {
     const { year, month } = req.query;
     const selectedYear = year ? parseInt(year) : new Date().getFullYear();
@@ -1560,7 +1552,7 @@ function getMonthName(monthNum) {
   ];
   return months[monthNum - 1] || "";
 }
-app.get("/api/patient/user-info", auth, async (req, res) => {
+app.get("/patient/user-info", auth, async (req, res) => {
   try {
     const userId = req.user.id; // Extracted from JWT token
     console.log("📥 Fetching user info for user_id:", userId);
@@ -1595,9 +1587,9 @@ app.get("/api/patient/user-info", auth, async (req, res) => {
   }
 });
 
-// 📍 GET /api/patient/profile-data
+// 📍 GET /patient/profile-data
 // ✅ Returns the patient_profiles record linked to the logged-in user
-app.get("/api/patient/profile-data", auth, async (req, res) => {
+app.get("/patient/profile-data", auth, async (req, res) => {
   try {
     const userId = req.user.id; // Extracted from JWT middleware
 
@@ -1645,7 +1637,7 @@ app.get("/api/patient/profile-data", auth, async (req, res) => {
 });
 
 // 📍 GET latest completed appointment for logged-in patient
-app.get("/api/patient/last-checkup", auth, async (req, res) => {
+app.get("/patient/last-checkup", auth, async (req, res) => {
   try {
     const userId = req.user.id; // ✅ from JWT
 
@@ -1682,7 +1674,7 @@ app.get("/api/patient/last-checkup", auth, async (req, res) => {
 });
 
 // 📍 POST (update or insert) patient profile
-app.post("/api/patient/profile", auth, async (req, res) => {
+app.post("/patient/profile", auth, async (req, res) => {
   try {
     const userId = req.user.id;
     const {
@@ -1742,7 +1734,7 @@ app.post("/api/patient/profile", auth, async (req, res) => {
 });
 
 // Generate AI Insights Endpoint
-app.post("/api/generate-insights", async (req, res) => {
+app.post("/generate-insights", async (req, res) => {
   try {
     const { chartType, data, context } = req.body;
 
@@ -1881,9 +1873,7 @@ Give me 3-4 SHORT insights using simple words. Make each point 1 sentence only. 
   }
 });
 
-
-
-app.post("/api/walkin", async (req, res) => {
+app.post("/walkin", async (req, res) => {
   const { fullName, gender, age, contactPerson, contactNumber } = req.body;
 
   if (!fullName || !gender || !age || !contactPerson || !contactNumber) {
@@ -1897,9 +1887,11 @@ app.post("/api/walkin", async (req, res) => {
     [fullName, gender, age, contactPerson, contactNumber]
   );
 
-  res.status(201).json({ message: "Saved successfully", id: result.rows[0].id });
+  res
+    .status(201)
+    .json({ message: "Saved successfully", id: result.rows[0].id });
 });
 
-app.listen(port, () => {
-  console.log(`✅ Server running on http://localhost:${port}`);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Server running on http://0.0.0.0:${port}`);
 });

@@ -53,7 +53,7 @@ function ContactPage() {
     setError("");
 
     try {
-      const res = await axios.post("http://localhost:5001/api/login", {
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/login`, {
         email,
         password,
       });
@@ -95,7 +95,7 @@ function ContactPage() {
   const handleSignup = async (e) => {
     e.preventDefault();
     try {
-      await axios.post("http://localhost:5001/api/signup", {
+      await axios.post(`${import.meta.env.VITE_API_URL}/signup`, {
         full_name: fullName,
         email,
         password,
@@ -261,7 +261,6 @@ function ContactPage() {
       >
         <div className="absolute inset-0 bg-black/30"></div>
         <div className="max-w-6xl mx-auto w-full bg-white/95 backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 md:p-8 lg:p-10 grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 md:gap-10 border border-white/60 relative z-10 overflow-y-auto max-h-[calc(100vh-4rem)] sm:max-h-[85vh]">
-
           {/* Contact Text */}
           <div className="flex flex-col justify-center text-center md:text-left">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-sky-700 mb-4 sm:mb-5 md:mb-6">
@@ -288,7 +287,9 @@ function ContactPage() {
                 <br />
                 138 Rizal Avenue Brgy 9 4200
               </p>
-              <p className="text-gray-600 mb-3 sm:mb-4 text-sm sm:text-base">Batangas City, Calabarzon</p>
+              <p className="text-gray-600 mb-3 sm:mb-4 text-sm sm:text-base">
+                Batangas City, Calabarzon
+              </p>
               <a
                 href="https://www.google.com/maps/place/Castillo+Children's+Clinic/@13.7565027,121.0566993,1162m/data=!3m2!1e3!4b1!4m6!3m5!1s0x33bd0541aaa50131:0xa6968e99ce251f20!8m2!3d13.7564975!4d121.0592742!16s%2Fg%2F11f4xtcvqq"
                 target="_blank"
@@ -300,8 +301,10 @@ function ContactPage() {
             </div>
 
             <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-sky-600 mb-2">Phone</h2>
-              <a 
+              <h2 className="text-lg sm:text-xl font-semibold text-sky-600 mb-2">
+                Phone
+              </h2>
+              <a
                 href="tel:09664412470"
                 className="text-gray-600 text-sm sm:text-base hover:text-sky-600 transition touch-manipulation"
               >
@@ -310,7 +313,9 @@ function ContactPage() {
             </div>
 
             <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-sky-600 mb-2">Facebook</h2>
+              <h2 className="text-lg sm:text-xl font-semibold text-sky-600 mb-2">
+                Facebook
+              </h2>
               <a
                 href="https://www.facebook.com/myracastilloMD"
                 target="_blank"
@@ -322,8 +327,10 @@ function ContactPage() {
             </div>
 
             <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-sky-600 mb-2">Email</h2>
-              <a 
+              <h2 className="text-lg sm:text-xl font-semibold text-sky-600 mb-2">
+                Email
+              </h2>
+              <a
                 href="mailto:castillochildrensclinic@gmail.com"
                 className="text-gray-600 text-sm sm:text-base hover:text-sky-600 transition break-all touch-manipulation"
               >
@@ -336,7 +343,7 @@ function ContactPage() {
 
       {/* ✅ Shared Modal */}
       {(isOpen || isSignupOpen) && (
-        <div 
+        <div
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-0 sm:p-2 md:p-4 lg:p-6 transition-all duration-500 overflow-y-auto"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -347,9 +354,7 @@ function ContactPage() {
         >
           <div
             className={`w-full h-full sm:h-auto sm:max-h-[95vh] md:max-h-[90vh] max-w-full sm:max-w-5xl bg-white rounded-none sm:rounded-xl md:rounded-2xl shadow-2xl flex flex-col lg:flex-row overflow-hidden relative border-0 sm:border border-yellow-400 transition-all duration-500 transform ${
-              transition
-                ? "opacity-0 scale-95"
-                : "opacity-100 scale-100"
+              transition ? "opacity-0 scale-95" : "opacity-100 scale-100"
             }`}
           >
             {/* Close */}
@@ -381,7 +386,8 @@ function ContactPage() {
                     </h2>
                     <p className="text-xs lg:text-sm text-sky-100 leading-relaxed drop-shadow">
                       Caring for babies, kids, and teens with compassion.
-                      Register now to access your personalized pediatric records anytime.
+                      Register now to access your personalized pediatric records
+                      anytime.
                     </p>
                   </div>
                 </div>
@@ -391,7 +397,10 @@ function ContactPage() {
                   <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-5 md:mb-6 lg:hidden">
                     Create Account
                   </h2>
-                  <form onSubmit={handleSignup} className="space-y-3 sm:space-y-4">
+                  <form
+                    onSubmit={handleSignup}
+                    className="space-y-3 sm:space-y-4"
+                  >
                     <input
                       type="text"
                       placeholder="Full Name"
@@ -545,11 +554,18 @@ function ContactPage() {
               <>
                 {/* Left Login Form */}
                 <div className="w-full lg:w-1/2 p-4 sm:p-5 md:p-6 lg:p-8 overflow-y-auto max-h-[calc(100vh-2rem)] sm:max-h-[95vh] md:max-h-[90vh] transition-all duration-500">
-                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-5 md:mb-6">Login</h2>
+                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-5 md:mb-6">
+                    Login
+                  </h2>
                   {error && (
-                    <p className="text-red-500 text-xs sm:text-sm text-center mb-3 sm:mb-4 px-2">{error}</p>
+                    <p className="text-red-500 text-xs sm:text-sm text-center mb-3 sm:mb-4 px-2">
+                      {error}
+                    </p>
                   )}
-                  <form onSubmit={handleLogin} className="space-y-3 sm:space-y-4">
+                  <form
+                    onSubmit={handleLogin}
+                    className="space-y-3 sm:space-y-4"
+                  >
                     <input
                       type="email"
                       placeholder="Email"

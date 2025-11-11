@@ -34,7 +34,7 @@ import {
 const appointmentTypes = {
   Vaccination: 30,
   "Check-up": 60,
-  "Ear Piercing":5,
+  "Ear Piercing": 5,
   "Follow-up Check-up": 20,
   Consultation: 30,
 };
@@ -64,12 +64,15 @@ function Patient() {
   useEffect(() => {
     const fetchPatientInfo = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/patient/user-info", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-            "Content-Type": "application/json",
-          },
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/patient/user-info`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
 
         if (res.ok) {
           const data = await res.json();
@@ -160,7 +163,9 @@ function Patient() {
       if (!isSameCalendarDay(appt.appointment_date, selectedDate)) return false;
 
       // Only block when appointment is active (pending/approved)
-      const apptStatus = String(appt.status || "").toLowerCase().trim();
+      const apptStatus = String(appt.status || "")
+        .toLowerCase()
+        .trim();
       if (apptStatus !== "approved" && apptStatus !== "pending") return false;
 
       // Must have a time to compare
@@ -204,11 +209,14 @@ function Patient() {
   // ✅ Fetch appointments
   const fetchAppointments = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/get/appointments", {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/get/appointments`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
       const data = await res.json();
       setAppointments(data);
     } catch (err) {
@@ -231,11 +239,12 @@ function Patient() {
 
     try {
       // Format additional services: "None" if empty, or comma-separated string
-      const additionalServicesStr = additionalServices.length === 0 
-        ? "None" 
-        : additionalServices.join(", ");
+      const additionalServicesStr =
+        additionalServices.length === 0
+          ? "None"
+          : additionalServices.join(", ");
 
-      const res = await fetch("http://localhost:5001/api/appointments", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/appointments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -261,7 +270,7 @@ function Patient() {
       } else {
         setBookingStatus("❌ " + data.error);
       }
-    // eslint-disable-next-line no-unused-vars
+      // eslint-disable-next-line no-unused-vars
     } catch (err) {
       setBookingStatus("⚠️ Server error, please try again later.");
     }
@@ -300,293 +309,309 @@ function Patient() {
     });
 
     return (
-  <div className="bg-transparent rounded-3xl p-6 md:p-10 space-y-12">
-    {/* Header */}
-    <div className="text-center space-y-3">
-      <Star className="mx-auto w-12 h-12 text-yellow-400 drop-shadow-md" />
-      <h2 className="text-4xl font-extrabold text-sky-800 drop-shadow-sm">
-        Book Your Appointment
-      </h2>
-      <p className="text-sky-600 text-lg">
-        Choose a date, visit type, time, and optionally add additional services.
-      </p>
-    </div>
-
-    {/* Step Cards */}
-    <div className="grid gap-6 md:grid-cols-3">
-      {/* Date Picker */}
-      <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all relative z-20">
-        <div className="flex items-center gap-2 mb-2">
-          <Calendar className="text-sky-600" />
-          <h3 className="text-xl font-bold text-sky-800">1. Pick a Date</h3>
+      <div className="bg-transparent rounded-3xl p-6 md:p-10 space-y-12">
+        {/* Header */}
+        <div className="text-center space-y-3">
+          <Star className="mx-auto w-12 h-12 text-yellow-400 drop-shadow-md" />
+          <h2 className="text-4xl font-extrabold text-sky-800 drop-shadow-sm">
+            Book Your Appointment
+          </h2>
+          <p className="text-sky-600 text-lg">
+            Choose a date, visit type, time, and optionally add additional
+            services.
+          </p>
         </div>
-        <div className="relative z-30">
-          <DatePicker
-            selected={selectedDate}
-            onChange={(date) => {
-              setSelectedDate(date);
-              setSelectedTime("");
-              setAdditionalServices([]);
-            }}
-            filterDate={(date) => date.getDay() !== 0}
-            minDate={new Date()}
-            dateFormat="MMMM d, yyyy"
-            className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
+
+        {/* Step Cards */}
+        <div className="grid gap-6 md:grid-cols-3">
+          {/* Date Picker */}
+          <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all relative z-20">
+            <div className="flex items-center gap-2 mb-2">
+              <Calendar className="text-sky-600" />
+              <h3 className="text-xl font-bold text-sky-800">1. Pick a Date</h3>
+            </div>
+            <div className="relative z-30">
+              <DatePicker
+                selected={selectedDate}
+                onChange={(date) => {
+                  setSelectedDate(date);
+                  setSelectedTime("");
+                  setAdditionalServices([]);
+                }}
+                filterDate={(date) => date.getDay() !== 0}
+                minDate={new Date()}
+                dateFormat="MMMM d, yyyy"
+                className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
               focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-            placeholderText="Select a date"
-            popperClassName="z-50"
-          />
-        </div>
-      </div>
+                placeholderText="Select a date"
+                popperClassName="z-50"
+              />
+            </div>
+          </div>
 
-      {/* Appointment Type */}
-      <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
-        <div className="flex items-center gap-2 mb-2">
-          <ClipboardList className="text-sky-600" />
-          <h3 className="text-xl font-bold text-sky-800">2. Visit Type</h3>
-        </div>
-        <select
-          value={appointmentType}
-          onChange={(e) => {
-            setAppointmentType(e.target.value);
-            setSelectedTime("");
-            setAdditionalServices([]); // Clear additional services when primary type changes
-          }}
-          className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
+          {/* Appointment Type */}
+          <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
+            <div className="flex items-center gap-2 mb-2">
+              <ClipboardList className="text-sky-600" />
+              <h3 className="text-xl font-bold text-sky-800">2. Visit Type</h3>
+            </div>
+            <select
+              value={appointmentType}
+              onChange={(e) => {
+                setAppointmentType(e.target.value);
+                setSelectedTime("");
+                setAdditionalServices([]); // Clear additional services when primary type changes
+              }}
+              className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
             focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-        >
-          <option value="">-- Choose --</option>
-          {Object.keys(appointmentTypes).map((type) => (
-            <option key={type} value={type}>
-              {type} ({appointmentTypes[type]} mins)
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Time Slot */}
-      <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
-        <div className="flex items-center gap-2 mb-2">
-          <Clock className="text-sky-600" />
-          <h3 className="text-xl font-bold text-sky-800">3. Time Slot</h3>
-        </div>
-        <select
-          value={selectedTime}
-          onChange={(e) => setSelectedTime(e.target.value)}
-          className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
-            focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-          disabled={!appointmentType || !selectedDate}
-        >
-          <option value="">-- Choose Slot --</option>
-          {availableSlots.map((slot, idx) => (
-            <option
-              key={idx}
-              value={slot.value}
-              disabled={!slot.available}
-              className={slot.available ? "" : "text-gray-400 bg-gray-100"}
             >
-              {slot.text} {!slot.available ? "(Booked)" : ""}
-            </option>
-          ))}
-        </select>
-        {appointmentType &&
-          selectedDate &&
-          availableSlots.filter((s) => s.available).length === 0 && (
-            <p className="text-red-500 text-sm mt-2">
-              No slots available for this date/type.
-            </p>
-          )}
-      </div>
-    </div>
+              <option value="">-- Choose --</option>
+              {Object.keys(appointmentTypes).map((type) => (
+                <option key={type} value={type}>
+                  {type} ({appointmentTypes[type]} mins)
+                </option>
+              ))}
+            </select>
+          </div>
 
-    {/* Additional Services Section */}
-    {selectedDate && appointmentType && selectedTime && (
-      <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
-        <div className="flex items-center gap-2 mb-4">
-          <ClipboardList className="text-sky-600" />
-          <h3 className="text-xl font-bold text-sky-800">4. Additional Services (Optional)</h3>
+          {/* Time Slot */}
+          <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="text-sky-600" />
+              <h3 className="text-xl font-bold text-sky-800">3. Time Slot</h3>
+            </div>
+            <select
+              value={selectedTime}
+              onChange={(e) => setSelectedTime(e.target.value)}
+              className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
+            focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+              disabled={!appointmentType || !selectedDate}
+            >
+              <option value="">-- Choose Slot --</option>
+              {availableSlots.map((slot, idx) => (
+                <option
+                  key={idx}
+                  value={slot.value}
+                  disabled={!slot.available}
+                  className={slot.available ? "" : "text-gray-400 bg-gray-100"}
+                >
+                  {slot.text} {!slot.available ? "(Booked)" : ""}
+                </option>
+              ))}
+            </select>
+            {appointmentType &&
+              selectedDate &&
+              availableSlots.filter((s) => s.available).length === 0 && (
+                <p className="text-red-500 text-sm mt-2">
+                  No slots available for this date/type.
+                </p>
+              )}
+          </div>
         </div>
-        <p className="text-sm text-sky-600 mb-4">
-          You can add other services to your appointment. Select "None" if you don't want any additional services.
-        </p>
-        <div className="space-y-3">
-          {/* None option */}
-          <label
-            className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-              additionalServices.length === 0
-                ? "border-yellow-400 bg-yellow-50"
-                : "border-sky-200 hover:border-sky-300 bg-white"
-            }`}
-          >
-            <input
-              type="radio"
-              name="additionalServices"
-              checked={additionalServices.length === 0}
-              onChange={handleSelectNone}
-              className="w-5 h-5 text-yellow-400 border-sky-300 focus:ring-yellow-400"
-            />
-            <span className="flex-1 font-semibold text-sky-800">None</span>
-          </label>
 
-          {/* Available additional services */}
-          {availableAdditionalServices.map((type) => {
-            const isSelected = additionalServices.includes(type);
-            return (
+        {/* Additional Services Section */}
+        {selectedDate && appointmentType && selectedTime && (
+          <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
+            <div className="flex items-center gap-2 mb-4">
+              <ClipboardList className="text-sky-600" />
+              <h3 className="text-xl font-bold text-sky-800">
+                4. Additional Services (Optional)
+              </h3>
+            </div>
+            <p className="text-sm text-sky-600 mb-4">
+              You can add other services to your appointment. Select "None" if
+              you don't want any additional services.
+            </p>
+            <div className="space-y-3">
+              {/* None option */}
               <label
-                key={type}
                 className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                  isSelected
+                  additionalServices.length === 0
                     ? "border-yellow-400 bg-yellow-50"
                     : "border-sky-200 hover:border-sky-300 bg-white"
                 }`}
               >
                 <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => toggleAdditionalService(type)}
-                  className="w-5 h-5 text-yellow-400 border-sky-300 rounded focus:ring-yellow-400"
+                  type="radio"
+                  name="additionalServices"
+                  checked={additionalServices.length === 0}
+                  onChange={handleSelectNone}
+                  className="w-5 h-5 text-yellow-400 border-sky-300 focus:ring-yellow-400"
                 />
-                <span className="flex-1 font-semibold text-sky-800">
-                  {type} <span className="text-sm text-sky-600">({appointmentTypes[type]} mins)</span>
-                </span>
+                <span className="flex-1 font-semibold text-sky-800">None</span>
               </label>
-            );
-          })}
-        </div>
-        {additionalServices.length > 0 && (
-          <div className="mt-4 p-3 bg-sky-50 rounded-lg border border-sky-200">
-            <p className="text-sm text-sky-700">
-              <strong>Selected Additional Services:</strong> {additionalServices.join(", ")}
-            </p>
+
+              {/* Available additional services */}
+              {availableAdditionalServices.map((type) => {
+                const isSelected = additionalServices.includes(type);
+                return (
+                  <label
+                    key={type}
+                    className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                      isSelected
+                        ? "border-yellow-400 bg-yellow-50"
+                        : "border-sky-200 hover:border-sky-300 bg-white"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleAdditionalService(type)}
+                      className="w-5 h-5 text-yellow-400 border-sky-300 rounded focus:ring-yellow-400"
+                    />
+                    <span className="flex-1 font-semibold text-sky-800">
+                      {type}{" "}
+                      <span className="text-sm text-sky-600">
+                        ({appointmentTypes[type]} mins)
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {additionalServices.length > 0 && (
+              <div className="mt-4 p-3 bg-sky-50 rounded-lg border border-sky-200">
+                <p className="text-sm text-sky-700">
+                  <strong>Selected Additional Services:</strong>{" "}
+                  {additionalServices.join(", ")}
+                </p>
+              </div>
+            )}
           </div>
         )}
-      </div>
-    )}
 
-    {/* Patient Concerns */}
-    <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all relative z-10">
-      <div className="flex items-center gap-2 mb-2">
-        <ClipboardList className="text-sky-600" />
-        <h3 className="text-xl font-bold text-sky-800">
-          {selectedDate && appointmentType && selectedTime ? "5. Patient Concerns" : "4. Patient Concerns"}
-        </h3>
-      </div>
-      <textarea
-        value={patientConcerns}
-        onChange={(e) => setPatientConcerns(e.target.value)}
-        placeholder="Describe symptoms or reason for visit"
-        className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white resize-none
+        {/* Patient Concerns */}
+        <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all relative z-10">
+          <div className="flex items-center gap-2 mb-2">
+            <ClipboardList className="text-sky-600" />
+            <h3 className="text-xl font-bold text-sky-800">
+              {selectedDate && appointmentType && selectedTime
+                ? "5. Patient Concerns"
+                : "4. Patient Concerns"}
+            </h3>
+          </div>
+          <textarea
+            value={patientConcerns}
+            onChange={(e) => setPatientConcerns(e.target.value)}
+            placeholder="Describe symptoms or reason for visit"
+            className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white resize-none
           focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-        rows={3}
-      />
-      {patientConcerns.length > 0 && (
-        <p className="text-xs text-sky-600 mt-2">
-          {patientConcerns.length} characters
-        </p>
-      )}
-    </div>
+            rows={3}
+          />
+          {patientConcerns.length > 0 && (
+            <p className="text-xs text-sky-600 mt-2">
+              {patientConcerns.length} characters
+            </p>
+          )}
+        </div>
 
-    {/* Book Button */}
-    <div className="text-center">
-      <button
-        onClick={() => handleBookAppointment(patientConcerns)}
-        className="inline-block bg-yellow-400 text-sky-900 px-10 py-4 rounded-full text-lg
+        {/* Book Button */}
+        <div className="text-center">
+          <button
+            onClick={() => handleBookAppointment(patientConcerns)}
+            className="inline-block bg-yellow-400 text-sky-900 px-10 py-4 rounded-full text-lg
           font-bold shadow-md hover:bg-yellow-500 hover:scale-105 hover:shadow-lg transition-all"
-      >
-        Book Appointment
-      </button>
-      {bookingStatus && (
-        <p className="mt-3 text-sky-700 text-lg font-medium">{bookingStatus}</p>
-      )}
-    </div>
+          >
+            Book Appointment
+          </button>
+          {bookingStatus && (
+            <p className="mt-3 text-sky-700 text-lg font-medium">
+              {bookingStatus}
+            </p>
+          )}
+        </div>
 
-    {/* Timeline Section */}
-    <div className="bg-white rounded-2xl p-6 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-3xl font-extrabold text-sky-800 drop-shadow-sm">
-          Upcoming & Past Appointments
-        </h3>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="border-2 border-sky-300 rounded-xl px-4 py-2 text-lg bg-white
+        {/* Timeline Section */}
+        <div className="bg-white rounded-2xl p-6 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-3xl font-extrabold text-sky-800 drop-shadow-sm">
+              Upcoming & Past Appointments
+            </h3>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="border-2 border-sky-300 rounded-xl px-4 py-2 text-lg bg-white
             focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-        >
-          <option value="all">All</option>
-          <option value="approved">Approved</option>
-          <option value="completed">Completed</option>
-          <option value="pending">Pending</option>
-          <option value="canceled">Canceled</option>
-        </select>
+            >
+              <option value="all">All</option>
+              <option value="approved">Approved</option>
+              <option value="completed">Completed</option>
+              <option value="pending">Pending</option>
+              <option value="canceled">Canceled</option>
+            </select>
+          </div>
+
+          {loading ? (
+            <p className="text-center text-sky-600">Loading appointments…</p>
+          ) : filteredAppointments.length === 0 ? (
+            <p className="text-center text-gray-500 text-lg">
+              No appointments found.
+            </p>
+          ) : (
+            <ol className="relative border-l-4 border-sky-300/50 space-y-8 pl-4">
+              {filteredAppointments
+                .sort(
+                  (a, b) =>
+                    new Date(a.appointment_date) - new Date(b.appointment_date)
+                )
+                .map((appt, index) => {
+                  const status = appt.status?.toLowerCase().trim();
+                  const date = new Date(
+                    appt.appointment_date
+                  ).toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  });
+
+                  let dot = "bg-yellow-400";
+                  let badge = "bg-yellow-100 text-yellow-700";
+                  if (status === "completed") {
+                    dot = "bg-green-400";
+                    badge = "bg-green-100 text-green-700";
+                  } else if (status === "approved") {
+                    dot = "bg-sky-400";
+                    badge = "bg-sky-100 text-sky-700";
+                  } else if (status === "canceled") {
+                    dot = "bg-red-400";
+                    badge = "bg-red-100 text-red-700";
+                  }
+
+                  return (
+                    <li key={index} className="ml-6">
+                      <span
+                        className={`absolute -left-3 flex items-center justify-center w-7 h-7 rounded-full ring-8 ring-white/60 ${dot}`}
+                      />
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h4 className="text-xl font-bold text-gray-800">
+                            {appt.appointment_type}
+                          </h4>
+                          <p className="text-gray-600 text-lg">
+                            {date} • {appt.appointment_time}
+                          </p>
+                          {appt.additional_services &&
+                            appt.additional_services !== "None" && (
+                              <p className="text-sm text-sky-600 mt-1">
+                                <strong>Additional Services:</strong>{" "}
+                                {appt.additional_services}
+                              </p>
+                            )}
+                        </div>
+                        <span
+                          className={`mt-3 sm:mt-0 px-4 py-1.5 text-md rounded-full font-semibold capitalize ${badge}`}
+                        >
+                          {status}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+            </ol>
+          )}
+        </div>
       </div>
-
-      {loading ? (
-        <p className="text-center text-sky-600">Loading appointments…</p>
-      ) : filteredAppointments.length === 0 ? (
-        <p className="text-center text-gray-500 text-lg">
-          No appointments found.
-        </p>
-      ) : (
-        <ol className="relative border-l-4 border-sky-300/50 space-y-8 pl-4">
-          {filteredAppointments
-            .sort(
-              (a, b) =>
-                new Date(a.appointment_date) - new Date(b.appointment_date)
-            )
-            .map((appt, index) => {
-              const status = appt.status?.toLowerCase().trim();
-              const date = new Date(appt.appointment_date).toLocaleDateString(
-                "en-US",
-                { year: "numeric", month: "long", day: "numeric" }
-              );
-
-              let dot = "bg-yellow-400";
-              let badge = "bg-yellow-100 text-yellow-700";
-              if (status === "completed") {
-                dot = "bg-green-400";
-                badge = "bg-green-100 text-green-700";
-              } else if (status === "approved") {
-                dot = "bg-sky-400";
-                badge = "bg-sky-100 text-sky-700";
-              } else if (status === "canceled") {
-                dot = "bg-red-400";
-                badge = "bg-red-100 text-red-700";
-              }
-
-              return (
-                <li key={index} className="ml-6">
-                  <span
-                    className={`absolute -left-3 flex items-center justify-center w-7 h-7 rounded-full ring-8 ring-white/60 ${dot}`}
-                  />
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h4 className="text-xl font-bold text-gray-800">
-                        {appt.appointment_type}
-                      </h4>
-                      <p className="text-gray-600 text-lg">
-                        {date} • {appt.appointment_time}
-                      </p>
-                      {appt.additional_services && appt.additional_services !== "None" && (
-                        <p className="text-sm text-sky-600 mt-1">
-                          <strong>Additional Services:</strong> {appt.additional_services}
-                        </p>
-                      )}
-                    </div>
-                    <span
-                      className={`mt-3 sm:mt-0 px-4 py-1.5 text-md rounded-full font-semibold capitalize ${badge}`}
-                    >
-                      {status}
-                    </span>
-                  </div>
-                </li>
-              );
-            })}
-        </ol>
-      )}
-    </div>
-  </div>
-);
-
+    );
   };
 
   const MedicalRecords = () => {
@@ -612,7 +637,7 @@ function Patient() {
         }
 
         const response = await fetch(
-          "http://localhost:5001/api/patient/medical-records",
+          `${import.meta.env.VITE_API_URL}/patient/medical-records`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -656,31 +681,31 @@ function Patient() {
       setSelectedRecord(null);
     };
 
-   const printRecord = (patient) => {
-  if (!patient) return alert("No record to print.");
+    const printRecord = (patient) => {
+      if (!patient) return alert("No record to print.");
 
-  // Compute age from birth_date if available
-  let age = "N/A";
-  if (patient.birth_date) {
-    const birth = new Date(patient.birth_date);
-    const today = new Date();
-    age = today.getFullYear() - birth.getFullYear();
-    const m = today.getMonth() - birth.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    age = `${age} yrs`;
-  }
+      // Compute age from birth_date if available
+      let age = "N/A";
+      if (patient.birth_date) {
+        const birth = new Date(patient.birth_date);
+        const today = new Date();
+        age = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+          age--;
+        }
+        age = `${age} yrs`;
+      }
 
-  // Format appointment date and time
-  const appointmentDate = patient.appointment_date
-    ? new Date(patient.appointment_date).toLocaleDateString()
-    : "N/A";
-  const appointmentTime = patient.appointment_time || "N/A";
-  const appointmentType = patient.appointment_type || "N/A";
+      // Format appointment date and time
+      const appointmentDate = patient.appointment_date
+        ? new Date(patient.appointment_date).toLocaleDateString()
+        : "N/A";
+      const appointmentTime = patient.appointment_time || "N/A";
+      const appointmentType = patient.appointment_type || "N/A";
 
-  const printWindow = window.open("", "_blank");
-  printWindow.document.write(`
+      const printWindow = window.open("", "_blank");
+      printWindow.document.write(`
     <html>
       <head>
         <title>Patient Record - ${patient.full_name}</title>
@@ -733,23 +758,36 @@ function Patient() {
 
         <h2>Medical Record</h2>
         <div class="section">
-          <p class="field"><span class="label">Full Name:</span> ${patient.full_name}</p>
+          <p class="field"><span class="label">Full Name:</span> ${
+            patient.full_name
+          }</p>
           <p class="field"><span class="label">Age:</span> ${age}</p>
-          <p class="field"><span class="label">Temperature:</span> ${patient.temperature || "N/A"}</p>
-          <p class="field"><span class="label">Pulse Rate:</span> ${patient.pulse_rate || "N/A"}</p>
-          <p class="field"><span class="label">Height:</span> ${patient.height || "N/A"}</p>
-          <p class="field"><span class="label">Weight:</span> ${patient.weight || "N/A"}</p>
-          <p class="field"><span class="label">Diagnosis:</span> ${patient.diagnosis || "N/A"}</p>
-          <p class="field"><span class="label">Remarks:</span> ${patient.remarks || "N/A"}</p>
+          <p class="field"><span class="label">Temperature:</span> ${
+            patient.temperature || "N/A"
+          }</p>
+          <p class="field"><span class="label">Pulse Rate:</span> ${
+            patient.pulse_rate || "N/A"
+          }</p>
+          <p class="field"><span class="label">Height:</span> ${
+            patient.height || "N/A"
+          }</p>
+          <p class="field"><span class="label">Weight:</span> ${
+            patient.weight || "N/A"
+          }</p>
+          <p class="field"><span class="label">Diagnosis:</span> ${
+            patient.diagnosis || "N/A"
+          }</p>
+          <p class="field"><span class="label">Remarks:</span> ${
+            patient.remarks || "N/A"
+          }</p>
         </div>
 
         <button onclick="window.print()">Print this page</button>
       </body>
     </html>
   `);
-  printWindow.document.close();
-};
-
+      printWindow.document.close();
+    };
 
     if (loading) {
       return (
@@ -1085,11 +1123,11 @@ function Patient() {
                       information confidential.
                     </p>
                     <button
-              onClick={() => printRecord(selectedRecord)}
-              className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Print Record
-            </button>
+                      onClick={() => printRecord(selectedRecord)}
+                      className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Print Record
+                    </button>
                     <button
                       onClick={closeModal}
                       className="px-6 py-2 bg-yellow-500 text-blue-900 font-semibold rounded-lg hover:bg-yellow-400 transition-colors"
@@ -1113,26 +1151,24 @@ function Patient() {
     { id: "profile", label: "Profile", icon: User },
   ];
 
-const renderContent = () => {
-   switch (activePage) {
-    case "home":
-      return <Analysis />; 
+  const renderContent = () => {
+    switch (activePage) {
+      case "home":
+        return <Analysis />;
 
-    case "appointments":
-      return <AppointmentsPage />;
+      case "appointments":
+        return <AppointmentsPage />;
 
-    case "checkup":
-      return <MedicalRecords />;
+      case "checkup":
+        return <MedicalRecords />;
 
-    
+      case "profile":
+        return <PatientProfile />;
 
-    case "profile":
-      return <PatientProfile />;
-
-    default:
-      return null;
-  }
-};
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-blue-50 to-pink-50">
@@ -1166,7 +1202,9 @@ const renderContent = () => {
               {/* Text Branding */}
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold">Castillo</h2>
-                <p className="text-blue-200 text-xs sm:text-sm">Children Clinic</p>
+                <p className="text-blue-200 text-xs sm:text-sm">
+                  Children Clinic
+                </p>
               </div>
             </div>
 
@@ -1211,7 +1249,9 @@ const renderContent = () => {
               <User className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm sm:text-base truncate">{patientName}</p>
+              <p className="font-semibold text-sm sm:text-base truncate">
+                {patientName}
+              </p>
             </div>
           </div>
           <button

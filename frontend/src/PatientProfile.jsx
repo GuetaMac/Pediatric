@@ -43,7 +43,7 @@ function PatientProfile() {
     const updateQrSize = () => {
       setQrSize(window.innerWidth < 640 ? 140 : 180);
     };
-    
+
     updateQrSize();
     window.addEventListener("resize", updateQrSize);
     return () => window.removeEventListener("resize", updateQrSize);
@@ -58,14 +58,17 @@ function PatientProfile() {
   // 🔹 Fetch patient profile record for the logged-in user (patient_profiles table)
   const fetchProfile = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/patient/profile-data", {
-        headers: {
-          Authorization: `Bearer ${
-            window.localStorage?.getItem("token") || ""
-          }`,
-          "Content-Type": "application/json",
-        },
-      });
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/patient/profile-data`,
+        {
+          headers: {
+            Authorization: `Bearer ${
+              window.localStorage?.getItem("token") || ""
+            }`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (res.ok) {
         const data = await res.json();
@@ -85,14 +88,17 @@ function PatientProfile() {
   // 🔹 Fetch gender + birth_date from users table
   const fetchUserInfo = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/patient/user-info", {
-        headers: {
-          Authorization: `Bearer ${
-            window.localStorage?.getItem("token") || ""
-          }`,
-          "Content-Type": "application/json",
-        },
-      });
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/patient/user-info`,
+        {
+          headers: {
+            Authorization: `Bearer ${
+              window.localStorage?.getItem("token") || ""
+            }`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (res.ok) {
         const data = await res.json();
@@ -116,12 +122,17 @@ function PatientProfile() {
   // 🔹 Fetch latest completed appointment as last checkup
   const fetchLastCheckup = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/patient/last-checkup", {
-        headers: {
-          Authorization: `Bearer ${window.localStorage.getItem("token") || ""}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/patient/last-checkup`,
+        {
+          headers: {
+            Authorization: `Bearer ${
+              window.localStorage.getItem("token") || ""
+            }`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (res.ok) {
         const data = await res.json();
@@ -181,7 +192,9 @@ function PatientProfile() {
       email: patient.email || "No email available",
       qr_code:
         patient.qr_code ||
-        (patient.user_id ? `PAT${String(patient.user_id).padStart(3, "0")}` : ""),
+        (patient.user_id
+          ? `PAT${String(patient.user_id).padStart(3, "0")}`
+          : ""),
     });
 
     setFormData((prev) => ({
@@ -250,7 +263,9 @@ function PatientProfile() {
             </h2>
             <p className="text-gray-700 mb-1.5 sm:mb-1 flex items-center gap-2 text-sm sm:text-base">
               <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-500 flex-shrink-0" />
-              <span className="font-medium break-words">{userInfo.full_name}</span>
+              <span className="font-medium break-words">
+                {userInfo.full_name}
+              </span>
             </p>
             <p className="text-gray-700 mb-1.5 sm:mb-1 flex items-center gap-2 text-sm sm:text-base">
               <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-500 flex-shrink-0" />
@@ -272,7 +287,9 @@ function PatientProfile() {
             <div className="mt-3 sm:mt-4 border-t border-sky-200 pt-3 space-y-1.5 sm:space-y-2">
               <p className="text-gray-700 flex flex-col sm:flex-row sm:justify-between gap-1 text-sm sm:text-base">
                 <span className="font-semibold">Birth Date:</span>
-                <span className="sm:text-right">{formData.birth_date || "Not provided"}</span>
+                <span className="sm:text-right">
+                  {formData.birth_date || "Not provided"}
+                </span>
               </p>
               <p className="text-gray-700 flex flex-col sm:flex-row sm:justify-between gap-1 text-sm sm:text-base">
                 <span className="font-semibold">Age:</span>
@@ -280,7 +297,9 @@ function PatientProfile() {
               </p>
               <p className="text-gray-700 flex flex-col sm:flex-row sm:justify-between gap-1 text-sm sm:text-base">
                 <span className="font-semibold">Gender:</span>
-                <span className="sm:text-right">{formData.gender || "Not provided"}</span>
+                <span className="sm:text-right">
+                  {formData.gender || "Not provided"}
+                </span>
               </p>
             </div>
           </div>
@@ -351,7 +370,9 @@ function PatientProfile() {
           </div>
 
           {message && (
-            <p className="mt-4 text-center text-red-600 text-sm sm:text-base px-2">{message}</p>
+            <p className="mt-4 text-center text-red-600 text-sm sm:text-base px-2">
+              {message}
+            </p>
           )}
         </div>
       </div>

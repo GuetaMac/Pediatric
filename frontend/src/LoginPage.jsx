@@ -63,7 +63,6 @@ function LoginPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
 
-
   // Add timer effect for resend button
   useEffect(() => {
     if (resendTimer <= 0) return;
@@ -86,7 +85,7 @@ function LoginPage() {
 
     try {
       // Send verification code
-      await axios.post("http://localhost:5001/api/send-verification", {
+      await axios.post(`${import.meta.env.VITE_API_URL}/send-verification`, {
         email,
       });
 
@@ -133,7 +132,7 @@ function LoginPage() {
     setIsVerifying(true);
 
     try {
-      await axios.post("http://localhost:5001/api/verify-and-signup", {
+      await axios.post(`${import.meta.env.VITE_API_URL}/verify-and-signup`, {
         ...pendingSignupData,
         code: verificationCode,
       });
@@ -163,13 +162,13 @@ function LoginPage() {
     if (!pendingSignupData?.email) return;
 
     try {
-      await axios.post("http://localhost:5001/api/send-verification", {
+      await axios.post(`${import.meta.env.VITE_API_URL}/send-verification`, {
         email: pendingSignupData.email,
       });
       setResendTimer(60);
       alert("📧 New verification code sent!");
       setError("");
-    // eslint-disable-next-line no-unused-vars
+      // eslint-disable-next-line no-unused-vars
     } catch (err) {
       setError("Failed to resend code. Please try again.");
     }
@@ -180,10 +179,14 @@ function LoginPage() {
     e.preventDefault();
     setError("");
 
+    // ✅ Add these 2 lines
+    console.log("🔍 VITE_API_URL:", import.meta.env.VITE_API_URL);
+    console.log("🔍 Full login URL:", `${import.meta.env.VITE_API_URL}/login`);
+
     if (cooldown > 0) return;
 
     try {
-      const res = await axios.post("http://localhost:5001/api/login", {
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/login`, {
         email,
         password,
       });

@@ -16,7 +16,7 @@ function SignupPage() {
     setError("");
 
     try {
-      const res = await axios.post("http://localhost:5001/api/signup", {
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/signup`, {
         full_name: fullName,
         email,
         password,
@@ -36,7 +36,9 @@ function SignupPage() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-100 to-green-300 px-4 py-8">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-6 sm:p-8">
-        <h2 className="text-xl sm:text-2xl font-bold text-center mb-6">Signup</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-center mb-6">
+          Signup
+        </h2>
         {error && (
           <p className="text-red-500 text-sm text-center mb-4">{error}</p>
         )}
@@ -66,7 +68,9 @@ function SignupPage() {
             required
           />
           <div>
-            <label className="block text-gray-700 mb-1 text-sm sm:text-base">Birth Date</label>
+            <label className="block text-gray-700 mb-1 text-sm sm:text-base">
+              Birth Date
+            </label>
             <input
               type="date"
               value={birthDate}
@@ -76,7 +80,9 @@ function SignupPage() {
             />
           </div>
           <div>
-            <label className="block text-gray-700 mb-1 text-sm sm:text-base">Gender</label>
+            <label className="block text-gray-700 mb-1 text-sm sm:text-base">
+              Gender
+            </label>
             <select
               value={gender}
               onChange={(e) => setGender(e.target.value)}

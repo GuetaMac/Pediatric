@@ -77,7 +77,7 @@ function Nurse() {
 
         // 🧠 Fetch Appointments (includes full_name from backend)
         const apptRes = await fetch(
-          "http://localhost:5001/api/appointments/nurse",
+          `${import.meta.env.VITE_API_URL}/appointments/nurse`,
           {
             headers: {
               Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -159,9 +159,14 @@ function Nurse() {
         setQueue(todayQueue);
 
         // 🧮 Inventory Summary
-        const invRes = await fetch("http://localhost:5001/api/inventory", {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
+        const invRes = await fetch(
+          `${import.meta.env.VITE_API_URL}/inventory`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
         if (!invRes.ok) throw new Error("Failed to fetch inventory");
         const invData = await invRes.json();
 
@@ -471,7 +476,7 @@ function Nurse() {
       try {
         setLoading(true);
         const res = await fetch(
-          "http://localhost:5001/api/appointments/nurse",
+          `${import.meta.env.VITE_API_URL}/appointments/nurse`,
           {
             headers: {
               Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -496,7 +501,7 @@ function Nurse() {
     const updateStatus = async (id, status) => {
       try {
         const res = await fetch(
-          `http://localhost:5001/api/appointments/${id}/status`,
+          `${import.meta.env.VITE_API_URL}/appointments/${id}/status`,
           {
             method: "PUT",
             headers: {
@@ -531,7 +536,7 @@ function Nurse() {
       if (!confirm("Delete this appointment?")) return;
       try {
         const res = await fetch(
-          `http://localhost:5001/api/appointments/${id}`,
+          `${import.meta.env.VITE_API_URL}/appointments/${id}`,
           {
             method: "DELETE",
             headers: {
@@ -742,25 +747,25 @@ function Nurse() {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState(""); // <-- new state
     const [newPatient, setNewPatient] = useState({
-          full_name: "",
-          email: "",
-          password: "", // KULANG ITO
-          birth_date: "",
-          gender: "",
-          guardian: "",
-          guardian_number: "",
-          phone_number: "",
-          address: "",
-          blood_type: "",
-          allergies: "",
-          chronic_conditions: "",
-          mother_name: "",
-          father_name: "",
-        });
+      full_name: "",
+      email: "",
+      password: "", // KULANG ITO
+      birth_date: "",
+      gender: "",
+      guardian: "",
+      guardian_number: "",
+      phone_number: "",
+      address: "",
+      blood_type: "",
+      allergies: "",
+      chronic_conditions: "",
+      mother_name: "",
+      father_name: "",
+    });
     const fetchPatients = async () => {
       try {
         setLoading(true);
-        const res = await fetch("http://localhost:5001/api/users");
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/users`);
         const data = await res.json();
 
         if (res.ok) {
@@ -787,7 +792,7 @@ function Nurse() {
       try {
         setLoadingProfile(true);
         const res = await fetch(
-          `http://localhost:5001/api/patients/${patient.user_id}/profile`
+          `${import.meta.env.VITE_API_URL}/patients/${patient.user_id}/profile`
         );
         if (!res.ok) throw new Error("Failed to load patient profile");
         const data = await res.json();
@@ -807,9 +812,12 @@ function Nurse() {
 
       try {
         setLoading(true);
-        const res = await fetch(`http://localhost:5001/api/users/${user_id}`, {
-          method: "DELETE",
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/users/${user_id}`,
+          {
+            method: "DELETE",
+          }
+        );
 
         const data = await res.json();
         if (res.ok) {
@@ -831,14 +839,17 @@ function Nurse() {
     const handleAddPatient = async (e) => {
       e.preventDefault();
       try {
-        const res = await fetch("http://localhost:5001/api/patients/add", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-          body: JSON.stringify(newPatient),
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/patients/add`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+            body: JSON.stringify(newPatient),
+          }
+        );
 
         if (!res.ok) {
           const err = await res.json();
@@ -870,135 +881,137 @@ function Nurse() {
       }
     };
     const filteredPatients = patients.filter((patient) =>
-    patient.full_name.toLowerCase().includes(searchTerm.toLowerCase())
-     );
+      patient.full_name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
     const closeModal = () => {
       setIsModalOpen(false);
       setSelectedPatient(null);
     };
-    
+
     return (
       <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center">
-          <Users className="w-6 h-6 sm:w-8 sm:h-8 mr-2 sm:mr-3 text-blue-500" />
-          Patient Management
-        </h1>
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center">
+            <Users className="w-6 h-6 sm:w-8 sm:h-8 mr-2 sm:mr-3 text-blue-500" />
+            Patient Management
+          </h1>
 
-       <div className="flex gap-2 items-center">
-  {/* Search Input with Icon */}
-  <div className="relative flex-1">
-    <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-pink-400" />
-    <input
-      type="text"
-      placeholder="Search patient..."
-      value={searchTerm}
-      onChange={(e) => setSearchTerm(e.target.value)}
-      className="w-full pl-10 pr-4 py-2 sm:py-3 rounded-full border-2 border-pink-300 bg-pink-50 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400 shadow-md text-sm sm:text-base placeholder-pink-300"
-    />
-  </div>
-
-          {/* Add Patient Button */}
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm sm:text-base"
-          >
-            <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-            Add New Patient
-          </button>
-        </div>
-      </div>
-
-      {/* Table + List */}
-      <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 overflow-x-auto">
-        {loading ? (
-          <p className="text-gray-500">Loading patients...</p>
-        ) : filteredPatients.length === 0 ? (
-          <div className="text-center py-16">
-            <Baby className="w-20 h-20 mx-auto text-gray-300 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">
-              No Patients Found
-            </h3>
-            <p className="text-gray-500 mb-6">
-              Start by adding your first patient to the system
-            </p>
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-8 py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition-all duration-200 shadow-md"
-            >
-              Add Patient
-            </button>
-          </div>
-        ) : (
-          <>
-            {/* Desktop Table */}
-            <div className="hidden md:block overflow-hidden rounded-lg border border-gray-200 shadow-md">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-gradient-to-r from-blue-50 to-blue-100 text-gray-700 uppercase text-sm font-semibold">
-                  <tr>
-                    <th className="px-4 lg:px-6 py-3">Full Name</th>
-                    <th className="px-4 lg:px-6 py-3">Email</th>
-                    <th className="px-4 lg:px-6 py-3 text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredPatients.map((patient) => (
-                    <tr
-                      key={patient.user_id}
-                      className="odd:bg-white even:bg-gray-50 hover:bg-blue-50 transition"
-                    >
-                      <td className="px-4 lg:px-6 py-4 font-medium text-gray-900">
-                        {patient.full_name}
-                      </td>
-                      <td className="px-4 lg:px-6 py-4 text-gray-700">
-                        {patient.email}
-                      </td>
-                      <td className="px-4 lg:px-6 py-4 text-center space-x-3">
-                        <button
-                          className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-                          onClick={() => handleView(patient)}
-                        >
-                          View
-                        </button>
-                        <button
-                          className="text-red-600 hover:text-red-800 font-medium text-sm"
-                          onClick={() => handleDeletePatient(patient.user_id)}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="flex gap-2 items-center">
+            {/* Search Input with Icon */}
+            <div className="relative flex-1">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-pink-400" />
+              <input
+                type="text"
+                placeholder="Search patient..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 sm:py-3 rounded-full border-2 border-pink-300 bg-pink-50 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400 shadow-md text-sm sm:text-base placeholder-pink-300"
+              />
             </div>
 
-            {/* Mobile Card View */}
-            <div className="md:hidden space-y-4">
-              {filteredPatients.map((patient) => (
-                <div
-                  key={patient.user_id}
-                  className="bg-white rounded-lg border border-gray-200 shadow-md p-4"
-                >
-                  <div className="mb-3">
-                    <h3 className="font-semibold text-gray-900 text-lg">
-                      {patient.full_name}
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1">{patient.email}</p>
-                  </div>
-                  <div className="flex gap-3 pt-3 border-t border-gray-200">
-                    <button
-                      className="flex-1 text-blue-600 hover:text-blue-800 font-medium py-2 px-4 border border-blue-600 rounded-lg hover:bg-blue-50 transition text-sm"
-                      onClick={() => handleView(patient)}
-                    >
-                      View
-                    </button>
-                    <button
-                      className="flex-1 text-red-600 hover:text-red-800 font-medium py-2 px-4 border border-red-600 rounded-lg hover:bg-red-50 transition text-sm"
-                      onClick={() => handleDeletePatient(patient.user_id)}
-                    >
-                      Delete
+            {/* Add Patient Button */}
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm sm:text-base"
+            >
+              <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+              Add New Patient
+            </button>
+          </div>
+        </div>
+
+        {/* Table + List */}
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 overflow-x-auto">
+          {loading ? (
+            <p className="text-gray-500">Loading patients...</p>
+          ) : filteredPatients.length === 0 ? (
+            <div className="text-center py-16">
+              <Baby className="w-20 h-20 mx-auto text-gray-300 mb-4" />
+              <h3 className="text-xl font-semibold text-gray-600 mb-2">
+                No Patients Found
+              </h3>
+              <p className="text-gray-500 mb-6">
+                Start by adding your first patient to the system
+              </p>
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-8 py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition-all duration-200 shadow-md"
+              >
+                Add Patient
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-hidden rounded-lg border border-gray-200 shadow-md">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-gradient-to-r from-blue-50 to-blue-100 text-gray-700 uppercase text-sm font-semibold">
+                    <tr>
+                      <th className="px-4 lg:px-6 py-3">Full Name</th>
+                      <th className="px-4 lg:px-6 py-3">Email</th>
+                      <th className="px-4 lg:px-6 py-3 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredPatients.map((patient) => (
+                      <tr
+                        key={patient.user_id}
+                        className="odd:bg-white even:bg-gray-50 hover:bg-blue-50 transition"
+                      >
+                        <td className="px-4 lg:px-6 py-4 font-medium text-gray-900">
+                          {patient.full_name}
+                        </td>
+                        <td className="px-4 lg:px-6 py-4 text-gray-700">
+                          {patient.email}
+                        </td>
+                        <td className="px-4 lg:px-6 py-4 text-center space-x-3">
+                          <button
+                            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                            onClick={() => handleView(patient)}
+                          >
+                            View
+                          </button>
+                          <button
+                            className="text-red-600 hover:text-red-800 font-medium text-sm"
+                            onClick={() => handleDeletePatient(patient.user_id)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-4">
+                {filteredPatients.map((patient) => (
+                  <div
+                    key={patient.user_id}
+                    className="bg-white rounded-lg border border-gray-200 shadow-md p-4"
+                  >
+                    <div className="mb-3">
+                      <h3 className="font-semibold text-gray-900 text-lg">
+                        {patient.full_name}
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {patient.email}
+                      </p>
+                    </div>
+                    <div className="flex gap-3 pt-3 border-t border-gray-200">
+                      <button
+                        className="flex-1 text-blue-600 hover:text-blue-800 font-medium py-2 px-4 border border-blue-600 rounded-lg hover:bg-blue-50 transition text-sm"
+                        onClick={() => handleView(patient)}
+                      >
+                        View
+                      </button>
+                      <button
+                        className="flex-1 text-red-600 hover:text-red-800 font-medium py-2 px-4 border border-red-600 rounded-lg hover:bg-red-50 transition text-sm"
+                        onClick={() => handleDeletePatient(patient.user_id)}
+                      >
+                        Delete
                       </button>
                     </div>
                   </div>
@@ -1329,7 +1342,7 @@ function Nurse() {
         return;
       }
 
-      fetch("http://localhost:5001/api/patients", {
+      fetch(`${import.meta.env.VITE_API_URL}/patients`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -1391,7 +1404,7 @@ function Nurse() {
         };
 
         const response = await fetch(
-          "http://localhost:5001/api/medical-records",
+          `${import.meta.env.VITE_API_URL}/medical-records`,
           {
             method: "POST",
             headers: {
@@ -1414,12 +1427,15 @@ function Nurse() {
 
         setShowModal(true);
 
-        const updated = await fetch("http://localhost:5001/api/patients", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
+        const updated = await fetch(
+          `${import.meta.env.VITE_API_URL}/patients`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
 
         if (updated.ok) {
           const updatedData = await updated.json();
@@ -1914,7 +1930,7 @@ function Nurse() {
     const fetchInventory = async () => {
       setLoading(true);
       try {
-        const res = await fetch("http://localhost:5001/api/inventory", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/inventory`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
@@ -1931,11 +1947,14 @@ function Nurse() {
     // Fetch sales summary
     const fetchSalesSummary = async () => {
       try {
-        const res = await fetch("http://localhost:5001/api/sales/summary", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/sales/summary`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
         const data = await res.json();
         setSales(data);
       } catch (err) {
@@ -1954,8 +1973,10 @@ function Nurse() {
       if (!name.trim() || stock === "") return alert("Fill all fields");
 
       const url = editingItem
-        ? `http://localhost:5001/api/inventory/update/${editingItem.inventory_id}`
-        : "http://localhost:5001/api/inventory/add";
+        ? `${import.meta.env.VITE_API_URL}/inventory/update/${
+            editingItem.inventory_id
+          }`
+        : `${import.meta.env.VITE_API_URL}/inventory/add`;
       const method = editingItem ? "PUT" : "POST";
 
       try {
@@ -1985,10 +2006,15 @@ function Nurse() {
     const handleDelete = async (id) => {
       if (!confirm("Delete this product?")) return;
       try {
-        const res = await fetch(`http://localhost:5001/api/inventory/${id}`, {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/inventory/${id}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
         if (res.ok) {
           setItems(items.filter((i) => i.inventory_id !== id));
         } else {
@@ -1998,7 +2024,7 @@ function Nurse() {
         alert("Error deleting item: " + err.message);
       }
     };
-    
+
     // Edit
     const handleEdit = (item) => {
       setEditingItem(item);
@@ -2023,7 +2049,7 @@ function Nurse() {
       if (!sellQty || parseInt(sellQty) <= 0)
         return alert("Enter valid quantity");
       try {
-        const res = await fetch("http://localhost:5001/api/sales", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/sales`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

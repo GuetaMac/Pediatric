@@ -91,7 +91,7 @@ function ServicesPage() {
     setError("");
 
     try {
-      const res = await axios.post("http://localhost:5001/api/login", {
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/login`, {
         email,
         password,
       });
@@ -115,7 +115,7 @@ function ServicesPage() {
   const handleSignup = async (e) => {
     e.preventDefault();
     try {
-      await axios.post("http://localhost:5001/api/signup", {
+      await axios.post(`${import.meta.env.VITE_API_URL}/signup`, {
         full_name: fullName,
         email,
         password,
@@ -164,7 +164,10 @@ function ServicesPage() {
 
           {/* Desktop Navbar Links */}
           <nav className="hidden md:flex space-x-4 lg:space-x-6">
-            <Link to="/services" className="text-sky-700 font-medium underline text-sm lg:text-base">
+            <Link
+              to="/services"
+              className="text-sky-700 font-medium underline text-sm lg:text-base"
+            >
               Services
             </Link>
             <Link
@@ -328,7 +331,9 @@ function ServicesPage() {
                     <h2 className="text-lg sm:text-xl font-semibold text-sky-600 mb-2">
                       {service.title}
                     </h2>
-                    <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">{service.desc}</p>
+                    <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">
+                      {service.desc}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -339,7 +344,7 @@ function ServicesPage() {
 
       {/* ✅ Shared Modal */}
       {(isOpen || isSignupOpen) && (
-        <div 
+        <div
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-0 sm:p-2 md:p-4 lg:p-6 transition-all duration-500 overflow-y-auto"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -350,9 +355,7 @@ function ServicesPage() {
         >
           <div
             className={`w-full h-full sm:h-auto sm:max-h-[95vh] md:max-h-[90vh] max-w-full sm:max-w-5xl bg-white rounded-none sm:rounded-xl md:rounded-2xl shadow-2xl flex flex-col lg:flex-row overflow-hidden relative border-0 sm:border border-yellow-400 transition-all duration-500 transform ${
-              transition
-                ? "opacity-0 scale-95"
-                : "opacity-100 scale-100"
+              transition ? "opacity-0 scale-95" : "opacity-100 scale-100"
             }`}
           >
             {/* Close */}
@@ -384,7 +387,8 @@ function ServicesPage() {
                     </h2>
                     <p className="text-xs lg:text-sm text-sky-100 leading-relaxed drop-shadow">
                       Caring for babies, kids, and teens with compassion.
-                      Register now to access your personalized pediatric records anytime.
+                      Register now to access your personalized pediatric records
+                      anytime.
                     </p>
                   </div>
                 </div>
@@ -394,8 +398,11 @@ function ServicesPage() {
                   <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-5 md:mb-6 lg:hidden">
                     Create Account
                   </h2>
-                  <form onSubmit={handleSignup} className="space-y-3 sm:space-y-4">
-                <input
+                  <form
+                    onSubmit={handleSignup}
+                    className="space-y-3 sm:space-y-4"
+                  >
+                    <input
                       type="text"
                       placeholder="Full Name"
                       value={fullName}
@@ -548,16 +555,23 @@ function ServicesPage() {
               <>
                 {/* Left Login Form */}
                 <div className="w-full lg:w-1/2 p-4 sm:p-5 md:p-6 lg:p-8 overflow-y-auto max-h-[calc(100vh-2rem)] sm:max-h-[95vh] md:max-h-[90vh] transition-all duration-500">
-                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-5 md:mb-6">Login</h2>
+                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-5 md:mb-6">
+                    Login
+                  </h2>
                   {error && (
-                    <p className="text-red-500 text-xs sm:text-sm text-center mb-3 sm:mb-4 px-2">{error}</p>
+                    <p className="text-red-500 text-xs sm:text-sm text-center mb-3 sm:mb-4 px-2">
+                      {error}
+                    </p>
                   )}
                   {cooldown > 0 && (
                     <p className="text-orange-600 text-xs sm:text-sm text-center mb-3 sm:mb-4 px-2">
                       Too many attempts. Please wait {cooldown}s.
                     </p>
                   )}
-                  <form onSubmit={handleLogin} className="space-y-3 sm:space-y-4">
+                  <form
+                    onSubmit={handleLogin}
+                    className="space-y-3 sm:space-y-4"
+                  >
                     <input
                       type="email"
                       placeholder="Email"

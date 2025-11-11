@@ -19,12 +19,17 @@ function PatientDashboard() {
   // 🔹 Fetch patient profile
   const fetchUserInfo = async () => {
     try {
-      const res = await fetch("http://localhost:5001/api/patient/profile-data", {
-        headers: {
-          Authorization: `Bearer ${window.localStorage.getItem("token") || ""}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/patient/profile-data`,
+        {
+          headers: {
+            Authorization: `Bearer ${
+              window.localStorage.getItem("token") || ""
+            }`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       if (!res.ok) throw new Error("Failed to fetch user info");
       const data = await res.json();
@@ -38,10 +43,12 @@ function PatientDashboard() {
   const fetchLatestApprovedAppointment = async () => {
     try {
       const res = await fetch(
-        "http://localhost:5001/api/appointments/latest-approved",
+        `${import.meta.env.VITE_API_URL}/appointments/latest-approved`,
         {
           headers: {
-            Authorization: `Bearer ${window.localStorage.getItem("token") || ""}`,
+            Authorization: `Bearer ${
+              window.localStorage.getItem("token") || ""
+            }`,
             "Content-Type": "application/json",
           },
         }
@@ -94,7 +101,8 @@ function PatientDashboard() {
               : "Welcome back! 👋"}
           </h1>
           <p className="text-gray-600 text-base">
-            Stay on top of your health journey — here’s a summary of what’s next.
+            Stay on top of your health journey — here’s a summary of what’s
+            next.
           </p>
         </div>
         <div className="absolute right-6 bottom-0 opacity-10">
