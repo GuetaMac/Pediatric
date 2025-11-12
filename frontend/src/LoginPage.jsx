@@ -76,20 +76,56 @@ function LoginPage() {
     e.preventDefault();
     setError("");
 
+    // 🔍 DEBUG: I-print lahat ng values
+    console.log("=== FORM VALUES ===");
+    console.log("fullName:", fullName);
+    console.log("email:", email);
+    console.log("password:", password);
+    console.log("birthDate:", birthDate);
+    console.log("gender:", gender);
+    console.log("address:", address);
+    console.log("fatherName:", fatherName);
+    console.log("motherName:", motherName);
+    console.log("phone:", phone);
+    console.log("bloodType:", bloodType);
+    console.log("isSendingCode:", isSendingCode);
+    console.log("===================");
     // Client-side password strength check
     const isStrongPassword = (pwd) =>
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(pwd);
 
     // Validate all fields first
-    if (!fullName || !email || !password || !birthDate || !gender) {
+    if (
+      !fullName ||
+      !email ||
+      !password ||
+      !birthDate ||
+      !gender ||
+      !address ||
+      !fatherName ||
+      !motherName ||
+      !phone ||
+      !bloodType
+    ) {
       setError("Please fill in all required fields");
       return;
     }
-
     if (!isStrongPassword(password)) {
-      setError(
-        "Password must be at least 8 characters and include uppercase, lowercase, number, and special character."
-      );
+      Swal.fire({
+        icon: "error",
+        title: "Weak Password",
+        html: `
+      <p>Password must include:</p>
+      <ul style="text-align: left; margin-top: 10px;">
+        <li>✓ At least 8 characters</li>
+        <li>✓ Uppercase letter (A-Z)</li>
+        <li>✓ Lowercase letter (a-z)</li>
+        <li>✓ Number (0-9)</li>
+        <li>✓ Special character (!@#$%^&*)</li>
+      </ul>
+    `,
+        confirmButtonColor: "#0ea5e9",
+      });
       return;
     }
 
@@ -151,7 +187,12 @@ function LoginPage() {
         setIsOpen(true);
         setError("");
       } else {
-        setError(serverMsg);
+        Swal.fire({
+          icon: "error",
+          title: "Registration Failed",
+          text: serverMsg,
+          confirmButtonColor: "#0ea5e9",
+        });
       }
     } finally {
       setIsSendingCode(false); // Stop loading
@@ -664,9 +705,15 @@ function LoginPage() {
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base resize-y min-h-[100px] sm:min-h-[80px] outline-none transition touch-manipulation"
                     />
 
+                    {error && (
+                      <p className="text-red-500 text-xs sm:text-sm text-center mb-3 sm:mb-4 px-2">
+                        {error}
+                      </p>
+                    )}
+
                     <button
                       type="submit"
-                      disabled={isSendingCode}
+                      //disabled={isSendingCode}
                       className={`w-full py-3 sm:py-2.5 md:py-3 rounded-lg transition font-semibold text-base sm:text-base mt-2 min-h-[48px] touch-manipulation shadow-md flex items-center justify-center ${
                         isSendingCode
                           ? "bg-gray-400 cursor-not-allowed text-white"
