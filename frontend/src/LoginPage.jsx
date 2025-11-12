@@ -75,9 +75,20 @@ function LoginPage() {
     e.preventDefault();
     setError("");
 
+    // Client-side password strength check
+    const isStrongPassword = (pwd) =>
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(pwd);
+
     // Validate all fields first
     if (!fullName || !email || !password || !birthDate || !gender) {
       setError("Please fill in all required fields");
+      return;
+    }
+
+    if (!isStrongPassword(password)) {
+      setError(
+        "Password must be at least 8 characters and include uppercase, lowercase, number, and special character."
+      );
       return;
     }
 
@@ -113,7 +124,17 @@ function LoginPage() {
       alert("📧 Verification code sent to " + email);
     } catch (err) {
       console.error("Error sending code:", err);
-      setError(err.response?.data?.error || "Failed to send verification code");
+      const serverMsg =
+        err.response?.data?.error || "Failed to send verification code";
+      // If email already registered, inform and direct to login
+      if (serverMsg.toLowerCase().includes("email already registered")) {
+        alert("This email is already registered. You can log in with it.");
+        setIsSignupOpen(false);
+        setIsOpen(true);
+        setError("");
+      } else {
+        setError(serverMsg);
+      }
     } finally {
       setIsSendingCode(false); // Stop loading
     }
@@ -178,10 +199,6 @@ function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
-
-    // ✅ Add these 2 lines
-    console.log("🔍 VITE_API_URL:", import.meta.env.VITE_API_URL);
-    console.log("🔍 Full login URL:", `${import.meta.env.VITE_API_URL}/login`);
 
     if (cooldown > 0) return;
 
@@ -468,7 +485,7 @@ function LoginPage() {
                   >
                     <input
                       type="text"
-                      placeholder="Full Name"
+                      placeholder="Patient's Full Name"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required
@@ -492,13 +509,18 @@ function LoginPage() {
                         required
                         className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                       />
-                      <input
-                        type="date"
-                        value={birthDate}
-                        onChange={(e) => setBirthDate(e.target.value)}
-                        required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
-                      />
+                      <div className="flex flex-col">
+                        <label className="text-sm font-medium text-gray-700 mb-1">
+                          Birthdate
+                        </label>
+                        <input
+                          type="date"
+                          value={birthDate}
+                          onChange={(e) => setBirthDate(e.target.value)}
+                          required
+                          className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                        />
+                      </div>
                       <select
                         value={gender}
                         onChange={(e) => setGender(e.target.value)}
@@ -550,45 +572,50 @@ function LoginPage() {
 
                     <input
                       type="text"
-                      placeholder="Guardian"
+                      placeholder="Guardian (Optional)"
                       value={guardian}
                       onChange={(e) => setGuardian(e.target.value)}
-                      required
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                     />
 
                     <input
                       type="tel"
-                      placeholder="Guardian Number"
+                      placeholder="Guardian Number (Optional)"
                       value={guardianNumber}
                       onChange={(e) => setGuardianNumber(e.target.value)}
-                      required
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                     />
 
-                    <input
-                      type="text"
-                      placeholder="Blood Type"
+                    <select
                       value={bloodType}
                       onChange={(e) => setBloodType(e.target.value)}
                       required
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
-                    />
+                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation bg-white"
+                    >
+                      <option value="">Select Blood Type</option>
+                      <option value="A+">A+</option>
+                      <option value="A-">A-</option>
+                      <option value="B+">B+</option>
+                      <option value="B-">B-</option>
+                      <option value="AB+">AB+</option>
+                      <option value="AB-">AB-</option>
+                      <option value="O+">O+</option>
+                      <option value="O-">O-</option>
+                      <option value="N/A">N/A / Unsure</option>
+                    </select>
 
                     <textarea
-                      placeholder="Chronic Conditions"
+                      placeholder="Chronic Conditions (Optional)"
                       value={chronicConditions}
                       onChange={(e) => setChronicConditions(e.target.value)}
-                      required
                       rows={3}
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base resize-y min-h-[100px] sm:min-h-[80px] outline-none transition touch-manipulation"
                     />
 
                     <textarea
-                      placeholder="Allergies"
+                      placeholder="Allergies (Optional)"
                       value={allergies}
                       onChange={(e) => setAllergies(e.target.value)}
-                      required
                       rows={3}
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base resize-y min-h-[100px] sm:min-h-[80px] outline-none transition touch-manipulation"
                     />

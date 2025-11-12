@@ -31,12 +31,22 @@ const pool = new Pool({
 });
 
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: process.env.EMAIL_HOST || "smtp.gmail.com",
+  port: process.env.EMAIL_PORT || 587,
+  secure: process.env.EMAIL_SECURE === "true", // true for 465, false for other ports
   auth: {
-    user: process.env.EMAIL_USER || "castillochildrenclinic@gmail.com", // Your Gmail address
-    pass: process.env.EMAIL_PASS || "szwr hwkw wevl gjqu", // 16-char App Password from Google
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
 });
+
+const isStrongPassword = (password = "") => {
+  const strongRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+  return strongRegex.test(password);
+};
+
+const PASSWORD_REQUIREMENTS =
+  "Password must be at least 8 characters long and include uppercase, lowercase, numeric, and special characters.";
 
 // Test email connection on startup
 transporter.verify(function (error, success) {
@@ -152,6 +162,10 @@ app.post("/verify-and-signup", async (req, res) => {
         .json({ error: "Invalid or expired verification code" });
     }
 
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({ error: PASSWORD_REQUIREMENTS });
+    }
+
     // Hash password
     const hashedPass = await bcrypt.hash(password, 10);
 
@@ -250,6 +264,10 @@ app.post("/signup", async (req, res) => {
       return res
         .status(400)
         .json({ error: "All required fields must be filled" });
+    }
+
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({ error: PASSWORD_REQUIREMENTS });
     }
 
     const hashedPass = await bcrypt.hash(password, 10);
@@ -490,7 +508,7 @@ app.delete("/users/:user_id", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-// ✅ POST //appointments
+// ✅ POST /appointments
 app.post("/appointments", auth, async (req, res) => {
   try {
     const { date, time, type, concerns, additional_services } = req.body;
@@ -628,14 +646,24 @@ app.get("/appointments/doctor", auth, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-// Update status (approve/completed)
+// Update status (approve/completed/canceled)
 app.put("/appointments/:id/status", auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    let { status } = req.body;
 
-    if (!["Approved", "Completed"].includes(status)) {
-      return res.status(400).json({ error: "Invalid status" });
+    // Normalize status to capitalize first letter
+    if (status) {
+      status = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+    }
+
+    // Allow: Approved, Completed, Canceled, Pending
+    const validStatuses = ["Approved", "Completed", "Canceled", "Pending"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        error:
+          "Invalid status. Allowed: Approved, Completed, Canceled, Pending",
+      });
     }
 
     const result = await pool.query(
@@ -896,6 +924,10 @@ app.post("/patients/add", auth, async (req, res) => {
       return res.status(400).json({
         message: "Please fill all required fields",
       });
+    }
+
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({ message: PASSWORD_REQUIREMENTS });
     }
 
     // ✅ Check if email already exists
@@ -1204,6 +1236,247 @@ app.get("/patient/medical-records", auth, async (req, res) => {
   } catch (err) {
     console.error("Error fetching patient medical records:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// 🔎 Search medical records by unique identifiers for import
+app.post("/patient/medical-records/import/search", auth, async (req, res) => {
+  try {
+    const { mother_name, father_name } = req.body || {};
+
+    if (!mother_name && !father_name) {
+      return res
+        .status(400)
+        .json({ error: "Either mother_name or father_name is required" });
+    }
+
+    // Fetch logged-in user's full name to ensure strict match
+    const currentUser = await pool.query(
+      "SELECT full_name FROM users WHERE user_id = $1",
+      [req.user.id]
+    );
+    if (currentUser.rows.length === 0) {
+      return res.status(404).json({ error: "Current user not found" });
+    }
+    const currentFullName = currentUser.rows[0].full_name;
+
+    const result = await pool.query(
+      `
+      SELECT 
+        a.appointment_id,
+        a.appointment_date::text AS appointment_date,
+        a.appointment_time::text AS appointment_time,
+        a.appointment_type,
+        a.concerns,
+        a.additional_services,
+        u.full_name,
+        u.user_id,
+        m.weight,
+        m.height,
+        m.temperature,
+        m.pulse_rate,
+        m.diagnosis,
+        m.remarks,
+        m.created_at,
+        m.updated_at
+      FROM users u
+      LEFT JOIN patient_profiles p ON u.user_id = p.user_id
+      JOIN appointments a ON a.user_id = u.user_id
+      LEFT JOIN medical_records m ON m.appointment_id = a.appointment_id
+      WHERE TRIM(LOWER(u.full_name)) = TRIM(LOWER($1))
+        AND (
+          ($2::text IS NOT NULL AND TRIM(LOWER(p.mother_name)) = TRIM(LOWER($2::text)))
+          OR
+          ($3::text IS NOT NULL AND TRIM(LOWER(p.father_name)) = TRIM(LOWER($3::text)))
+        )
+        AND LOWER(a.status) = 'completed'
+      ORDER BY a.appointment_date DESC, a.appointment_time DESC
+      `,
+      [currentFullName, mother_name || null, father_name || null]
+    );
+
+    // Check which records are already imported for the current user
+    const currentUserId = req.user.id;
+    const existingRecords = await pool.query(
+      `
+      SELECT 
+        a.appointment_date::text AS appointment_date,
+        a.appointment_time::text AS appointment_time,
+        a.appointment_type,
+        m.diagnosis,
+        m.weight,
+        m.height
+      FROM appointments a
+      JOIN medical_records m ON m.appointment_id = a.appointment_id
+      WHERE a.user_id = $1
+        AND LOWER(a.status) = 'completed'
+      `,
+      [currentUserId]
+    );
+
+    // Helper function to format date safely
+    const formatDate = (dateValue) => {
+      if (!dateValue) return "";
+      if (typeof dateValue === "string") {
+        return dateValue.split("T")[0];
+      }
+      if (dateValue instanceof Date) {
+        return dateValue.toISOString().split("T")[0];
+      }
+      return String(dateValue).split("T")[0] || "";
+    };
+
+    // Helper function to format time safely
+    const formatTime = (timeValue) => {
+      if (!timeValue) return "";
+      if (typeof timeValue === "string") {
+        return timeValue.substring(0, 8);
+      }
+      return String(timeValue).substring(0, 8) || "";
+    };
+
+    // Create a set of imported record signatures for quick lookup
+    // Use date, time, type, and diagnosis as the unique identifier
+    const importedSignatures = new Set(
+      existingRecords.rows.map((r) => {
+        const date = formatDate(r.appointment_date);
+        const time = formatTime(r.appointment_time);
+        const type = r.appointment_type || "";
+        const diagnosis = r.diagnosis || "";
+        return `${date}|${time}|${type}|${diagnosis}`;
+      })
+    );
+
+    // Return minimal, useful fields for the client UI with import status
+    const rows = result.rows.map((r) => {
+      const date = formatDate(r.appointment_date);
+      const time = formatTime(r.appointment_time);
+      const type = r.appointment_type || "";
+      const diagnosis = r.diagnosis || "";
+      const signature = `${date}|${time}|${type}|${diagnosis}`;
+      const isImported = importedSignatures.has(signature);
+
+      return {
+        appointment_id: r.appointment_id,
+        appointment_date: date,
+        appointment_time: time,
+        appointment_type: r.appointment_type,
+        full_name: r.full_name,
+        diagnosis: r.diagnosis,
+        weight: r.weight,
+        height: r.height,
+        is_imported: isImported,
+      };
+    });
+
+    res.json(rows);
+  } catch (err) {
+    console.error("Error searching import medical records:", err.message);
+    res.status(500).json({ error: "Server error during search" });
+  }
+});
+
+// ⬇️ Import selected medical records into the current account
+app.post("/patient/medical-records/import", auth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const userId = req.user.id;
+    const { record_ids } = req.body || {};
+
+    if (!Array.isArray(record_ids) || record_ids.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "record_ids must be a non-empty array" });
+    }
+
+    await client.query("BEGIN");
+
+    // Fetch source appointments + medical records to be imported
+    const src = await client.query(
+      `
+      SELECT 
+        a.appointment_id,
+        a.appointment_date,
+        a.appointment_time,
+        a.appointment_type,
+        a.concerns,
+        a.additional_services,
+        a.status,
+        m.weight,
+        m.height,
+        m.temperature,
+        m.pulse_rate,
+        m.diagnosis,
+        m.remarks
+      FROM appointments a
+      JOIN medical_records m ON m.appointment_id = a.appointment_id
+      WHERE a.appointment_id = ANY($1::int[])
+        AND LOWER(a.status) = 'completed'
+      `,
+      [record_ids]
+    );
+
+    if (src.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res
+        .status(404)
+        .json({ error: "No completed records found to import" });
+    }
+
+    let importedCount = 0;
+
+    for (const row of src.rows) {
+      // Create a new appointment for the current user, copying essential fields
+      const insertAppt = await client.query(
+        `
+        INSERT INTO appointments
+          (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services)
+        VALUES
+          ($1, $2, $3, $4, 'completed', $5, $6)
+        RETURNING appointment_id
+        `,
+        [
+          userId,
+          row.appointment_date,
+          row.appointment_time,
+          row.appointment_type,
+          row.concerns || "",
+          row.additional_services || "None",
+        ]
+      );
+
+      const newAppointmentId = insertAppt.rows[0].appointment_id;
+
+      // Copy the medical record to the new appointment
+      await client.query(
+        `
+        INSERT INTO medical_records
+          (appointment_id, weight, height, temperature, pulse_rate, diagnosis, remarks, created_at, updated_at)
+        VALUES
+          ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+        `,
+        [
+          newAppointmentId,
+          row.weight ?? null,
+          row.height ?? null,
+          row.temperature ?? null,
+          row.pulse_rate ?? null,
+          row.diagnosis ?? null,
+          row.remarks ?? null,
+        ]
+      );
+
+      importedCount += 1;
+    }
+
+    await client.query("COMMIT");
+    res.json({ message: "Import successful", imported: importedCount });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error importing medical records:", err.message);
+    res.status(500).json({ error: "Server error during import" });
+  } finally {
+    client.release();
   }
 });
 

@@ -86,7 +86,7 @@ function PatientDashboard() {
     {
       title: "Health Monitoring",
       icon: <HeartPulse className="w-10 h-10 text-pink-500" />,
-      desc: "Track vital signs and wellness through the kiosk system.",
+      desc: "Track vital signs and wellness through the Castillo Children Clinic System.",
     },
   ];
 

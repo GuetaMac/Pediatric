@@ -28,6 +28,7 @@ import {
   Home,
   LogOut,
   X,
+  CheckCircle,
 } from "lucide-react";
 
 // ✅ Appointment types with durations
@@ -342,7 +343,7 @@ function Patient() {
                 minDate={new Date()}
                 dateFormat="MMMM d, yyyy"
                 className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
-              focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+            focus:ring-2 focus:ring-yellow-400 focus:outline-none"
                 placeholderText="Select a date"
                 popperClassName="z-50"
               />
@@ -495,7 +496,7 @@ function Patient() {
             onChange={(e) => setPatientConcerns(e.target.value)}
             placeholder="Describe symptoms or reason for visit"
             className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white resize-none
-          focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+        focus:ring-2 focus:ring-yellow-400 focus:outline-none"
             rows={3}
           />
           {patientConcerns.length > 0 && (
@@ -510,7 +511,7 @@ function Patient() {
           <button
             onClick={() => handleBookAppointment(patientConcerns)}
             className="inline-block bg-yellow-400 text-sky-900 px-10 py-4 rounded-full text-lg
-          font-bold shadow-md hover:bg-yellow-500 hover:scale-105 hover:shadow-lg transition-all"
+        font-bold shadow-md hover:bg-yellow-500 hover:scale-105 hover:shadow-lg transition-all"
           >
             Book Appointment
           </button>
@@ -620,7 +621,40 @@ function Patient() {
     const [error, setError] = useState(null);
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [showModal, setShowModal] = useState(false);
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importFullName, setImportFullName] = useState("");
+    const [importMotherName, setImportMotherName] = useState("");
+    const [importFatherName, setImportFatherName] = useState("");
+    const [importSearchLoading, setImportSearchLoading] = useState(false);
+    const [importResults, setImportResults] = useState([]);
+    const [importError, setImportError] = useState(null);
+    const [selectedImportIds, setSelectedImportIds] = useState(new Set());
+    const [importSubmitting, setImportSubmitting] = useState(false);
 
+    // Auto-load current user's full_name for import and lock the field
+    useEffect(() => {
+      const loadUser = async () => {
+        try {
+          const token = localStorage.getItem("token");
+          if (!token) return;
+          const res = await fetch(
+            `${import.meta.env.VITE_API_URL}/patient/user-info`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data.full_name) {
+              setImportFullName(data.full_name);
+            }
+          }
+        } catch {
+          // ignore
+        }
+      };
+      loadUser();
+    }, []);
     useEffect(() => {
       fetchPatientRecords();
     }, []);
@@ -684,17 +718,45 @@ function Patient() {
     const printRecord = (patient) => {
       if (!patient) return alert("No record to print.");
 
-      // Compute age from birth_date if available
+      // Compute age from birth_date at the time of appointment
       let age = "N/A";
-      if (patient.birth_date) {
+      if (patient.birth_date && patient.appointment_date) {
         const birth = new Date(patient.birth_date);
-        const today = new Date();
-        age = today.getFullYear() - birth.getFullYear();
-        const m = today.getMonth() - birth.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-          age--;
+        const appointmentDateForAge = new Date(patient.appointment_date);
+
+        // Calculate age in years and months
+        let years = appointmentDateForAge.getFullYear() - birth.getFullYear();
+        let months = appointmentDateForAge.getMonth() - birth.getMonth();
+
+        if (
+          months < 0 ||
+          (months === 0 && appointmentDateForAge.getDate() < birth.getDate())
+        ) {
+          years--;
+          months += 12;
         }
-        age = `${age} yrs`;
+        if (appointmentDateForAge.getDate() < birth.getDate()) {
+          months--;
+          if (months < 0) {
+            months += 12;
+            years--;
+          }
+        }
+
+        // If less than 2 years old, show in months
+        if (years < 2) {
+          const totalMonths = years * 12 + months;
+          age = `${totalMonths} ${totalMonths === 1 ? "month" : "months"}`;
+        } else {
+          // Otherwise show in years
+          if (months === 0) {
+            age = `${years} ${years === 1 ? "yr" : "yrs"}`;
+          } else {
+            age = `${years} ${years === 1 ? "yr" : "yrs"} ${months} ${
+              months === 1 ? "month" : "months"
+            }`;
+          }
+        }
       }
 
       // Format appointment date and time
@@ -707,31 +769,31 @@ function Patient() {
       const printWindow = window.open("", "_blank");
       printWindow.document.write(`
     <html>
-      <head>
+    <head>
         <title>Patient Record - ${patient.full_name}</title>
         <style>
-          body {
+        body {
             font-family: Arial, sans-serif;
             padding: 30px;
             line-height: 1.6;
             color: #333;
-          }
-          h2 {
+        }
+        h2 {
             color: #2563eb;
             border-bottom: 2px solid #2563eb;
             padding-bottom: 5px;
-          }
-          p {
+        }
+        p {
             margin: 6px 0;
-          }
-          .field {
+        }
+        .field {
             margin-bottom: 10px;
-          }
-          .label {
+        }
+        .label {
             font-weight: bold;
             color: #1e3a8a;
-          }
-          button {
+        }
+        button {
             margin-top: 20px;
             padding: 8px 16px;
             background: #2563eb;
@@ -739,53 +801,53 @@ function Patient() {
             border: none;
             border-radius: 6px;
             cursor: pointer;
-          }
-          button:hover {
+        }
+        button:hover {
             background: #1d4ed8;
-          }
-          .section {
+        }
+        .section {
             margin-bottom: 20px;
-          }
+        }
         </style>
-      </head>
-      <body>
+    </head>
+    <body>
         <h2>Appointment Details</h2>
         <div class="section">
-          <p class="field"><span class="label">Appointment Type:</span> ${appointmentType}</p>
-          <p class="field"><span class="label">Date:</span> ${appointmentDate}</p>
-          <p class="field"><span class="label">Time:</span> ${appointmentTime}</p>
+        <p class="field"><span class="label">Appointment Type:</span> ${appointmentType}</p>
+        <p class="field"><span class="label">Date:</span> ${appointmentDate}</p>
+        <p class="field"><span class="label">Time:</span> ${appointmentTime}</p>
         </div>
 
         <h2>Medical Record</h2>
         <div class="section">
-          <p class="field"><span class="label">Full Name:</span> ${
-            patient.full_name
-          }</p>
-          <p class="field"><span class="label">Age:</span> ${age}</p>
-          <p class="field"><span class="label">Temperature:</span> ${
-            patient.temperature || "N/A"
-          }</p>
-          <p class="field"><span class="label">Pulse Rate:</span> ${
-            patient.pulse_rate || "N/A"
-          }</p>
-          <p class="field"><span class="label">Height:</span> ${
-            patient.height || "N/A"
-          }</p>
-          <p class="field"><span class="label">Weight:</span> ${
-            patient.weight || "N/A"
-          }</p>
-          <p class="field"><span class="label">Diagnosis:</span> ${
-            patient.diagnosis || "N/A"
-          }</p>
-          <p class="field"><span class="label">Remarks:</span> ${
-            patient.remarks || "N/A"
-          }</p>
+        <p class="field"><span class="label">Full Name:</span> ${
+          patient.full_name
+        }</p>
+        <p class="field"><span class="label">Age:</span> ${age}</p>
+        <p class="field"><span class="label">Temperature:</span> ${
+          patient.temperature || "N/A"
+        }</p>
+        <p class="field"><span class="label">Pulse Rate:</span> ${
+          patient.pulse_rate || "N/A"
+        }</p>
+        <p class="field"><span class="label">Height:</span> ${
+          patient.height || "N/A"
+        }</p>
+        <p class="field"><span class="label">Weight:</span> ${
+          patient.weight || "N/A"
+        }</p>
+        <p class="field"><span class="label">Diagnosis:</span> ${
+          patient.diagnosis || "N/A"
+        }</p>
+        <p class="field"><span class="label">Remarks:</span> ${
+          patient.remarks || "N/A"
+        }</p>
         </div>
 
         <button onclick="window.print()">Print this page</button>
-      </body>
+    </body>
     </html>
-  `);
+`);
       printWindow.document.close();
     };
 
@@ -829,18 +891,36 @@ function Patient() {
     return (
       <div className="space-y-6 p-6">
         <div className="max-w-6xl mx-auto space-y-6">
-          {/* ---------- Header ---------- */}
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-blue-900 flex items-center">
-              <User className="w-8 h-8 mr-3 text-yellow-500" />
+          {/* ---------- Cohesive Header Bar (Replaced Original Header Div) ---------- */}
+          <div className="flex items-center justify-between p-4 bg-white/95 border-b border-gray-200 rounded-xl shadow-lg">
+            {/* Title */}
+            <h1 className="text-2xl sm:text-3xl font-bold text-blue-900 flex items-center">
+              <User className="w-7 h-7 sm:w-8 sm:h-8 mr-3 text-yellow-500" />
               My Medical Records
             </h1>
-            <button
-              onClick={fetchPatientRecords}
-              className="px-4 py-2 bg-yellow-500 text-blue-900 font-semibold rounded-lg shadow hover:bg-yellow-400 transition-colors"
-            >
-              Refresh
-            </button>
+
+            {/* Actions/Buttons */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportModal(true);
+                  setImportError(null);
+                }}
+                // Import button optimized for smaller screens (hidden on XS)
+                className="hidden sm:block px-3 py-1.5 md:px-4 md:py-2 border-2 border-blue-300 text-blue-900 font-semibold rounded-lg shadow-sm bg-white hover:bg-blue-50 transition-colors text-sm"
+              >
+                Import Medical Records
+              </button>
+
+              <button
+                onClick={fetchPatientRecords}
+                // Refresh button
+                className="px-3 py-1.5 md:px-4 md:py-2 bg-yellow-500 text-blue-900 font-semibold rounded-lg shadow hover:bg-yellow-400 transition-colors text-sm"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
 
           {/* ---------- Records Grid ---------- */}
@@ -998,26 +1078,59 @@ function Patient() {
                     {selectedRecord.birth_date ? (
                       <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                         <h4 className="font-semibold text-blue-800 mb-1">
-                          Age
+                          Age (at appointment)
                         </h4>
                         <p className="text-2xl font-bold text-blue-600">
                           {(() => {
                             const birthDate = new Date(
                               selectedRecord.birth_date
                             );
-                            const today = new Date();
-                            let age =
-                              today.getFullYear() - birthDate.getFullYear();
-                            const m = today.getMonth() - birthDate.getMonth();
+                            const appointmentDate =
+                              selectedRecord.appointment_date
+                                ? new Date(selectedRecord.appointment_date)
+                                : new Date();
+
+                            // Calculate age in years and months
+                            let years =
+                              appointmentDate.getFullYear() -
+                              birthDate.getFullYear();
+                            let months =
+                              appointmentDate.getMonth() - birthDate.getMonth();
+
                             if (
-                              m < 0 ||
-                              (m === 0 && today.getDate() < birthDate.getDate())
+                              months < 0 ||
+                              (months === 0 &&
+                                appointmentDate.getDate() < birthDate.getDate())
                             ) {
-                              age--;
+                              years--;
+                              months += 12;
                             }
-                            return age;
+                            if (
+                              appointmentDate.getDate() < birthDate.getDate()
+                            ) {
+                              months--;
+                              if (months < 0) {
+                                months += 12;
+                                years--;
+                              }
+                            }
+
+                            // If less than 2 years old, show in months
+                            if (years < 2) {
+                              const totalMonths = years * 12 + months;
+                              return `${totalMonths} ${
+                                totalMonths === 1 ? "month" : "months"
+                              }`;
+                            }
+
+                            // Otherwise show in years
+                            if (months === 0) {
+                              return `${years} ${years === 1 ? "yr" : "yrs"}`;
+                            }
+                            return `${years} ${
+                              years === 1 ? "yr" : "yrs"
+                            } ${months} ${months === 1 ? "month" : "months"}`;
                           })()}
-                          <span className="text-sm ml-1">yrs</span>
                         </p>
                       </div>
                     ) : (
@@ -1133,6 +1246,324 @@ function Patient() {
                       className="px-6 py-2 bg-yellow-500 text-blue-900 font-semibold rounded-lg hover:bg-yellow-400 transition-colors"
                     >
                       Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {showImportModal && (
+            <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border-t-8 border-blue-500">
+                <div className="p-6 border-b border-blue-100">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-blue-900 flex items-center">
+                      <FileText className="w-6 h-6 mr-2 text-blue-500" />
+                      Import Medical Records
+                    </h2>
+                    <button
+                      onClick={() => {
+                        setShowImportModal(false);
+                        setImportFullName("");
+                        setImportMotherName("");
+                        setImportFatherName("");
+                        setImportResults([]);
+                        setSelectedImportIds(new Set());
+                        setImportError(null);
+                      }}
+                      className="text-blue-500 hover:text-yellow-500 text-2xl"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <p className="text-sm text-blue-600 mt-1">
+                    Enter your full name and either your mother&apos;s or
+                    father&apos;s name to find your records.
+                  </p>
+                </div>
+
+                <div className="p-6 space-y-6">
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-blue-900 mb-1">
+                          Full Name
+                        </label>
+                        <input
+                          type="text"
+                          value={importFullName}
+                          onChange={(e) => setImportFullName(e.target.value)}
+                          disabled
+                          placeholder="e.g., Juan Dela Cruz"
+                          className="w-full border-2 border-blue-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-blue-900 mb-1">
+                          Mother&apos;s Name (optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={importMotherName}
+                          onChange={(e) => setImportMotherName(e.target.value)}
+                          placeholder="e.g., Maria Dela Cruz"
+                          className="w-full border-2 border-blue-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-blue-900 mb-1">
+                          Father&apos;s Name (optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={importFatherName}
+                          onChange={(e) => setImportFatherName(e.target.value)}
+                          placeholder="e.g., Jose Dela Cruz"
+                          className="w-full border-2 border-blue-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                        />
+                      </div>
+                    </div>
+                    {importError && (
+                      <p className="text-sm text-red-600 mt-3">{importError}</p>
+                    )}
+                    <div className="mt-4">
+                      <button
+                        disabled={importSearchLoading}
+                        onClick={async () => {
+                          setImportError(null);
+                          if (
+                            !importFullName.trim() ||
+                            (!importMotherName.trim() &&
+                              !importFatherName.trim())
+                          ) {
+                            setImportError(
+                              "Please enter your full name and at least one parent name."
+                            );
+                            return;
+                          }
+                          try {
+                            setImportSearchLoading(true);
+                            const token = localStorage.getItem("token");
+                            const res = await fetch(
+                              `${
+                                import.meta.env.VITE_API_URL
+                              }/patient/medical-records/import/search`,
+                              {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                  Authorization: `Bearer ${token}`,
+                                },
+                                body: JSON.stringify({
+                                  full_name: importFullName.trim(),
+                                  mother_name:
+                                    importMotherName.trim() || undefined,
+                                  father_name:
+                                    importFatherName.trim() || undefined,
+                                }),
+                              }
+                            );
+                            if (!res.ok) {
+                              const data = await res.json().catch(() => ({}));
+                              throw new Error(
+                                data.error || `Search failed (${res.status})`
+                              );
+                            }
+                            const data = await res.json();
+                            setImportResults(Array.isArray(data) ? data : []);
+                            setSelectedImportIds(new Set());
+                          } catch (err) {
+                            setImportError(
+                              err.message || "Search failed. Please try again."
+                            );
+                          } finally {
+                            setImportSearchLoading(false);
+                          }
+                        }}
+                        className={`px-5 py-2 rounded-lg font-semibold ${
+                          importSearchLoading
+                            ? "bg-blue-300 text-white"
+                            : "bg-blue-600 text-white hover:bg-blue-700"
+                        } transition-colors`}
+                      >
+                        {importSearchLoading
+                          ? "Searching..."
+                          : "Search Records"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-md font-semibold text-blue-900">
+                      Search Results
+                    </h3>
+                    {importResults.length === 0 ? (
+                      <div className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-3">
+                        No records to display. Run a search to see results.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {importResults.map((rec) => {
+                          const id =
+                            rec.record_id || rec.appointment_id || rec.id;
+                          const checked = selectedImportIds.has(id);
+                          const isImported = rec.is_imported === true;
+                          return (
+                            <label
+                              key={id}
+                              className={`border rounded-lg p-4 transition-all ${
+                                isImported
+                                  ? "bg-green-50 border-green-300 cursor-not-allowed opacity-75"
+                                  : checked
+                                  ? "border-yellow-400 bg-yellow-50 cursor-pointer hover:shadow"
+                                  : "border-blue-100 bg-white cursor-pointer hover:shadow"
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={isImported}
+                                  onChange={(e) => {
+                                    if (!isImported) {
+                                      const next = new Set(selectedImportIds);
+                                      if (e.target.checked) next.add(id);
+                                      else next.delete(id);
+                                      setSelectedImportIds(next);
+                                    }
+                                  }}
+                                  className={`mt-1 w-5 h-5 text-yellow-400 border-blue-300 rounded focus:ring-yellow-400 ${
+                                    isImported
+                                      ? "opacity-50 cursor-not-allowed"
+                                      : ""
+                                  }`}
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <p className="text-sm font-bold text-yellow-700 uppercase">
+                                      {rec.appointment_type || "Record"}
+                                    </p>
+                                    {isImported && (
+                                      <span className="px-2 py-0.5 text-xs font-semibold bg-green-500 text-white rounded-full flex items-center gap-1">
+                                        <CheckCircle className="w-3 h-3" />
+                                        Imported
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-blue-900 font-semibold">
+                                    {rec.full_name || importFullName}
+                                  </p>
+                                  <p className="text-sm text-blue-700">
+                                    Date:{" "}
+                                    {rec.appointment_date || rec.date || "N/A"}
+                                  </p>
+                                  {rec.diagnosis && (
+                                    <p className="text-sm text-blue-700">
+                                      Diagnosis: {rec.diagnosis}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-6 border-t border-blue-100 bg-blue-50 rounded-b-2xl flex items-center justify-between">
+                  <p className="text-xs text-blue-600">
+                    Select the records you recognize as yours, then import them
+                    to your account.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        setShowImportModal(false);
+                        setImportFullName("");
+                        setImportMotherName("");
+                        setImportFatherName("");
+                        setImportResults([]);
+                        setSelectedImportIds(new Set());
+                        setImportError(null);
+                      }}
+                      className="px-5 py-2 bg-white border-2 border-blue-200 text-blue-900 font-semibold rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      disabled={
+                        selectedImportIds.size === 0 || importSubmitting
+                      }
+                      onClick={async () => {
+                        setImportError(null);
+                        try {
+                          setImportSubmitting(true);
+                          const token = localStorage.getItem("token");
+
+                          // Filter out already-imported records from selection
+                          const importableIds = Array.from(
+                            selectedImportIds
+                          ).filter((id) => {
+                            const rec = importResults.find(
+                              (r) =>
+                                (r.record_id || r.appointment_id || r.id) === id
+                            );
+                            return rec && !rec.is_imported;
+                          });
+
+                          if (importableIds.length === 0) {
+                            setImportError(
+                              "No importable records selected. Please select records that haven't been imported yet."
+                            );
+                            setImportSubmitting(false);
+                            return;
+                          }
+
+                          const res = await fetch(
+                            `${
+                              import.meta.env.VITE_API_URL
+                            }/patient/medical-records/import`,
+                            {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({
+                                record_ids: importableIds,
+                              }),
+                            }
+                          );
+                          if (!res.ok) {
+                            const data = await res.json().catch(() => ({}));
+                            throw new Error(
+                              data.error || `Import failed (${res.status})`
+                            );
+                          }
+                          setShowImportModal(false);
+                          setImportFullName("");
+                          setImportMotherName("");
+                          setImportFatherName("");
+                          setImportResults([]);
+                          setSelectedImportIds(new Set());
+                          await fetchPatientRecords();
+                        } catch (err) {
+                          setImportError(
+                            err.message || "Import failed. Please try again."
+                          );
+                        } finally {
+                          setImportSubmitting(false);
+                        }
+                      }}
+                      className={`px-5 py-2 rounded-lg font-semibold ${
+                        selectedImportIds.size === 0 || importSubmitting
+                          ? "bg-yellow-300 text-blue-900"
+                          : "bg-yellow-500 text-blue-900 hover:bg-yellow-400"
+                      } transition-colors`}
+                    >
+                      {importSubmitting ? "Importing..." : "Import Selected"}
                     </button>
                   </div>
                 </div>

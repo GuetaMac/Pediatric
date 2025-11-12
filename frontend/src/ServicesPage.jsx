@@ -29,18 +29,17 @@ function ServicesPage() {
   const [error, setError] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isSignupOpen, setIsSignupOpen] = useState(false);
+  const [loginAttempts, setLoginAttempts] = useState(0);
   const [cooldown, setCooldown] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [transition, setTransition] = useState(false);
 
   const navigate = useNavigate();
 
-  // ✅ Cooldown Timer for login attempts
   useEffect(() => {
-    if (cooldown > 0) {
-      const timer = setTimeout(() => setCooldown((prev) => prev - 1), 1000);
-      return () => clearTimeout(timer);
-    }
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => setCooldown((c) => c - 1), 1000);
+    return () => clearInterval(timer);
   }, [cooldown]);
 
   // Close mobile menu on window resize to desktop
@@ -66,6 +65,20 @@ function ServicesPage() {
     };
   }, [isOpen, isSignupOpen]);
 
+  const [verificationCode, setVerificationCode] = useState("");
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [pendingSignupData, setPendingSignupData] = useState(null);
+  const [resendTimer, setResendTimer] = useState(0);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isSendingCode, setIsSendingCode] = useState(false);
+
+  // Add timer effect for resend button
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const timer = setInterval(() => setResendTimer((c) => c - 1), 1000);
+    return () => clearInterval(timer);
+  }, [resendTimer]);
+
   // ✅ Smooth transition helper
   const handleSwitchToSignup = () => {
     setTransition(true);
@@ -85,37 +98,38 @@ function ServicesPage() {
     }, 400);
   };
 
-  // ✅ Login
-  const handleLogin = async (e) => {
+  // 🔹 STEP 1: Click "Create Account" → Send Code
+  const handleCreateAccount = async (e) => {
     e.preventDefault();
     setError("");
 
+    // Client-side password strength check
+    const isStrongPassword = (pwd) =>
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(pwd);
+
+    // Validate all fields first
+    if (!fullName || !email || !password || !birthDate || !gender) {
+      setError("Please fill in all required fields");
+      return;
+    }
+
+    if (!isStrongPassword(password)) {
+      setError(
+        "Password must be at least 8 characters and include uppercase, lowercase, number, and special character."
+      );
+      return;
+    }
+
+    setIsSendingCode(true); // Start loading
+
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/login`, {
+      // Send verification code
+      await axios.post(`${import.meta.env.VITE_API_URL}/send-verification`, {
         email,
-        password,
       });
 
-      const { token, role } = res.data;
-      localStorage.setItem("token", token);
-
-      alert("✅ Login successful!");
-      setIsOpen(false);
-
-      if (role === "doctor") navigate("/doctor_dashboard");
-      else if (role === "nurse") navigate("/nurse-dashboard");
-      else navigate("/patient-dashboard");
-    } catch {
-      setError("Invalid email or password");
-      setCooldown(10); // 10s cooldown after failed attempt
-    }
-  };
-
-  // ✅ Signup
-  const handleSignup = async (e) => {
-    e.preventDefault();
-    try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/signup`, {
+      // Store form data temporarily
+      setPendingSignupData({
         full_name: fullName,
         email,
         password,
@@ -132,11 +146,131 @@ function ServicesPage() {
         allergies,
       });
 
-      alert("🎉 Signup successful! Welcome to Pediatric System");
+      // Show verification modal
+      setShowVerificationModal(true);
+      setResendTimer(60);
+      alert("📧 Verification code sent to " + email);
+    } catch (err) {
+      console.error("Error sending code:", err);
+      const serverMsg =
+        err.response?.data?.error || "Failed to send verification code";
+      // If email already registered, inform and direct to login
+      if (serverMsg.toLowerCase().includes("email already registered")) {
+        alert("This email is already registered. You can log in with it.");
+        setIsSignupOpen(false);
+        setIsOpen(true);
+        setError("");
+      } else {
+        setError(serverMsg);
+      }
+    } finally {
+      setIsSendingCode(false); // Stop loading
+    }
+  };
+
+  // 🔹 STEP 2: Verify Code & Complete Signup
+  const handleVerifyAndSignup = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!verificationCode || verificationCode.length !== 6) {
+      setError("Please enter the 6-digit verification code");
+      return;
+    }
+
+    setIsVerifying(true);
+
+    try {
+      await axios.post(`${import.meta.env.VITE_API_URL}/verify-and-signup`, {
+        ...pendingSignupData,
+        code: verificationCode,
+      });
+
+      alert("🎉 Signup successful! Your account has been verified.");
+
+      // Reset states
+      setShowVerificationModal(false);
+      setVerificationCode("");
+      setPendingSignupData(null);
+
+      // Switch to login
       handleSwitchToLogin();
     } catch (err) {
-      console.error("❌ Signup failed:", err);
-      alert("❌ Signup failed. Try again.");
+      console.error("❌ Verification failed:", err);
+      setError(
+        err.response?.data?.error ||
+          "Invalid or expired code. Please try again."
+      );
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // 🔹 Resend Code
+  const handleResendCode = async () => {
+    if (!pendingSignupData?.email) return;
+
+    try {
+      await axios.post(`${import.meta.env.VITE_API_URL}/send-verification`, {
+        email: pendingSignupData.email,
+      });
+      setResendTimer(60);
+      alert("📧 New verification code sent!");
+      setError("");
+      // eslint-disable-next-line no-unused-vars
+    } catch (err) {
+      setError("Failed to resend code. Please try again.");
+    }
+  };
+
+  // ✅ Login
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (cooldown > 0) return;
+
+    try {
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/login`, {
+        email,
+        password,
+      });
+
+      const { token, role, patient } = res.data;
+      if (!token || !role) throw new Error("Invalid response from server");
+
+      localStorage.setItem("token", token);
+
+      if (role === "patient") {
+        let patientData = patient;
+        if (!patientData) {
+          patientData = {
+            id: res.data.id || 1,
+            full_name: res.data.full_name || email,
+            qr_code: `PAT${String(res.data.id || 1).padStart(3, "0")}`,
+          };
+        }
+        localStorage.setItem("patient", JSON.stringify(patientData));
+      }
+
+      alert("✅ Login successful!");
+      setIsOpen(false);
+      setLoginAttempts(0);
+
+      if (role === "doctor") navigate("/doctor_dashboard");
+      else if (role === "nurse") navigate("/nurse-dashboard");
+      else if (role === "patient") navigate("/patient-dashboard");
+      else navigate("/");
+    } catch (err) {
+      console.error("❌ Login error:", err);
+      const next = loginAttempts + 1;
+      setLoginAttempts(next);
+      setError("Invalid email or password");
+
+      if (next >= 5) {
+        setCooldown(60);
+        setLoginAttempts(0);
+      }
     }
   };
 
@@ -279,7 +413,7 @@ function ServicesPage() {
         className="flex-1 bg-cover bg-center bg-no-repeat relative flex items-center justify-center px-3 sm:px-4 md:px-6 pt-16 sm:pt-20 md:pt-24 pb-6 sm:pb-8"
         style={{ backgroundImage: "url('/ClinicRegistration.png')" }}
       >
-        <div className="absolute inset-0 bg-black/10"></div>
+        <div className="absolute inset-0 bg-black/30"></div>
 
         <div className="max-w-6xl w-full bg-white/70 backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 md:p-8 lg:p-10 overflow-y-auto max-h-[calc(100vh-4rem)] sm:max-h-[85vh] md:max-h-[80vh] relative z-10">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-sky-700 text-center mb-6 sm:mb-8 md:mb-10 drop-shadow-md">
@@ -399,17 +533,18 @@ function ServicesPage() {
                     Create Account
                   </h2>
                   <form
-                    onSubmit={handleSignup}
+                    onSubmit={handleCreateAccount}
                     className="space-y-3 sm:space-y-4"
                   >
                     <input
                       type="text"
-                      placeholder="Full Name"
+                      placeholder="Patient's Full Name"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                     />
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <input
                         type="email"
@@ -427,13 +562,18 @@ function ServicesPage() {
                         required
                         className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                       />
-                      <input
-                        type="date"
-                        value={birthDate}
-                        onChange={(e) => setBirthDate(e.target.value)}
-                        required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
-                      />
+                      <div className="flex flex-col">
+                        <label className="text-sm font-medium text-gray-700 mb-1">
+                          Birthdate
+                        </label>
+                        <input
+                          type="date"
+                          value={birthDate}
+                          onChange={(e) => setBirthDate(e.target.value)}
+                          required
+                          className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                        />
+                      </div>
                       <select
                         value={gender}
                         onChange={(e) => setGender(e.target.value)}
@@ -485,54 +625,90 @@ function ServicesPage() {
 
                     <input
                       type="text"
-                      placeholder="Guardian"
+                      placeholder="Guardian (Optional)"
                       value={guardian}
                       onChange={(e) => setGuardian(e.target.value)}
-                      required
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                     />
 
                     <input
                       type="tel"
-                      placeholder="Guardian Number"
+                      placeholder="Guardian Number (Optional)"
                       value={guardianNumber}
                       onChange={(e) => setGuardianNumber(e.target.value)}
-                      required
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                     />
 
-                    <input
-                      type="text"
-                      placeholder="Blood Type"
+                    <select
                       value={bloodType}
                       onChange={(e) => setBloodType(e.target.value)}
                       required
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
-                    />
+                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation bg-white"
+                    >
+                      <option value="">Select Blood Type</option>
+                      <option value="A+">A+</option>
+                      <option value="A-">A-</option>
+                      <option value="B+">B+</option>
+                      <option value="B-">B-</option>
+                      <option value="AB+">AB+</option>
+                      <option value="AB-">AB-</option>
+                      <option value="O+">O+</option>
+                      <option value="O-">O-</option>
+                      <option value="N/A">N/A / Unsure</option>
+                    </select>
 
                     <textarea
-                      placeholder="Chronic Conditions"
+                      placeholder="Chronic Conditions (Optional)"
                       value={chronicConditions}
                       onChange={(e) => setChronicConditions(e.target.value)}
-                      required
                       rows={3}
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base resize-y min-h-[100px] sm:min-h-[80px] outline-none transition touch-manipulation"
                     />
 
                     <textarea
-                      placeholder="Allergies"
+                      placeholder="Allergies (Optional)"
                       value={allergies}
                       onChange={(e) => setAllergies(e.target.value)}
-                      required
                       rows={3}
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base resize-y min-h-[100px] sm:min-h-[80px] outline-none transition touch-manipulation"
                     />
 
                     <button
                       type="submit"
-                      className="w-full bg-green-500 text-white py-3 sm:py-2.5 md:py-3 rounded-lg hover:bg-green-600 active:bg-green-700 transition font-semibold text-base sm:text-base mt-2 min-h-[48px] touch-manipulation shadow-md"
+                      disabled={isSendingCode}
+                      className={`w-full py-3 sm:py-2.5 md:py-3 rounded-lg transition font-semibold text-base sm:text-base mt-2 min-h-[48px] touch-manipulation shadow-md flex items-center justify-center ${
+                        isSendingCode
+                          ? "bg-gray-400 cursor-not-allowed text-white"
+                          : "bg-green-500 text-white hover:bg-green-600 active:bg-green-700"
+                      }`}
                     >
-                      Create Account
+                      {isSendingCode ? (
+                        <>
+                          <svg
+                            className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          Sending Code...
+                        </>
+                      ) : (
+                        "Create Account"
+                      )}
                     </button>
 
                     <p className="text-center text-xs sm:text-sm text-gray-600 mt-3 sm:mt-4 px-2">
@@ -546,6 +722,104 @@ function ServicesPage() {
                       </button>
                     </p>
                   </form>
+
+                  {/* 🔹 Verification Code Modal - Add this AFTER the signup form closing tag */}
+                  {showVerificationModal && (
+                    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 relative animate-in fade-in zoom-in duration-300">
+                        <button
+                          onClick={() => {
+                            setShowVerificationModal(false);
+                            setVerificationCode("");
+                            setError("");
+                          }}
+                          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
+                        >
+                          ×
+                        </button>
+
+                        <div className="text-center mb-6">
+                          <div className="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="text-3xl">📧</span>
+                          </div>
+                          <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                            Verify Your Email
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            We sent a 6-digit code to
+                            <br />
+                            <span className="font-semibold text-sky-600">
+                              {pendingSignupData?.email}
+                            </span>
+                          </p>
+                        </div>
+
+                        <form
+                          onSubmit={handleVerifyAndSignup}
+                          className="space-y-4"
+                        >
+                          {error && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                              {error}
+                            </div>
+                          )}
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Enter Verification Code
+                            </label>
+                            <input
+                              type="text"
+                              value={verificationCode}
+                              onChange={(e) =>
+                                setVerificationCode(
+                                  e.target.value.replace(/\D/g, "").slice(0, 6)
+                                )
+                              }
+                              placeholder="000000"
+                              maxLength={6}
+                              required
+                              autoFocus
+                              className="w-full px-4 py-4 text-center text-2xl font-mono tracking-[0.5em] border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none transition"
+                            />
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={
+                              isVerifying || verificationCode.length !== 6
+                            }
+                            className={`w-full py-3 rounded-lg font-semibold transition ${
+                              isVerifying || verificationCode.length !== 6
+                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                : "bg-sky-500 text-white hover:bg-sky-600 active:bg-sky-700"
+                            }`}
+                          >
+                            {isVerifying
+                              ? "Verifying..."
+                              : "Verify & Complete Signup"}
+                          </button>
+
+                          <div className="text-center text-sm text-gray-600">
+                            Didn't receive the code?{" "}
+                            {resendTimer > 0 ? (
+                              <span className="text-gray-400">
+                                Resend in {resendTimer}s
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={handleResendCode}
+                                className="text-sky-600 hover:underline font-medium"
+                              >
+                                Resend Code
+                              </button>
+                            )}
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}

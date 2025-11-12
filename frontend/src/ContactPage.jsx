@@ -1,7 +1,38 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
+import { MapPinIcon } from "@heroicons/react/24/solid"; //bago din are
+import { PhoneIcon } from "@heroicons/react/24/outline"; //bago are
+const FacebookIcon = (props) => (
+  <svg
+    {...props}
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+  </svg>
+);
 
+const MailIcon = (props) => (
+  <svg
+    {...props}
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+    <path d="m22 6-10 7L2 6"></path>
+  </svg>
+);
 function ContactPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,9 +51,17 @@ function ContactPage() {
   const [error, setError] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isSignupOpen, setIsSignupOpen] = useState(false);
+  const [loginAttempts, setLoginAttempts] = useState(0);
+  const [cooldown, setCooldown] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [transition, setTransition] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => setCooldown((c) => c - 1), 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
   // Close mobile menu on window resize to desktop
   useEffect(() => {
@@ -47,30 +86,19 @@ function ContactPage() {
     };
   }, [isOpen, isSignupOpen]);
 
-  // ✅ Login function
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [pendingSignupData, setPendingSignupData] = useState(null);
+  const [resendTimer, setResendTimer] = useState(0);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isSendingCode, setIsSendingCode] = useState(false);
 
-    try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/login`, {
-        email,
-        password,
-      });
-
-      const { token, role } = res.data;
-      localStorage.setItem("token", token);
-
-      alert("✅ Login successful!");
-      setIsOpen(false);
-
-      if (role === "doctor") navigate("/doctor_dashboard");
-      else if (role === "nurse") navigate("/nurse-dashboard");
-      else navigate("/patient-dashboard");
-    } catch {
-      setError("Invalid email or password");
-    }
-  };
+  // Add timer effect for resend button
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const timer = setInterval(() => setResendTimer((c) => c - 1), 1000);
+    return () => clearInterval(timer);
+  }, [resendTimer]);
 
   // ✅ Smooth transition helper
   const handleSwitchToSignup = () => {
@@ -91,11 +119,38 @@ function ContactPage() {
     }, 400);
   };
 
-  // ✅ Signup function
-  const handleSignup = async (e) => {
+  // 🔹 STEP 1: Click "Create Account" → Send Code
+  const handleCreateAccount = async (e) => {
     e.preventDefault();
+    setError("");
+
+    // Client-side password strength check
+    const isStrongPassword = (pwd) =>
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(pwd);
+
+    // Validate all fields first
+    if (!fullName || !email || !password || !birthDate || !gender) {
+      setError("Please fill in all required fields");
+      return;
+    }
+
+    if (!isStrongPassword(password)) {
+      setError(
+        "Password must be at least 8 characters and include uppercase, lowercase, number, and special character."
+      );
+      return;
+    }
+
+    setIsSendingCode(true); // Start loading
+
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/signup`, {
+      // Send verification code
+      await axios.post(`${import.meta.env.VITE_API_URL}/send-verification`, {
+        email,
+      });
+
+      // Store form data temporarily
+      setPendingSignupData({
         full_name: fullName,
         email,
         password,
@@ -112,11 +167,131 @@ function ContactPage() {
         allergies,
       });
 
-      alert("🎉 Signup successful! Welcome to Pediatric System");
+      // Show verification modal
+      setShowVerificationModal(true);
+      setResendTimer(60);
+      alert("📧 Verification code sent to " + email);
+    } catch (err) {
+      console.error("Error sending code:", err);
+      const serverMsg =
+        err.response?.data?.error || "Failed to send verification code";
+      // If email already registered, inform and direct to login
+      if (serverMsg.toLowerCase().includes("email already registered")) {
+        alert("This email is already registered. You can log in with it.");
+        setIsSignupOpen(false);
+        setIsOpen(true);
+        setError("");
+      } else {
+        setError(serverMsg);
+      }
+    } finally {
+      setIsSendingCode(false); // Stop loading
+    }
+  };
+
+  // 🔹 STEP 2: Verify Code & Complete Signup
+  const handleVerifyAndSignup = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!verificationCode || verificationCode.length !== 6) {
+      setError("Please enter the 6-digit verification code");
+      return;
+    }
+
+    setIsVerifying(true);
+
+    try {
+      await axios.post(`${import.meta.env.VITE_API_URL}/verify-and-signup`, {
+        ...pendingSignupData,
+        code: verificationCode,
+      });
+
+      alert("🎉 Signup successful! Your account has been verified.");
+
+      // Reset states
+      setShowVerificationModal(false);
+      setVerificationCode("");
+      setPendingSignupData(null);
+
+      // Switch to login
       handleSwitchToLogin();
     } catch (err) {
-      console.error("❌ Signup failed:", err);
-      alert("❌ Signup failed. Try again.");
+      console.error("❌ Verification failed:", err);
+      setError(
+        err.response?.data?.error ||
+          "Invalid or expired code. Please try again."
+      );
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // 🔹 Resend Code
+  const handleResendCode = async () => {
+    if (!pendingSignupData?.email) return;
+
+    try {
+      await axios.post(`${import.meta.env.VITE_API_URL}/send-verification`, {
+        email: pendingSignupData.email,
+      });
+      setResendTimer(60);
+      alert("📧 New verification code sent!");
+      setError("");
+      // eslint-disable-next-line no-unused-vars
+    } catch (err) {
+      setError("Failed to resend code. Please try again.");
+    }
+  };
+
+  // ✅ Login function
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (cooldown > 0) return;
+
+    try {
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/login`, {
+        email,
+        password,
+      });
+
+      const { token, role, patient } = res.data;
+      if (!token || !role) throw new Error("Invalid response from server");
+
+      localStorage.setItem("token", token);
+
+      if (role === "patient") {
+        let patientData = patient;
+        if (!patientData) {
+          patientData = {
+            id: res.data.id || 1,
+            full_name: res.data.full_name || email,
+            qr_code: `PAT${String(res.data.id || 1).padStart(3, "0")}`,
+          };
+        }
+        localStorage.setItem("patient", JSON.stringify(patientData));
+      }
+
+      alert("✅ Login successful!");
+      setIsOpen(false);
+      setLoginAttempts(0);
+
+      if (role === "doctor") navigate("/doctor_dashboard");
+      else if (role === "nurse") navigate("/nurse-dashboard");
+      else if (role === "patient") navigate("/patient-dashboard");
+      else navigate("/");
+    } catch (err) {
+      console.error("❌ Login error:", err);
+      const next = loginAttempts + 1;
+      setLoginAttempts(next);
+      setError("Invalid email or password");
+
+      if (next >= 5) {
+        setCooldown(60);
+        setLoginAttempts(0);
+      }
     }
   };
 
@@ -254,88 +429,108 @@ function ContactPage() {
         </div>
       </header>
 
-      {/* ✅ Contact Section */}
+      {/* 📞 Contact Section (Updated Sizing) */}
       <main
-        className="flex-1 bg-cover bg-center bg-no-repeat relative flex items-center py-16 sm:py-20 md:py-24 px-3 sm:px-4 md:px-6 pt-16 sm:pt-20 md:pt-24 pb-6 sm:pb-8"
+        // Increased vertical padding and removed the dynamic top padding for consistency
+        className="flex-1 bg-cover bg-center bg-no-repeat relative flex items-center justify-center px-3 sm:px-4 md:px-6 pt-16 sm:pt-20 md:pt-24 pb-6 sm:pb-8"
         style={{ backgroundImage: "url('/ClinicRegistration.png')" }}
       >
+        {/* Slightly darker overlay for better readability */}
         <div className="absolute inset-0 bg-black/30"></div>
-        <div className="max-w-6xl mx-auto w-full bg-white/95 backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 md:p-8 lg:p-10 grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 md:gap-10 border border-white/60 relative z-10 overflow-y-auto max-h-[calc(100vh-4rem)] sm:max-h-[85vh]">
-          {/* Contact Text */}
+
+        {/* Content Container: max-w-6xl, lighter background, and updated max-h for scrolling */}
+        <div className="max-w-6xl mx-auto w-full bg-white/90 backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-2xl p-6 sm:p-8 md:p-10 lg:p-12 grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-10 border border-white/60 relative z-10 overflow-y-auto max-h-[calc(100vh-4rem)] sm:max-h-[85vh] md:max-h-[80vh]">
+          {/* Introduction Text */}
           <div className="flex flex-col justify-center text-center md:text-left">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-sky-700 mb-4 sm:mb-5 md:mb-6">
-              Get in Touch with Us
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-sky-700 mb-4 sm:mb-5 md:mb-6 leading-tight">
+              Get in Touch with Our Team
             </h1>
-            <p className="text-gray-700 text-sm sm:text-base md:text-lg leading-relaxed">
-              If you have any inquiries, appointment requests, or would like to
-              know more about our services, please don't hesitate to reach out.
+            <p className="text-gray-700 text-base sm:text-lg leading-relaxed">
+              We're here to help your little one thrive. Whether you need to
+              schedule an appointment, ask a question about our pediatric
+              services, or just want to chat, we're ready to listen.
               <br className="hidden sm:block" />
               <br className="hidden sm:block" />
-              You can contact us through any of the details provided — we'll be
-              happy to assist you as soon as possible.
+              Reach out via our direct lines or visit us during clinic hours.
             </p>
           </div>
 
-          {/* Contact Information */}
-          <div className="flex flex-col justify-center space-y-4 sm:space-y-5 md:space-y-6">
-            <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-sky-600 mb-2">
-                Address
-              </h2>
-              <p className="text-gray-600 text-sm sm:text-base">
-                Castillo Children Clinic,
-                <br />
-                138 Rizal Avenue Brgy 9 4200
-              </p>
-              <p className="text-gray-600 mb-3 sm:mb-4 text-sm sm:text-base">
-                Batangas City, Calabarzon
-              </p>
-              <a
-                href="https://www.google.com/maps/place/Castillo+Children's+Clinic/@13.7565027,121.0566993,1162m/data=!3m2!1e3!4b1!4m6!3m5!1s0x33bd0541aaa50131:0xa6968e99ce251f20!8m2!3d13.7564975!4d121.0592742!16s%2Fg%2F11f4xtcvqq"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-2 bg-green-500 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-green-600 active:bg-green-700 transition text-sm sm:text-base font-medium min-h-[44px] flex items-center justify-center touch-manipulation shadow-md"
-              >
-                View on Google Maps
-              </a>
+          {/* Contact Information Cards */}
+          <div className="flex flex-col justify-center space-y-5 sm:space-y-6 md:space-y-8">
+            {/* Address Card */}
+            <div className="flex items-start space-x-4 p-4 sm:p-5 bg-sky-50 rounded-lg shadow-sm">
+              <MapPinIcon className="w-6 h-6 text-sky-600 mt-1 flex-shrink-0" />
+              <div>
+                <h2 className="text-lg sm:text-xl font-semibold text-sky-700 mb-1">
+                  Our Location
+                </h2>
+                <p className="text-gray-700 text-sm sm:text-base">
+                  Castillo Children Clinic,
+                  <br />
+                  138 Rizal Avenue Brgy 9 4200, Batangas City, Calabarzon
+                </p>
+                <a
+                  href="https://www.google.com/maps/place/Castillo+Children's+Clinic/@13.7565027,121.0566993,1162m/data=!3m2!1e3!4b1!4m6!3m5!1s0x33bd0541aaa50131:0xa6968e99ce251f20!8m2!3d13.7564975!4d121.0592742!16s%2Fg%2F11f4xtcvqq"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center mt-3 bg-green-500 text-white px-4 py-2 rounded-full hover:bg-green-600 transition text-sm font-medium shadow-md hover:shadow-lg"
+                >
+                  View on Map
+                </a>
+              </div>
             </div>
 
-            <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-sky-600 mb-2">
-                Phone
-              </h2>
-              <a
-                href="tel:09664412470"
-                className="text-gray-600 text-sm sm:text-base hover:text-sky-600 transition touch-manipulation"
-              >
-                0966 441 2470
-              </a>
+            {/* Phone and Email Cards (Grouped in a 2-column grid) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
+              {/* Phone Card */}
+              <div className="flex items-start space-x-4 p-4 bg-yellow-50 rounded-lg shadow-sm">
+                <PhoneIcon className="w-6 h-6 text-yellow-600 mt-1 flex-shrink-0" />
+                <div>
+                  <h2 className="text-lg sm:text-xl font-semibold text-yellow-700 mb-1">
+                    Phone
+                  </h2>
+                  <a
+                    href="tel:09664412470"
+                    className="text-gray-700 text-sm sm:text-base hover:text-yellow-600 font-medium transition"
+                  >
+                    0966 441 2470
+                  </a>
+                </div>
+              </div>
+
+              {/* Email Card */}
+              <div className="flex items-start space-x-4 p-4 bg-purple-50 rounded-lg shadow-sm">
+                <MailIcon className="w-6 h-6 text-purple-600 mt-1 flex-shrink-0" />
+                <div>
+                  <h2 className="text-lg sm:text-xl font-semibold text-purple-700 mb-1">
+                    Email
+                  </h2>
+                  <a
+                    href="mailto:castillochildrensclinic@gmail.com"
+                    className="text-gray-700 text-sm sm:text-base hover:text-purple-600 transition break-all font-medium"
+                  >
+                    castillochildrensclinic@gmail.com
+                  </a>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-sky-600 mb-2">
-                Facebook
-              </h2>
-              <a
-                href="https://www.facebook.com/myracastilloMD"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sky-600 hover:underline active:text-sky-700 text-sm sm:text-base break-all touch-manipulation"
-              >
-                facebook.com/myracastilloMD
-              </a>
-            </div>
-
-            <div>
-              <h2 className="text-lg sm:text-xl font-semibold text-sky-600 mb-2">
-                Email
-              </h2>
-              <a
-                href="mailto:castillochildrensclinic@gmail.com"
-                className="text-gray-600 text-sm sm:text-base hover:text-sky-600 transition break-all touch-manipulation"
-              >
-                castillochildrensclinic@gmail.com
-              </a>
+            {/* Facebook Card - Single Row for emphasis */}
+            <div className="flex items-start space-x-4 p-4 sm:p-5 bg-blue-50 rounded-lg shadow-sm">
+              <FacebookIcon className="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
+              <div>
+                <h2 className="text-lg sm:text-xl font-semibold text-blue-700 mb-1">
+                  Facebook
+                </h2>
+                <a
+                  href="https://www.facebook.com/myracastilloMD"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-700 hover:underline text-sm sm:text-base break-all font-medium"
+                >
+                  facebook.com/myracastilloMD
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -398,17 +593,18 @@ function ContactPage() {
                     Create Account
                   </h2>
                   <form
-                    onSubmit={handleSignup}
+                    onSubmit={handleCreateAccount}
                     className="space-y-3 sm:space-y-4"
                   >
                     <input
                       type="text"
-                      placeholder="Full Name"
+                      placeholder="Patient's Full Name"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                     />
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <input
                         type="email"
@@ -426,13 +622,18 @@ function ContactPage() {
                         required
                         className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                       />
-                      <input
-                        type="date"
-                        value={birthDate}
-                        onChange={(e) => setBirthDate(e.target.value)}
-                        required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
-                      />
+                      <div className="flex flex-col">
+                        <label className="text-sm font-medium text-gray-700 mb-1">
+                          Birthdate
+                        </label>
+                        <input
+                          type="date"
+                          value={birthDate}
+                          onChange={(e) => setBirthDate(e.target.value)}
+                          required
+                          className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                        />
+                      </div>
                       <select
                         value={gender}
                         onChange={(e) => setGender(e.target.value)}
@@ -484,54 +685,90 @@ function ContactPage() {
 
                     <input
                       type="text"
-                      placeholder="Guardian"
+                      placeholder="Guardian (Optional)"
                       value={guardian}
                       onChange={(e) => setGuardian(e.target.value)}
-                      required
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                     />
 
                     <input
                       type="tel"
-                      placeholder="Guardian Number"
+                      placeholder="Guardian Number (Optional)"
                       value={guardianNumber}
                       onChange={(e) => setGuardianNumber(e.target.value)}
-                      required
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                     />
 
-                    <input
-                      type="text"
-                      placeholder="Blood Type"
+                    <select
                       value={bloodType}
                       onChange={(e) => setBloodType(e.target.value)}
                       required
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
-                    />
+                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation bg-white"
+                    >
+                      <option value="">Select Blood Type</option>
+                      <option value="A+">A+</option>
+                      <option value="A-">A-</option>
+                      <option value="B+">B+</option>
+                      <option value="B-">B-</option>
+                      <option value="AB+">AB+</option>
+                      <option value="AB-">AB-</option>
+                      <option value="O+">O+</option>
+                      <option value="O-">O-</option>
+                      <option value="N/A">N/A / Unsure</option>
+                    </select>
 
                     <textarea
-                      placeholder="Chronic Conditions"
+                      placeholder="Chronic Conditions (Optional)"
                       value={chronicConditions}
                       onChange={(e) => setChronicConditions(e.target.value)}
-                      required
                       rows={3}
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base resize-y min-h-[100px] sm:min-h-[80px] outline-none transition touch-manipulation"
                     />
 
                     <textarea
-                      placeholder="Allergies"
+                      placeholder="Allergies (Optional)"
                       value={allergies}
                       onChange={(e) => setAllergies(e.target.value)}
-                      required
                       rows={3}
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base resize-y min-h-[100px] sm:min-h-[80px] outline-none transition touch-manipulation"
                     />
 
                     <button
                       type="submit"
-                      className="w-full bg-green-500 text-white py-3 sm:py-2.5 md:py-3 rounded-lg hover:bg-green-600 active:bg-green-700 transition font-semibold text-base sm:text-base mt-2 min-h-[48px] touch-manipulation shadow-md"
+                      disabled={isSendingCode}
+                      className={`w-full py-3 sm:py-2.5 md:py-3 rounded-lg transition font-semibold text-base sm:text-base mt-2 min-h-[48px] touch-manipulation shadow-md flex items-center justify-center ${
+                        isSendingCode
+                          ? "bg-gray-400 cursor-not-allowed text-white"
+                          : "bg-green-500 text-white hover:bg-green-600 active:bg-green-700"
+                      }`}
                     >
-                      Create Account
+                      {isSendingCode ? (
+                        <>
+                          <svg
+                            className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          Sending Code...
+                        </>
+                      ) : (
+                        "Create Account"
+                      )}
                     </button>
 
                     <p className="text-center text-xs sm:text-sm text-gray-600 mt-3 sm:mt-4 px-2">
@@ -545,6 +782,104 @@ function ContactPage() {
                       </button>
                     </p>
                   </form>
+
+                  {/* 🔹 Verification Code Modal - Add this AFTER the signup form closing tag */}
+                  {showVerificationModal && (
+                    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 relative animate-in fade-in zoom-in duration-300">
+                        <button
+                          onClick={() => {
+                            setShowVerificationModal(false);
+                            setVerificationCode("");
+                            setError("");
+                          }}
+                          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
+                        >
+                          ×
+                        </button>
+
+                        <div className="text-center mb-6">
+                          <div className="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="text-3xl">📧</span>
+                          </div>
+                          <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                            Verify Your Email
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            We sent a 6-digit code to
+                            <br />
+                            <span className="font-semibold text-sky-600">
+                              {pendingSignupData?.email}
+                            </span>
+                          </p>
+                        </div>
+
+                        <form
+                          onSubmit={handleVerifyAndSignup}
+                          className="space-y-4"
+                        >
+                          {error && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                              {error}
+                            </div>
+                          )}
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Enter Verification Code
+                            </label>
+                            <input
+                              type="text"
+                              value={verificationCode}
+                              onChange={(e) =>
+                                setVerificationCode(
+                                  e.target.value.replace(/\D/g, "").slice(0, 6)
+                                )
+                              }
+                              placeholder="000000"
+                              maxLength={6}
+                              required
+                              autoFocus
+                              className="w-full px-4 py-4 text-center text-2xl font-mono tracking-[0.5em] border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 outline-none transition"
+                            />
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={
+                              isVerifying || verificationCode.length !== 6
+                            }
+                            className={`w-full py-3 rounded-lg font-semibold transition ${
+                              isVerifying || verificationCode.length !== 6
+                                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                : "bg-sky-500 text-white hover:bg-sky-600 active:bg-sky-700"
+                            }`}
+                          >
+                            {isVerifying
+                              ? "Verifying..."
+                              : "Verify & Complete Signup"}
+                          </button>
+
+                          <div className="text-center text-sm text-gray-600">
+                            Didn't receive the code?{" "}
+                            {resendTimer > 0 ? (
+                              <span className="text-gray-400">
+                                Resend in {resendTimer}s
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={handleResendCode}
+                                className="text-sky-600 hover:underline font-medium"
+                              >
+                                Resend Code
+                              </button>
+                            )}
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -560,6 +895,11 @@ function ContactPage() {
                   {error && (
                     <p className="text-red-500 text-xs sm:text-sm text-center mb-3 sm:mb-4 px-2">
                       {error}
+                    </p>
+                  )}
+                  {cooldown > 0 && (
+                    <p className="text-orange-600 text-xs sm:text-sm text-center mb-3 sm:mb-4 px-2">
+                      Too many attempts. Please wait {cooldown}s.
                     </p>
                   )}
                   <form
@@ -582,9 +922,14 @@ function ContactPage() {
                     />
                     <button
                       type="submit"
-                      className="w-full bg-blue-500 text-white py-3 sm:py-2.5 md:py-3 rounded-lg hover:bg-blue-600 active:bg-blue-700 transition text-base sm:text-base font-medium min-h-[48px] touch-manipulation shadow-md"
+                      disabled={cooldown > 0}
+                      className={`w-full py-3 sm:py-2.5 md:py-3 rounded-lg transition text-base sm:text-base font-medium min-h-[48px] touch-manipulation shadow-md ${
+                        cooldown > 0
+                          ? "bg-gray-400 cursor-not-allowed text-white"
+                          : "bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white"
+                      }`}
                     >
-                      Login
+                      {cooldown > 0 ? `Wait ${cooldown}s` : "Login"}
                     </button>
 
                     <p className="text-center text-xs sm:text-sm text-gray-600 mt-3 sm:mt-4 px-2">

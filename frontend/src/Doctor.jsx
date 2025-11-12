@@ -101,21 +101,34 @@ function Doctor() {
         const patients = data.filter((user) => user.role === "patient");
         const nurses = data.filter((user) => user.role === "nurse");
 
+        // Calculate today's approved appointments from the appointments array
         const today = new Date().toLocaleDateString("en-CA"); // gives YYYY-MM-DD in local time
 
-        const todaysCheckups = patients.filter(
-          (p) => p.appointment_date === today
-        );
+        // Helper function to normalize date strings for comparison
+        const normalizeDate = (dateStr) => {
+          if (!dateStr) return null;
+          // Handle different date formats
+          const date = new Date(dateStr);
+          if (isNaN(date.getTime())) return null;
+          return date.toLocaleDateString("en-CA");
+        };
+
+        // Filter appointments for today with status "approved"
+        const todaysApprovedAppointments = appointments.filter((appt) => {
+          const apptDate = normalizeDate(appt.appointment_date);
+          const apptStatus = (appt.status || "").toLowerCase().trim();
+          return apptDate === today && apptStatus === "approved";
+        });
 
         setStats({
-          todaysPatients: todaysCheckups.length,
+          todaysPatients: todaysApprovedAppointments.length,
           totalPatients: patients.length,
           nurseAccounts: nurses.length,
-          checkups: todaysCheckups.length,
+          checkups: todaysApprovedAppointments.length,
         });
 
         // Save the list of today's appointments for the schedule section
-        setTodaysAppointments(todaysCheckups);
+        setTodaysAppointments(todaysApprovedAppointments);
       }
     } catch (err) {
       console.error("Error fetching stats:", err);
@@ -124,7 +137,7 @@ function Doctor() {
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [appointments]); // Re-run when appointments change
 
   // Close mobile menu on window resize to desktop
   useEffect(() => {
@@ -143,7 +156,6 @@ function Doctor() {
     { id: "Manage Account", label: "Manage Account", icon: User },
     { id: "medical-records", label: "Medical Records", icon: Stethoscope },
     { id: "analytics", label: "Analytics", icon: Activity },
-    { id: "settings", label: "Settings", icon: Settings },
   ];
 
   // HOME PAGE
@@ -346,6 +358,8 @@ function Doctor() {
     const [loadingProfile, setLoadingProfile] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState(""); // <-- new state
+    const [isEditMode, setIsEditMode] = useState(false); // <-- new state for edit mode
+    const [editedPatient, setEditedPatient] = useState(null); // <-- new state for edited patient data
     const [newPatient, setNewPatient] = useState({
       full_name: "",
       email: "",
@@ -392,12 +406,14 @@ function Doctor() {
     const handleView = async (patient) => {
       try {
         setLoadingProfile(true);
+        setIsEditMode(false);
         const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/patients/${patient.user_id}/profile`
+          `http://localhost:5001/api/patients/${patient.user_id}/profile`
         );
         if (!res.ok) throw new Error("Failed to load patient profile");
         const data = await res.json();
         setSelectedPatient(data);
+        setEditedPatient({ ...data, password: "" }); // Initialize edited patient
         setIsModalOpen(true);
       } catch (err) {
         console.error(err);
@@ -406,18 +422,82 @@ function Doctor() {
         setLoadingProfile(false);
       }
     };
+
+    // ✅ Handle Edit - Enable edit mode
+    const handleEdit = () => {
+      setIsEditMode(true);
+      setEditedPatient({ ...selectedPatient, password: "" });
+    };
+
+    // ✅ Handle Update - Update patient details
+    const handleUpdate = async (e) => {
+      e.preventDefault();
+      if (!editedPatient) return;
+
+      try {
+        setLoadingProfile(true);
+        const token = localStorage.getItem("token");
+        const res = await fetch(
+          `http://localhost:5001/api/patients/${selectedPatient.user_id}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              full_name: editedPatient.full_name,
+              email: editedPatient.email,
+              password: editedPatient.password || undefined, // Only send if provided
+              birth_date: editedPatient.birth_date,
+              gender: editedPatient.gender,
+              guardian: editedPatient.guardian || "",
+              guardian_number: editedPatient.guardian_number || "",
+              phone_number: editedPatient.phone_number || "",
+              address: editedPatient.address || "",
+              blood_type: editedPatient.blood_type || "",
+              allergies: editedPatient.allergies || "",
+              chronic_conditions: editedPatient.chronic_conditions || "",
+              mother_name: editedPatient.mother_name || "",
+              father_name: editedPatient.father_name || "",
+            }),
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          alert(data.message || "Failed to update patient");
+          return;
+        }
+
+        alert("Patient updated successfully!");
+        setIsEditMode(false);
+        setSelectedPatient(data.patient);
+        setEditedPatient({ ...data.patient, password: "" });
+        fetchPatients(); // Refresh the list
+      } catch (err) {
+        console.error("Error updating patient:", err);
+        alert("Error updating patient");
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+
+    // ✅ Handle Cancel Edit
+    const handleCancelEdit = () => {
+      setIsEditMode(false);
+      setEditedPatient({ ...selectedPatient, password: "" });
+    };
     const handleDeletePatient = async (user_id) => {
       if (!confirm("Are you sure you want to delete this patient account?"))
         return;
 
       try {
         setLoading(true);
-        const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/users/${user_id}`,
-          {
-            method: "DELETE",
-          }
-        );
+        const res = await fetch(`http://localhost:5001/api/users/${user_id}`, {
+          method: "DELETE",
+        });
 
         const data = await res.json();
         if (res.ok) {
@@ -485,38 +565,46 @@ function Doctor() {
     const closeModal = () => {
       setIsModalOpen(false);
       setSelectedPatient(null);
+      setIsEditMode(false);
+      setEditedPatient(null);
     };
 
     return (
-      <div className="space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center">
-            <Users className="w-6 h-6 sm:w-8 sm:h-8 mr-2 sm:mr-3 text-blue-500" />
-            Patient Management
-          </h1>
+      <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 mt-2 sm:mt-0">
+        {/* ---------- Cohesive Header Bar for Patient Management ---------- */}
+        <div className="p-3 sm:p-4 md:p-6 bg-white/95 border-b border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          <div className="flex flex-col gap-3 sm:gap-4 w-full">
+            {/* Title */}
+            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 flex items-center flex-wrap gap-2">
+              <Users className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 text-blue-500 flex-shrink-0" />
+              <span className="break-words">Patient Management</span>
+            </h1>
 
-          <div className="flex gap-2 items-center">
-            {/* Search Input with Icon */}
-            <div className="relative flex-1">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-pink-400" />
-              <input
-                type="text"
-                placeholder="Search patient..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 sm:py-3 rounded-full border-2 border-pink-300 bg-pink-50 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400 shadow-md text-sm sm:text-base placeholder-pink-300"
-              />
+            {/* Search and Action Buttons - Stack on mobile, side by side on larger screens */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full">
+              {/* Search Input with Icon */}
+              <div className="relative flex-1 w-full min-w-0 sm:min-w-[200px]">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-pink-400 z-10 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search patient..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-2.5 md:py-3 rounded-full border-2 border-pink-300 bg-pink-50 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400 shadow-md text-sm sm:text-base placeholder-pink-300 transition-all duration-150 min-h-[44px]"
+                />
+              </div>
+
+              {/* Add Patient Button - Full width on mobile, auto on larger screens */}
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-4 sm:px-5 md:px-6 py-2.5 sm:py-2.5 md:py-3 rounded-full hover:from-pink-600 hover:to-pink-700 active:from-pink-700 active:to-pink-800 transition-all duration-200 shadow-lg flex items-center justify-center text-sm sm:text-base font-medium whitespace-nowrap w-full sm:w-auto sm:flex-shrink-0 min-h-[44px] touch-manipulation"
+                type="button"
+              >
+                <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" />
+                <span className="hidden sm:inline">Add New Patient</span>
+                <span className="sm:hidden">Add Patient</span>
+              </button>
             </div>
-
-            {/* Add Patient Button */}
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm sm:text-base"
-            >
-              <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-              Add New Patient
-            </button>
           </div>
         </div>
 
@@ -812,18 +900,18 @@ function Doctor() {
           </div>
         )}
 
-        {/* Updated Modal */}
+        {/* Updated Modal with Edit Functionality */}
         {isModalOpen && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md transition-all duration-300 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md transition-all duration-300 p-2 sm:p-4 overflow-y-auto"
             onClick={closeModal}
           >
             <div
-              className="bg-white rounded-xl sm:rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md p-4 sm:p-6 relative overflow-y-auto max-h-[90vh] transform transition-all duration-300"
+              className="bg-white rounded-xl sm:rounded-2xl shadow-2xl border border-gray-200 w-full max-w-2xl p-4 sm:p-6 relative my-auto max-h-[95vh] sm:max-h-[90vh] overflow-y-auto transform transition-all duration-300"
               onClick={(e) => e.stopPropagation()}
             >
               <button
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-gray-700 transition-colors w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-gray-100"
+                className="absolute top-2 right-2 sm:top-3 sm:right-3 text-gray-400 hover:text-gray-700 transition z-10 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-gray-100"
                 onClick={closeModal}
                 aria-label="Close"
               >
@@ -831,75 +919,302 @@ function Doctor() {
               </button>
 
               {loadingProfile ? (
-                <p className="text-center text-gray-500 py-6 text-sm sm:text-base">
-                  Loading profile...
-                </p>
-              ) : selectedPatient ? (
+                <div className="text-center py-8 sm:py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                  <p className="text-gray-500 text-sm sm:text-base">
+                    Loading profile...
+                  </p>
+                </div>
+              ) : selectedPatient && editedPatient ? (
                 <>
-                  <h2 className="text-xl sm:text-2xl font-bold text-blue-700 mb-4 border-b pb-2">
-                    Patient Details
-                  </h2>
-
-                  <div className="space-y-2 text-gray-700 text-sm sm:text-base">
-                    <p>
-                      <span className="font-semibold">Full Name:</span>{" "}
-                      {selectedPatient.full_name}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Email:</span>{" "}
-                      {selectedPatient.email}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Birth Date:</span>{" "}
-                      {selectedPatient.birth_date}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Gender:</span>{" "}
-                      {selectedPatient.gender}
-                    </p>
-
-                    <hr className="my-3 border-gray-300" />
-
-                    <p>
-                      <span className="font-semibold">Guardian:</span>{" "}
-                      {selectedPatient.guardian}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Guardian Number:</span>{" "}
-                      {selectedPatient.guardian_number}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Phone Number:</span>{" "}
-                      {selectedPatient.phone_number}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Address:</span>{" "}
-                      {selectedPatient.address}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Blood Type:</span>{" "}
-                      {selectedPatient.blood_type}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Allergies:</span>{" "}
-                      {selectedPatient.allergies}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Chronic Conditions:</span>{" "}
-                      {selectedPatient.chronic_conditions}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Mother's Name:</span>{" "}
-                      {selectedPatient.mother_name}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Father's Name:</span>{" "}
-                      {selectedPatient.father_name}
-                    </p>
+                  <div className="flex items-center justify-between mb-3 sm:mb-4 pr-8">
+                    <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-blue-700">
+                      {isEditMode ? "Edit Patient Details" : "Patient Details"}
+                    </h2>
+                    {!isEditMode && (
+                      <button
+                        onClick={handleEdit}
+                        className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm sm:text-base font-medium"
+                      >
+                        <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
+                        Edit
+                      </button>
+                    )}
                   </div>
+
+                  {isEditMode ? (
+                    <form
+                      onSubmit={handleUpdate}
+                      className="space-y-2 sm:space-y-3"
+                    >
+                      {/* USER FIELDS */}
+                      <input
+                        type="text"
+                        placeholder="Full Name"
+                        value={editedPatient.full_name || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            full_name: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                        required
+                      />
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        value={editedPatient.email || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            email: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                        required
+                      />
+                      <input
+                        type="password"
+                        placeholder="Password (Leave blank to keep current password)"
+                        value={editedPatient.password || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            password: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                      />
+                      <input
+                        type="date"
+                        value={editedPatient.birth_date || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            birth_date: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                        required
+                      />
+                      <select
+                        value={editedPatient.gender || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            gender: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px] bg-white"
+                        required
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                      </select>
+
+                      {/* PATIENT PROFILE FIELDS */}
+                      <input
+                        type="text"
+                        placeholder="Guardian Name"
+                        value={editedPatient.guardian || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            guardian: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Guardian Number"
+                        value={editedPatient.guardian_number || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            guardian_number: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Phone Number"
+                        value={editedPatient.phone_number || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            phone_number: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                      />
+                      <textarea
+                        placeholder="Address"
+                        value={editedPatient.address || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            address: e.target.value,
+                          })
+                        }
+                        rows={2}
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition resize-y min-h-[80px]"
+                      />
+
+                      <select
+                        value={editedPatient.blood_type || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            blood_type: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px] bg-white"
+                      >
+                        <option value="">Select Blood Type</option>
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                      </select>
+
+                      <textarea
+                        placeholder="Allergies (if any)"
+                        value={editedPatient.allergies || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            allergies: e.target.value,
+                          })
+                        }
+                        rows={2}
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition resize-y min-h-[80px]"
+                      />
+                      <textarea
+                        placeholder="Chronic Conditions (if any)"
+                        value={editedPatient.chronic_conditions || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            chronic_conditions: e.target.value,
+                          })
+                        }
+                        rows={2}
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition resize-y min-h-[80px]"
+                      />
+
+                      <input
+                        type="text"
+                        placeholder="Mother's Name"
+                        value={editedPatient.mother_name || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            mother_name: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Father's Name"
+                        value={editedPatient.father_name || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            father_name: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                      />
+
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-2">
+                        <button
+                          type="submit"
+                          className="flex-1 bg-gradient-to-r from-pink-500 to-pink-600 text-white py-2.5 sm:py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition font-semibold text-sm sm:text-base shadow-lg min-h-[44px]"
+                        >
+                          Save Changes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelEdit}
+                          className="flex-1 bg-gray-500 text-white py-2.5 sm:py-3 rounded-lg hover:bg-gray-600 transition font-semibold text-sm sm:text-base shadow-lg min-h-[44px]"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="space-y-2 sm:space-y-3 text-gray-700 text-xs sm:text-sm md:text-base">
+                      <p className="break-words">
+                        <span className="font-semibold">Full Name:</span>{" "}
+                        {selectedPatient.full_name}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Email:</span>{" "}
+                        {selectedPatient.email}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Birth Date:</span>{" "}
+                        {selectedPatient.birth_date || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Gender:</span>{" "}
+                        {selectedPatient.gender || "N/A"}
+                      </p>
+
+                      <hr className="my-2 sm:my-3 border-gray-300" />
+
+                      <p className="break-words">
+                        <span className="font-semibold">Guardian:</span>{" "}
+                        {selectedPatient.guardian || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Guardian Number:</span>{" "}
+                        {selectedPatient.guardian_number || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Phone Number:</span>{" "}
+                        {selectedPatient.phone_number || "N/A"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Address:</span>{" "}
+                        {selectedPatient.address || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Blood Type:</span>{" "}
+                        {selectedPatient.blood_type || "N/A"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Allergies:</span>{" "}
+                        {selectedPatient.allergies || "None"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">
+                          Chronic Conditions:
+                        </span>{" "}
+                        {selectedPatient.chronic_conditions || "None"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Mother's Name:</span>{" "}
+                        {selectedPatient.mother_name || "N/A"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Father's Name:</span>{" "}
+                        {selectedPatient.father_name || "N/A"}
+                      </p>
+                    </div>
+                  )}
                 </>
               ) : (
-                <p className="text-center text-gray-500 py-6">
+                <p className="text-center text-gray-500 py-6 text-sm sm:text-base">
                   No patient selected.
                 </p>
               )}
@@ -1000,12 +1315,9 @@ function Doctor() {
 
       try {
         setLoading(true);
-        const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/users/${user_id}`,
-          {
-            method: "DELETE",
-          }
-        );
+        const res = await fetch(`http://localhost:5001/api/users/${user_id}`, {
+          method: "DELETE",
+        });
 
         const data = await res.json();
         if (res.ok) {
@@ -1041,14 +1353,11 @@ function Doctor() {
 
       try {
         setLoading(true);
-        const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/users/${editId}`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(editForm),
-          }
-        );
+        const res = await fetch(`http://localhost:5001/api/users/${editId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(editForm),
+        });
 
         const data = await res.json();
         if (res.ok) {
@@ -1383,14 +1692,17 @@ function Doctor() {
     const printRecord = (patient) => {
       if (!patient) return alert("No record to print.");
 
-      // Compute age from birth_date if available
+      // Compute age from birth_date at the time of appointment
       let age = "N/A";
-      if (patient.birth_date) {
+      if (patient.birth_date && patient.appointment_date) {
         const birth = new Date(patient.birth_date);
-        const today = new Date();
-        age = today.getFullYear() - birth.getFullYear();
-        const m = today.getMonth() - birth.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        const appointmentDateForAge = new Date(patient.appointment_date);
+        age = appointmentDateForAge.getFullYear() - birth.getFullYear();
+        const m = appointmentDateForAge.getMonth() - birth.getMonth();
+        if (
+          m < 0 ||
+          (m === 0 && appointmentDateForAge.getDate() < birth.getDate())
+        ) {
           age--;
         }
         age = `${age} yrs`;
@@ -1508,13 +1820,18 @@ function Doctor() {
         return dateMatch || typeMatch;
       });
     };
-    const calculateAge = (birthDate) => {
+    const calculateAge = (birthDate, appointmentDate) => {
       if (!birthDate) return "Not recorded";
       const birth = new Date(birthDate);
-      const today = new Date();
-      let age = today.getFullYear() - birth.getFullYear();
-      const m = today.getMonth() - birth.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+      const appointmentDateForAge = appointmentDate
+        ? new Date(appointmentDate)
+        : new Date();
+      let age = appointmentDateForAge.getFullYear() - birth.getFullYear();
+      const m = appointmentDateForAge.getMonth() - birth.getMonth();
+      if (
+        m < 0 ||
+        (m === 0 && appointmentDateForAge.getDate() < birth.getDate())
+      ) {
         age--;
       }
       return `${age} yrs`;
@@ -1768,13 +2085,16 @@ function Doctor() {
                                   </div>
                                 ))}
 
-                                {/* Age (computed, read-only) */}
+                                {/* Age (computed at appointment time, read-only) */}
                                 <div>
                                   <label className="block text-xs sm:text-sm font-medium text-blue-700 mb-1">
-                                    Patient Age
+                                    Patient Age (at appointment)
                                   </label>
                                   <p className="border border-blue-200 p-2 sm:p-3 rounded-lg bg-gray-100 text-gray-700 font-semibold text-sm sm:text-base">
-                                    {calculateAge(p.birth_date)}
+                                    {calculateAge(
+                                      p.birth_date,
+                                      p.appointment_date
+                                    )}
                                   </p>
                                 </div>
                               </div>
@@ -2150,7 +2470,7 @@ function Doctor() {
             <p className="text-red-600 mb-6">{error}</p>
             <div className="flex gap-3 justify-center">
               <button
-                onClick={() => (window.location.href = "/login")}
+                onClick={() => (window.location.href = "/")}
                 className="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
               >
                 Go to Login
@@ -2583,82 +2903,6 @@ function Doctor() {
 
   // SETTINGS PAGE
   // SETTINGS PAGE (new design)
-  const SettingsPage = () => (
-    <div className="space-y-4 sm:space-y-6 md:space-y-8">
-      <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center">
-        <Settings className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 mr-2 sm:mr-3 text-purple-500" />
-        Clinic Settings
-      </h1>
-
-      <p className="text-gray-600 max-w-2xl text-sm sm:text-base">
-        Manage your profile, clinic information, and system preferences. Changes
-        are saved automatically.
-      </p>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 md:gap-8">
-        {/* Profile Settings */}
-        <div className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Profile</h2>
-          <div className="space-y-4">
-            <input
-              type="text"
-              placeholder="Clinic Name"
-              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400"
-            />
-            <input
-              type="email"
-              placeholder="Clinic Email"
-              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400"
-            />
-            <button className="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition">
-              Save Profile
-            </button>
-          </div>
-        </div>
-
-        {/* System Preferences */}
-        <div className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">
-            System Preferences
-          </h2>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-700">Email Notifications</span>
-              <input type="checkbox" className="toggle toggle-purple" />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-700">Dark Mode</span>
-              <input type="checkbox" className="toggle toggle-purple" />
-            </div>
-          </div>
-        </div>
-
-        {/* Security */}
-        <div className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Security</h2>
-          <p className="text-gray-600 mb-4">
-            Update your password regularly to keep your account safe.
-          </p>
-          <button className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition">
-            Change Password
-          </button>
-        </div>
-
-        {/* Backup & Export */}
-        <div className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">
-            Backup &amp; Export
-          </h2>
-          <p className="text-gray-600 mb-4">
-            Download patient records or create a full backup of the system.
-          </p>
-          <button className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition">
-            Export Data
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 
   // RENDER CURRENT PAGE
   const renderContent = () => {
@@ -2667,7 +2911,6 @@ function Doctor() {
     if (activePage === "Manage Account") return <ManageAccountPage />;
     if (activePage === "medical-records") return <MedicalRecords />;
     if (activePage === "analytics") return <AnalyticsPage />; // ✅ NEW
-    if (activePage === "settings") return <SettingsPage />;
 
     return (
       <div className="text-center py-16">

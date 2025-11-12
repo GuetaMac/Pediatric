@@ -50,7 +50,6 @@ function Nurse() {
     { id: "patient-accounts", label: "Patient Accounts", icon: Baby },
     { id: "medical-records", label: "Medical Records", icon: FileText },
     { id: "Inventory", label: "Inventory", icon: Package },
-    { id: "settings", label: "Settings", icon: Settings },
   ];
 
   // HOME PAGE
@@ -501,7 +500,7 @@ function Nurse() {
     const updateStatus = async (id, status) => {
       try {
         const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/appointments/${id}/status`,
+          `http://localhost:5001/api/appointments/${id}/status`,
           {
             method: "PUT",
             headers: {
@@ -536,7 +535,7 @@ function Nurse() {
       if (!confirm("Delete this appointment?")) return;
       try {
         const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/appointments/${id}`,
+          `http://localhost:5001/api/appointments/${id}`,
           {
             method: "DELETE",
             headers: {
@@ -562,7 +561,11 @@ function Nurse() {
     const filteredAppointments =
       filter === "All"
         ? appointments
-        : appointments.filter((appt) => appt.status === filter);
+        : appointments.filter((appt) => {
+            const apptStatus = appt.status?.toLowerCase().trim();
+            const filterStatus = filter.toLowerCase().trim();
+            return apptStatus === filterStatus;
+          });
 
     // 🔹 Sorting logic — today’s appointments first, then upcoming ones (by date/time)
     const sortedAppointments = [...filteredAppointments].sort((a, b) => {
@@ -580,49 +583,62 @@ function Nurse() {
       // Otherwise, sort by date/time
       return dateA - dateB;
     });
-    const statusOptions = ["All", "pending", "Approved", "Completed"];
+    const statusOptions = [
+      "All",
+      "pending",
+      "Approved",
+      "Completed",
+      "Canceled",
+    ];
     return (
       <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
-        {/* Header with Queue Title + Filter/Refresh */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center">
-            {/* Use Users icon, assuming it represents patient flow */}
-            {/* <Users className="w-6 h-6 sm:w-8 sm:h-8 mr-2 sm:mr-3 text-blue-500" /> */}
-            Daily Appointment Queue
-          </h1>
+        {/* ---------- Cohesive Header Bar for Appointment Queue (Enhanced Filter) ---------- */}
+        <div className="flex flex-col gap-4 p-4 bg-white border-b border-gray-200 rounded-xl shadow-lg">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
+            {/* Title */}
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center">
+              {/* Optional: Add a relevant icon like CalendarCheck or Users here */}
+              Daily Appointment Queue
+            </h1>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* UPDATED: Segmented Filter Buttons */}
-            <div className="inline-flex rounded-lg bg-gray-100 p-0.5 text-xs sm:text-sm">
-              {statusOptions.map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilter(status)}
-                  className={`px-2 py-1.5 font-medium transition ${
-                    filter === status
-                      ? "bg-white text-blue-600 shadow-md"
-                      : "text-gray-600 hover:text-blue-500"
-                  } rounded-md`}
-                >
-                  {status}
-                </button>
-              ))}
+            {/* Filter and Refresh Actions */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Segmented Filter Buttons (Appealing Style) */}
+              <div className="inline-flex rounded-xl bg-gray-100 p-0.5 text-xs sm:text-sm shadow-inner">
+                {statusOptions.map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setFilter(status)}
+                    className={`px-3 py-1.5 font-semibold transition-all duration-200 ${
+                      filter === status
+                        ? // Active: Strong blue background, white text, and an elevated shadow
+                          "bg-blue-600 text-white shadow-lg shadow-blue-300/50 hover:bg-blue-700"
+                        : // Inactive: Hover changes background slightly and text color to match the blue theme
+                          "text-gray-600 hover:bg-gray-200 hover:text-blue-600"
+                    } rounded-xl`} // Use rounded-xl to match container
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+
+              {/* Refresh Button */}
+              <button
+                onClick={fetchAppointments}
+                disabled={loading}
+                className="p-1.5 sm:p-2 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 transition disabled:opacity-50 shadow-md"
+                title="Refresh Appointments"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 sm:w-5 sm:h-5 ${
+                    loading ? "animate-spin" : ""
+                  }`}
+                />
+              </button>
             </div>
-
-            <button
-              onClick={fetchAppointments}
-              disabled={loading}
-              className="p-1.5 sm:p-2 rounded-full bg-gray-100 hover:bg-blue-100 text-blue-600 hover:text-blue-800 transition disabled:opacity-50"
-              title="Refresh Appointments"
-            >
-              <RefreshCw
-                className={`w-4 h-4 sm:w-5 sm:h-5 ${
-                  loading ? "animate-spin" : ""
-                }`}
-              />
-            </button>
           </div>
         </div>
+        {/* ---------- End Cohesive Header Bar ---------- */}
 
         {/* Appointment List / Grid */}
         {loading ? (
@@ -672,10 +688,12 @@ function Nurse() {
                     <b>Status:</b>{" "}
                     <span
                       className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                        appt.status === "Approved"
+                        appt.status?.toLowerCase() === "approved"
                           ? "bg-green-100 text-green-700"
-                          : appt.status === "Completed"
+                          : appt.status?.toLowerCase() === "completed"
                           ? "bg-blue-100 text-blue-700"
+                          : appt.status?.toLowerCase() === "canceled"
+                          ? "bg-red-100 text-red-700"
                           : "bg-yellow-100 text-yellow-700"
                       }`}
                     >
@@ -694,38 +712,74 @@ function Nurse() {
 
                 {/* Actions (Primary actions are now larger and more prominent) */}
                 <div className="flex flex-wrap gap-2 pt-2 border-t mt-4">
-                  {appt.status === "pending" && (
+                  {appt.status?.toLowerCase() === "pending" && (
+                    <>
+                      <button
+                        onClick={() =>
+                          updateStatus(appt.appointment_id, "Approved")
+                        }
+                        // Primary action blue/green for approval
+                        className="flex items-center px-4 py-2 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-1.5" />
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (
+                            confirm(
+                              "Are you sure you want to cancel this appointment?"
+                            )
+                          ) {
+                            updateStatus(appt.appointment_id, "Canceled");
+                          }
+                        }}
+                        className="flex items-center px-4 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
+                      >
+                        <X className="w-4 h-4 mr-1.5" />
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                  {appt.status?.toLowerCase() === "approved" && (
+                    <>
+                      <button
+                        onClick={() =>
+                          updateStatus(appt.appointment_id, "Completed")
+                        }
+                        // Primary action blue for completion
+                        className="flex items-center px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                      >
+                        <ClipboardCheck className="w-4 h-4 mr-1.5" />
+                        Complete
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (
+                            confirm(
+                              "Are you sure you want to cancel this appointment?"
+                            )
+                          ) {
+                            updateStatus(appt.appointment_id, "Canceled");
+                          }
+                        }}
+                        className="flex items-center px-4 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
+                      >
+                        <X className="w-4 h-4 mr-1.5" />
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                  {appt.status?.toLowerCase() !== "canceled" && (
                     <button
-                      onClick={() =>
-                        updateStatus(appt.appointment_id, "Approved")
-                      }
-                      // Primary action blue/green for approval
-                      className="flex items-center px-4 py-2 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                      onClick={() => deleteAppointment(appt.appointment_id)}
+                      // Delete remains red, but its size is consistent with others
+                      className="flex items-center px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
                     >
-                      <CheckCircle className="w-4 h-4 mr-1.5" />
-                      Approve
+                      <Trash2 className="w-4 h-4 mr-1.5" />
+                      Delete
                     </button>
                   )}
-                  {appt.status === "Approved" && (
-                    <button
-                      onClick={() =>
-                        updateStatus(appt.appointment_id, "Completed")
-                      }
-                      // Primary action blue for completion
-                      className="flex items-center px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                    >
-                      <ClipboardCheck className="w-4 h-4 mr-1.5" />
-                      Complete
-                    </button>
-                  )}
-                  <button
-                    onClick={() => deleteAppointment(appt.appointment_id)}
-                    // Delete remains red, but its size is consistent with others
-                    className="flex items-center px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-                  >
-                    <Trash2 className="w-4 h-4 mr-1.5" />
-                    Delete
-                  </button>
                 </div>
               </div>
             ))}
@@ -746,6 +800,8 @@ function Nurse() {
     const [loadingProfile, setLoadingProfile] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState(""); // <-- new state
+    const [isEditMode, setIsEditMode] = useState(false); // <-- new state for edit mode
+    const [editedPatient, setEditedPatient] = useState(null); // <-- new state for edited patient data
     const [newPatient, setNewPatient] = useState({
       full_name: "",
       email: "",
@@ -791,12 +847,14 @@ function Nurse() {
     const handleView = async (patient) => {
       try {
         setLoadingProfile(true);
+        setIsEditMode(false);
         const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/patients/${patient.user_id}/profile`
+          `http://localhost:5001/api/patients/${patient.user_id}/profile`
         );
         if (!res.ok) throw new Error("Failed to load patient profile");
         const data = await res.json();
         setSelectedPatient(data);
+        setEditedPatient({ ...data, password: "" }); // Initialize edited patient
         setIsModalOpen(true);
       } catch (err) {
         console.error(err);
@@ -806,18 +864,82 @@ function Nurse() {
       }
     };
 
+    // ✅ Handle Edit - Enable edit mode
+    const handleEdit = () => {
+      setIsEditMode(true);
+      setEditedPatient({ ...selectedPatient, password: "" });
+    };
+
+    // ✅ Handle Update - Update patient details
+    const handleUpdate = async (e) => {
+      e.preventDefault();
+      if (!editedPatient) return;
+
+      try {
+        setLoadingProfile(true);
+        const token = localStorage.getItem("token");
+        const res = await fetch(
+          `http://localhost:5001/api/patients/${selectedPatient.user_id}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              full_name: editedPatient.full_name,
+              email: editedPatient.email,
+              password: editedPatient.password || undefined, // Only send if provided
+              birth_date: editedPatient.birth_date,
+              gender: editedPatient.gender,
+              guardian: editedPatient.guardian || "",
+              guardian_number: editedPatient.guardian_number || "",
+              phone_number: editedPatient.phone_number || "",
+              address: editedPatient.address || "",
+              blood_type: editedPatient.blood_type || "",
+              allergies: editedPatient.allergies || "",
+              chronic_conditions: editedPatient.chronic_conditions || "",
+              mother_name: editedPatient.mother_name || "",
+              father_name: editedPatient.father_name || "",
+            }),
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          alert(data.message || "Failed to update patient");
+          return;
+        }
+
+        alert("Patient updated successfully!");
+        setIsEditMode(false);
+        setSelectedPatient(data.patient);
+        setEditedPatient({ ...data.patient, password: "" });
+        fetchPatients(); // Refresh the list
+      } catch (err) {
+        console.error("Error updating patient:", err);
+        alert("Error updating patient");
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+
+    // ✅ Handle Cancel Edit
+    const handleCancelEdit = () => {
+      setIsEditMode(false);
+      setEditedPatient({ ...selectedPatient, password: "" });
+    };
+
     const handleDeletePatient = async (user_id) => {
       if (!confirm("Are you sure you want to delete this patient account?"))
         return;
 
       try {
         setLoading(true);
-        const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/users/${user_id}`,
-          {
-            method: "DELETE",
-          }
-        );
+        const res = await fetch(`http://localhost:5001/api/users/${user_id}`, {
+          method: "DELETE",
+        });
 
         const data = await res.json();
         if (res.ok) {
@@ -886,57 +1008,68 @@ function Nurse() {
     const closeModal = () => {
       setIsModalOpen(false);
       setSelectedPatient(null);
+      setIsEditMode(false);
+      setEditedPatient(null);
     };
 
     return (
-      <div className="space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center">
-            <Users className="w-6 h-6 sm:w-8 sm:h-8 mr-2 sm:mr-3 text-blue-500" />
-            Patient Management
-          </h1>
+      <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 mt-2 sm:mt-0">
+        {/* ---------- Cohesive Header Bar for Patient Management ---------- */}
+        <div className="p-3 sm:p-4 md:p-6 bg-white/95 border-b border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          <div className="flex flex-col gap-3 sm:gap-4 w-full">
+            {/* Title */}
+            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 flex items-center flex-wrap gap-2">
+              <Users className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 text-blue-500 flex-shrink-0" />
+              <span className="break-words">Patient Management</span>
+            </h1>
 
-          <div className="flex gap-2 items-center">
-            {/* Search Input with Icon */}
-            <div className="relative flex-1">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-pink-400" />
-              <input
-                type="text"
-                placeholder="Search patient..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 sm:py-3 rounded-full border-2 border-pink-300 bg-pink-50 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400 shadow-md text-sm sm:text-base placeholder-pink-300"
-              />
+            {/* Search and Action Buttons - Stack on mobile, side by side on larger screens */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full">
+              {/* Search Input with Icon */}
+              <div className="relative flex-1 w-full min-w-0 sm:min-w-[200px]">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-pink-400 z-10 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search patient..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-2.5 md:py-3 rounded-full border-2 border-pink-300 bg-pink-50 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400 shadow-md text-sm sm:text-base placeholder-pink-300 transition-all duration-150 min-h-[44px]"
+                />
+              </div>
+
+              {/* Add Patient Button - Full width on mobile, auto on larger screens */}
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-4 sm:px-5 md:px-6 py-2.5 sm:py-2.5 md:py-3 rounded-full hover:from-pink-600 hover:to-pink-700 active:from-pink-700 active:to-pink-800 transition-all duration-200 shadow-lg flex items-center justify-center text-sm sm:text-base font-medium whitespace-nowrap w-full sm:w-auto sm:flex-shrink-0 min-h-[44px] touch-manipulation"
+                type="button"
+              >
+                <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" />
+                <span className="hidden sm:inline">Add New Patient</span>
+                <span className="sm:hidden">Add Patient</span>
+              </button>
             </div>
-
-            {/* Add Patient Button */}
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition-all duration-200 shadow-md flex items-center justify-center text-sm sm:text-base"
-            >
-              <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-              Add New Patient
-            </button>
           </div>
         </div>
-
+        {/* ---------- End Cohesive Header Bar ---------- */}
+        {/* This is where your patient list or table would typically follow, inheriting the space-y-4/6 */}
         {/* Table + List */}
-        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 overflow-x-auto">
+        <div className="bg-white rounded-xl shadow-lg p-3 sm:p-4 md:p-6 lg:p-8 overflow-x-auto">
           {loading ? (
-            <p className="text-gray-500">Loading patients...</p>
+            <p className="text-gray-500 text-sm sm:text-base py-4">
+              Loading patients...
+            </p>
           ) : filteredPatients.length === 0 ? (
-            <div className="text-center py-16">
-              <Baby className="w-20 h-20 mx-auto text-gray-300 mb-4" />
-              <h3 className="text-xl font-semibold text-gray-600 mb-2">
+            <div className="text-center py-8 sm:py-12 md:py-16">
+              <Baby className="w-16 h-16 sm:w-20 sm:h-20 mx-auto text-gray-300 mb-3 sm:mb-4" />
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-2 px-4">
                 No Patients Found
               </h3>
-              <p className="text-gray-500 mb-6">
+              <p className="text-gray-500 mb-4 sm:mb-6 text-sm sm:text-base px-4">
                 Start by adding your first patient to the system
               </p>
               <button
                 onClick={() => setIsAddModalOpen(true)}
-                className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-8 py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition-all duration-200 shadow-md"
+                className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition-all duration-200 shadow-md text-sm sm:text-base"
               >
                 Add Patient
               </button>
@@ -944,8 +1077,8 @@ function Nurse() {
           ) : (
             <>
               {/* Desktop Table */}
-              <div className="hidden md:block overflow-hidden rounded-lg border border-gray-200 shadow-md">
-                <table className="w-full text-left border-collapse">
+              <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 shadow-md">
+                <table className="w-full text-left border-collapse min-w-[600px]">
                   <thead className="bg-gradient-to-r from-blue-50 to-blue-100 text-gray-700 uppercase text-sm font-semibold">
                     <tr>
                       <th className="px-4 lg:px-6 py-3">Full Name</th>
@@ -959,25 +1092,29 @@ function Nurse() {
                         key={patient.user_id}
                         className="odd:bg-white even:bg-gray-50 hover:bg-blue-50 transition"
                       >
-                        <td className="px-4 lg:px-6 py-4 font-medium text-gray-900">
+                        <td className="px-4 lg:px-6 py-3 sm:py-4 font-medium text-gray-900 text-sm sm:text-base">
                           {patient.full_name}
                         </td>
-                        <td className="px-4 lg:px-6 py-4 text-gray-700">
+                        <td className="px-4 lg:px-6 py-3 sm:py-4 text-gray-700 text-sm sm:text-base break-words">
                           {patient.email}
                         </td>
-                        <td className="px-4 lg:px-6 py-4 text-center space-x-3">
-                          <button
-                            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-                            onClick={() => handleView(patient)}
-                          >
-                            View
-                          </button>
-                          <button
-                            className="text-red-600 hover:text-red-800 font-medium text-sm"
-                            onClick={() => handleDeletePatient(patient.user_id)}
-                          >
-                            Delete
-                          </button>
+                        <td className="px-4 lg:px-6 py-3 sm:py-4 text-center">
+                          <div className="flex items-center justify-center gap-2 sm:gap-3">
+                            <button
+                              className="text-blue-600 hover:text-blue-800 font-medium text-xs sm:text-sm px-2 py-1 hover:bg-blue-50 rounded transition"
+                              onClick={() => handleView(patient)}
+                            >
+                              View
+                            </button>
+                            <button
+                              className="text-red-600 hover:text-red-800 font-medium text-xs sm:text-sm px-2 py-1 hover:bg-red-50 rounded transition"
+                              onClick={() =>
+                                handleDeletePatient(patient.user_id)
+                              }
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -986,29 +1123,29 @@ function Nurse() {
               </div>
 
               {/* Mobile Card View */}
-              <div className="md:hidden space-y-4">
+              <div className="md:hidden space-y-3 sm:space-y-4">
                 {filteredPatients.map((patient) => (
                   <div
                     key={patient.user_id}
-                    className="bg-white rounded-lg border border-gray-200 shadow-md p-4"
+                    className="bg-white rounded-lg border border-gray-200 shadow-md p-3 sm:p-4"
                   >
                     <div className="mb-3">
-                      <h3 className="font-semibold text-gray-900 text-lg">
+                      <h3 className="font-semibold text-gray-900 text-base sm:text-lg break-words">
                         {patient.full_name}
                       </h3>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-xs sm:text-sm text-gray-600 mt-1 break-words">
                         {patient.email}
                       </p>
                     </div>
-                    <div className="flex gap-3 pt-3 border-t border-gray-200">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-3 border-t border-gray-200">
                       <button
-                        className="flex-1 text-blue-600 hover:text-blue-800 font-medium py-2 px-4 border border-blue-600 rounded-lg hover:bg-blue-50 transition text-sm"
+                        className="flex-1 text-blue-600 hover:text-blue-800 font-medium py-2 px-3 sm:px-4 border border-blue-600 rounded-lg hover:bg-blue-50 transition text-xs sm:text-sm min-h-[44px] flex items-center justify-center"
                         onClick={() => handleView(patient)}
                       >
                         View
                       </button>
                       <button
-                        className="flex-1 text-red-600 hover:text-red-800 font-medium py-2 px-4 border border-red-600 rounded-lg hover:bg-red-50 transition text-sm"
+                        className="flex-1 text-red-600 hover:text-red-800 font-medium py-2 px-3 sm:px-4 border border-red-600 rounded-lg hover:bg-red-50 transition text-xs sm:text-sm min-h-[44px] flex items-center justify-center"
                         onClick={() => handleDeletePatient(patient.user_id)}
                       >
                         Delete
@@ -1024,25 +1161,29 @@ function Nurse() {
         {/* 🧠 Add Patient Modal */}
         {isAddModalOpen && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-2 sm:p-4 overflow-y-auto"
             onClick={() => setIsAddModalOpen(false)}
           >
             <div
-              className="bg-white rounded-xl sm:rounded-2xl shadow-2xl border border-gray-200 w-full max-w-lg p-6 relative overflow-y-auto max-h-[90vh]"
+              className="bg-white rounded-xl sm:rounded-2xl shadow-2xl border border-gray-200 w-full max-w-lg p-4 sm:p-6 relative my-auto max-h-[95vh] sm:max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <button
-                className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 transition"
+                className="absolute top-2 right-2 sm:top-3 sm:right-3 text-gray-400 hover:text-gray-700 transition z-10 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-gray-100"
                 onClick={() => setIsAddModalOpen(false)}
+                aria-label="Close"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
 
-              <h2 className="text-xl font-bold text-pink-600 mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-pink-600 mb-3 sm:mb-4 pr-8">
                 Add New Patient
               </h2>
 
-              <form onSubmit={handleAddPatient} className="space-y-3">
+              <form
+                onSubmit={handleAddPatient}
+                className="space-y-2 sm:space-y-3"
+              >
                 {/* USER FIELDS */}
                 <input
                   type="text"
@@ -1051,7 +1192,7 @@ function Nurse() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, full_name: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                   required
                 />
                 <input
@@ -1061,7 +1202,7 @@ function Nurse() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, email: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                   required
                 />
                 <input
@@ -1071,7 +1212,7 @@ function Nurse() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, password: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                   required
                 />
                 <input
@@ -1080,7 +1221,7 @@ function Nurse() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, birth_date: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                   required
                 />
                 <select
@@ -1088,7 +1229,7 @@ function Nurse() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, gender: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px] bg-white"
                   required
                 >
                   <option value="">Select Gender</option>
@@ -1104,7 +1245,7 @@ function Nurse() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, guardian: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                 />
                 <input
                   type="text"
@@ -1116,7 +1257,7 @@ function Nurse() {
                       guardian_number: e.target.value,
                     })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                 />
                 <input
                   type="text"
@@ -1128,7 +1269,7 @@ function Nurse() {
                       phone_number: e.target.value,
                     })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                 />
                 <textarea
                   placeholder="Address"
@@ -1136,7 +1277,8 @@ function Nurse() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, address: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  rows={2}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition resize-y min-h-[80px]"
                 />
 
                 <select
@@ -1144,7 +1286,7 @@ function Nurse() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, blood_type: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px] bg-white"
                 >
                   <option value="">Select Blood Type</option>
                   <option value="A+">A+</option>
@@ -1163,7 +1305,8 @@ function Nurse() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, allergies: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  rows={2}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition resize-y min-h-[80px]"
                 />
                 <textarea
                   placeholder="Chronic Conditions (if any)"
@@ -1174,7 +1317,8 @@ function Nurse() {
                       chronic_conditions: e.target.value,
                     })
                   }
-                  className="w-full border rounded-lg p-2"
+                  rows={2}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition resize-y min-h-[80px]"
                 />
 
                 <input
@@ -1187,7 +1331,7 @@ function Nurse() {
                       mother_name: e.target.value,
                     })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                 />
                 <input
                   type="text"
@@ -1199,12 +1343,12 @@ function Nurse() {
                       father_name: e.target.value,
                     })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                 />
 
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-pink-500 to-pink-600 text-white py-2 rounded-lg hover:from-pink-600 hover:to-pink-700 transition"
+                  className="w-full bg-gradient-to-r from-pink-500 to-pink-600 text-white py-2.5 sm:py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition font-semibold text-sm sm:text-base shadow-lg min-h-[44px] mt-2"
                 >
                   Save Patient
                 </button>
@@ -1216,15 +1360,15 @@ function Nurse() {
         {/* Updated Modal */}
         {isModalOpen && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md transition-all duration-300 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md transition-all duration-300 p-2 sm:p-4 overflow-y-auto"
             onClick={closeModal}
           >
             <div
-              className="bg-white rounded-xl sm:rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md p-4 sm:p-6 relative overflow-y-auto max-h-[90vh] transform transition-all duration-300"
+              className="bg-white rounded-xl sm:rounded-2xl shadow-2xl border border-gray-200 w-full max-w-2xl p-4 sm:p-6 relative my-auto max-h-[95vh] sm:max-h-[90vh] overflow-y-auto transform transition-all duration-300"
               onClick={(e) => e.stopPropagation()}
             >
               <button
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-gray-700 transition-colors w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-gray-100"
+                className="absolute top-2 right-2 sm:top-3 sm:right-4 text-gray-400 hover:text-gray-700 transition-colors w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-gray-100 z-10"
                 onClick={closeModal}
                 aria-label="Close"
               >
@@ -1232,75 +1376,302 @@ function Nurse() {
               </button>
 
               {loadingProfile ? (
-                <p className="text-center text-gray-500 py-6 text-sm sm:text-base">
-                  Loading profile...
-                </p>
-              ) : selectedPatient ? (
+                <div className="text-center py-8 sm:py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                  <p className="text-gray-500 text-sm sm:text-base">
+                    Loading profile...
+                  </p>
+                </div>
+              ) : selectedPatient && editedPatient ? (
                 <>
-                  <h2 className="text-xl sm:text-2xl font-bold text-blue-700 mb-4 border-b pb-2">
-                    Patient Details
-                  </h2>
-
-                  <div className="space-y-2 text-gray-700 text-sm sm:text-base">
-                    <p>
-                      <span className="font-semibold">Full Name:</span>{" "}
-                      {selectedPatient.full_name}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Email:</span>{" "}
-                      {selectedPatient.email}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Birth Date:</span>{" "}
-                      {selectedPatient.birth_date}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Gender:</span>{" "}
-                      {selectedPatient.gender}
-                    </p>
-
-                    <hr className="my-3 border-gray-300" />
-
-                    <p>
-                      <span className="font-semibold">Guardian:</span>{" "}
-                      {selectedPatient.guardian}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Guardian Number:</span>{" "}
-                      {selectedPatient.guardian_number}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Phone Number:</span>{" "}
-                      {selectedPatient.phone_number}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Address:</span>{" "}
-                      {selectedPatient.address}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Blood Type:</span>{" "}
-                      {selectedPatient.blood_type}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Allergies:</span>{" "}
-                      {selectedPatient.allergies}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Chronic Conditions:</span>{" "}
-                      {selectedPatient.chronic_conditions}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Mother's Name:</span>{" "}
-                      {selectedPatient.mother_name}
-                    </p>
-                    <p>
-                      <span className="font-semibold">Father's Name:</span>{" "}
-                      {selectedPatient.father_name}
-                    </p>
+                  <div className="flex items-center justify-between mb-3 sm:mb-4 pr-8">
+                    <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-blue-700">
+                      {isEditMode ? "Edit Patient Details" : "Patient Details"}
+                    </h2>
+                    {!isEditMode && (
+                      <button
+                        onClick={handleEdit}
+                        className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm sm:text-base font-medium"
+                      >
+                        <Edit className="w-4 h-4 sm:w-5 sm:h-5" />
+                        Edit
+                      </button>
+                    )}
                   </div>
+
+                  {isEditMode ? (
+                    <form
+                      onSubmit={handleUpdate}
+                      className="space-y-2 sm:space-y-3"
+                    >
+                      {/* USER FIELDS */}
+                      <input
+                        type="text"
+                        placeholder="Full Name"
+                        value={editedPatient.full_name || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            full_name: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                        required
+                      />
+                      <input
+                        type="email"
+                        placeholder="Email"
+                        value={editedPatient.email || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            email: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                        required
+                      />
+                      <input
+                        type="password"
+                        placeholder="Password (Leave blank to keep current password)"
+                        value={editedPatient.password || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            password: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                      />
+                      <input
+                        type="date"
+                        value={editedPatient.birth_date || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            birth_date: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                        required
+                      />
+                      <select
+                        value={editedPatient.gender || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            gender: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px] bg-white"
+                        required
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                      </select>
+
+                      {/* PATIENT PROFILE FIELDS */}
+                      <input
+                        type="text"
+                        placeholder="Guardian Name"
+                        value={editedPatient.guardian || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            guardian: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Guardian Number"
+                        value={editedPatient.guardian_number || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            guardian_number: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Phone Number"
+                        value={editedPatient.phone_number || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            phone_number: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                      />
+                      <textarea
+                        placeholder="Address"
+                        value={editedPatient.address || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            address: e.target.value,
+                          })
+                        }
+                        rows={2}
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition resize-y min-h-[80px]"
+                      />
+
+                      <select
+                        value={editedPatient.blood_type || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            blood_type: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px] bg-white"
+                      >
+                        <option value="">Select Blood Type</option>
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                      </select>
+
+                      <textarea
+                        placeholder="Allergies (if any)"
+                        value={editedPatient.allergies || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            allergies: e.target.value,
+                          })
+                        }
+                        rows={2}
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition resize-y min-h-[80px]"
+                      />
+                      <textarea
+                        placeholder="Chronic Conditions (if any)"
+                        value={editedPatient.chronic_conditions || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            chronic_conditions: e.target.value,
+                          })
+                        }
+                        rows={2}
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition resize-y min-h-[80px]"
+                      />
+
+                      <input
+                        type="text"
+                        placeholder="Mother's Name"
+                        value={editedPatient.mother_name || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            mother_name: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Father's Name"
+                        value={editedPatient.father_name || ""}
+                        onChange={(e) =>
+                          setEditedPatient({
+                            ...editedPatient,
+                            father_name: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
+                      />
+
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-2">
+                        <button
+                          type="submit"
+                          className="flex-1 bg-gradient-to-r from-pink-500 to-pink-600 text-white py-2.5 sm:py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition font-semibold text-sm sm:text-base shadow-lg min-h-[44px]"
+                        >
+                          Save Changes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelEdit}
+                          className="flex-1 bg-gray-500 text-white py-2.5 sm:py-3 rounded-lg hover:bg-gray-600 transition font-semibold text-sm sm:text-base shadow-lg min-h-[44px]"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="space-y-2 sm:space-y-3 text-gray-700 text-xs sm:text-sm md:text-base">
+                      <p className="break-words">
+                        <span className="font-semibold">Full Name:</span>{" "}
+                        {selectedPatient.full_name}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Email:</span>{" "}
+                        {selectedPatient.email}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Birth Date:</span>{" "}
+                        {selectedPatient.birth_date || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Gender:</span>{" "}
+                        {selectedPatient.gender || "N/A"}
+                      </p>
+
+                      <hr className="my-2 sm:my-3 border-gray-300" />
+
+                      <p className="break-words">
+                        <span className="font-semibold">Guardian:</span>{" "}
+                        {selectedPatient.guardian || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Guardian Number:</span>{" "}
+                        {selectedPatient.guardian_number || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Phone Number:</span>{" "}
+                        {selectedPatient.phone_number || "N/A"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Address:</span>{" "}
+                        {selectedPatient.address || "N/A"}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Blood Type:</span>{" "}
+                        {selectedPatient.blood_type || "N/A"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Allergies:</span>{" "}
+                        {selectedPatient.allergies || "None"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">
+                          Chronic Conditions:
+                        </span>{" "}
+                        {selectedPatient.chronic_conditions || "None"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Mother's Name:</span>{" "}
+                        {selectedPatient.mother_name || "N/A"}
+                      </p>
+                      <p className="break-words">
+                        <span className="font-semibold">Father's Name:</span>{" "}
+                        {selectedPatient.father_name || "N/A"}
+                      </p>
+                    </div>
+                  )}
                 </>
               ) : (
-                <p className="text-center text-gray-500 py-6">
+                <p className="text-center text-gray-500 py-6 text-sm sm:text-base">
                   No patient selected.
                 </p>
               )}
@@ -1453,14 +1824,17 @@ function Nurse() {
     const printRecord = (patient) => {
       if (!patient) return alert("No record to print.");
 
-      // Compute age from birth_date if available
+      // Compute age from birth_date at the time of appointment
       let age = "N/A";
-      if (patient.birth_date) {
+      if (patient.birth_date && patient.appointment_date) {
         const birth = new Date(patient.birth_date);
-        const today = new Date();
-        age = today.getFullYear() - birth.getFullYear();
-        const m = today.getMonth() - birth.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        const appointmentDateForAge = new Date(patient.appointment_date);
+        age = appointmentDateForAge.getFullYear() - birth.getFullYear();
+        const m = appointmentDateForAge.getMonth() - birth.getMonth();
+        if (
+          m < 0 ||
+          (m === 0 && appointmentDateForAge.getDate() < birth.getDate())
+        ) {
           age--;
         }
         age = `${age} yrs`;
@@ -1804,25 +2178,29 @@ function Nurse() {
                                   </div>
                                 ))}
 
-                                {/* Age (computed) */}
+                                {/* Age (computed at appointment time) */}
                                 <div>
                                   <label className="block text-sm font-medium text-blue-700 mb-1">
-                                    Age
+                                    Age (at appointment)
                                   </label>
                                   <p className="border border-blue-200 p-3 rounded-lg bg-gray-50">
-                                    {p.birth_date
+                                    {p.birth_date && p.appointment_date
                                       ? (() => {
                                           const birth = new Date(p.birth_date);
-                                          const today = new Date();
+                                          const appointmentDate = new Date(
+                                            p.appointment_date
+                                          );
                                           let age =
-                                            today.getFullYear() -
+                                            appointmentDate.getFullYear() -
                                             birth.getFullYear();
                                           const m =
-                                            today.getMonth() - birth.getMonth();
+                                            appointmentDate.getMonth() -
+                                            birth.getMonth();
                                           if (
                                             m < 0 ||
                                             (m === 0 &&
-                                              today.getDate() < birth.getDate())
+                                              appointmentDate.getDate() <
+                                                birth.getDate())
                                           ) {
                                             age--;
                                           }
@@ -1875,7 +2253,7 @@ function Nurse() {
 
                                 <button
                                   type="button"
-                                  onClick={() => printRecord(p, patientName)}
+                                  onClick={() => printRecord(p)}
                                   className="px-4 sm:px-6 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors text-sm sm:text-base"
                                 >
                                   Print Record
@@ -1973,9 +2351,7 @@ function Nurse() {
       if (!name.trim() || stock === "") return alert("Fill all fields");
 
       const url = editingItem
-        ? `${import.meta.env.VITE_API_URL}/inventory/update/${
-            editingItem.inventory_id
-          }`
+        ? `http://localhost:5001/api/inventory/update/${editingItem.inventory_id}`
         : `${import.meta.env.VITE_API_URL}/inventory/add`;
       const method = editingItem ? "PUT" : "POST";
 
@@ -2006,15 +2382,10 @@ function Nurse() {
     const handleDelete = async (id) => {
       if (!confirm("Delete this product?")) return;
       try {
-        const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/inventory/${id}`,
-          {
-            method: "DELETE",
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }
-        );
+        const res = await fetch(`http://localhost:5001/api/inventory/${id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
         if (res.ok) {
           setItems(items.filter((i) => i.inventory_id !== id));
         } else {
@@ -2366,15 +2737,6 @@ function Nurse() {
     );
   };
   // SETTINGS PAGE
-  const SettingsPage = () => (
-    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
-      <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center">
-        <Settings className="w-6 h-6 sm:w-8 sm:h-8 mr-2 sm:mr-3 text-purple-500" />
-        Clinic Settings
-      </h1>
-      {/* Content will go here */}
-    </div>
-  );
 
   // RENDER CURRENT PAGE
   const renderContent = () => {
@@ -2383,7 +2745,6 @@ function Nurse() {
     if (activePage === "patient-accounts") return <PatientsPage />;
     if (activePage === "medical-records") return <MedicalRecords />;
     if (activePage === "Inventory") return <InventoryPage />;
-    if (activePage === "settings") return <SettingsPage />;
 
     return (
       <div className="text-center py-16">
