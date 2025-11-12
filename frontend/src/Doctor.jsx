@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { Sparkles, Lightbulb } from "lucide-react";
 import { RefreshCw } from "lucide-react";
 import { BarChart3, ClipboardList } from "lucide-react";
+import Swal from "sweetalert2";
 import {
   LineChart,
   Line,
@@ -70,11 +71,21 @@ function Doctor() {
           setAppointments(data);
         } else {
           console.error("Error fetching appointments:", data.error);
-          alert(data.error || "Error fetching appointments");
+          Swal.fire({
+            icon: "error",
+            title: "Error Loading Appointments",
+            text: data.error || "Error fetching appointments",
+            confirmButtonColor: "#3b82f6",
+          });
         }
       } catch (err) {
         console.error("Error fetching appointments", err);
-        alert("Error connecting to server");
+        Swal.fire({
+          icon: "error",
+          title: "Error Loading Appointments",
+          text: data.error || "Error fetching appointments",
+          confirmButtonColor: "#3b82f6",
+        });
       }
     };
 
@@ -388,7 +399,12 @@ function Doctor() {
           setPatients(onlyPatients);
         } else {
           console.error("Error fetching users:", data.error);
-          alert(data.error || "Error fetching users");
+          Swal.fire({
+            icon: "error",
+            title: "Error",
+            text: data.error || "Error fetching data",
+            confirmButtonColor: "#3b82f6",
+          });
         }
       } catch (err) {
         console.error("Error fetching users", err);
@@ -408,7 +424,7 @@ function Doctor() {
         setLoadingProfile(true);
         setIsEditMode(false);
         const res = await fetch(
-          `http://localhost:5001/api/patients/${patient.user_id}/profile`
+          `${import.meta.env.VITE_API_URL}/patients/${patient.user_id}/profile`
         );
         if (!res.ok) throw new Error("Failed to load patient profile");
         const data = await res.json();
@@ -417,7 +433,12 @@ function Doctor() {
         setIsModalOpen(true);
       } catch (err) {
         console.error(err);
-        alert("Failed to load patient profile.");
+        Swal.fire({
+          icon: "error",
+          title: "Load Failed",
+          text: "Failed to load patient profile",
+          confirmButtonColor: "#3b82f6",
+        });
       } finally {
         setLoadingProfile(false);
       }
@@ -438,7 +459,7 @@ function Doctor() {
         setLoadingProfile(true);
         const token = localStorage.getItem("token");
         const res = await fetch(
-          `http://localhost:5001/api/patients/${selectedPatient.user_id}`,
+          `${import.meta.env.VITE_API_URL}/patients/${selectedPatient.user_id}`,
           {
             method: "PUT",
             headers: {
@@ -467,11 +488,22 @@ function Doctor() {
         const data = await res.json();
 
         if (!res.ok) {
-          alert(data.message || "Failed to update patient");
+          Swal.fire({
+            icon: "error",
+            title: "Update Failed",
+            text: data.message || "Failed to update patient",
+            confirmButtonColor: "#3b82f6",
+          });
           return;
         }
 
-        alert("Patient updated successfully!");
+        Swal.fire({
+          icon: "success",
+          title: "Updated!",
+          text: "Patient information has been updated successfully",
+          timer: 2000,
+          showConfirmButton: false,
+        });
         setIsEditMode(false);
         setSelectedPatient(data.patient);
         setEditedPatient({ ...data.patient, password: "" });
@@ -490,21 +522,40 @@ function Doctor() {
       setEditedPatient({ ...selectedPatient, password: "" });
     };
     const handleDeletePatient = async (user_id) => {
-      if (!confirm("Are you sure you want to delete this patient account?"))
-        return;
+      const result = await Swal.fire({
+        icon: "warning",
+        title: "Delete Patient Account?",
+        text: "This action cannot be undone!",
+        showCancelButton: true,
+        confirmButtonColor: "#ef4444",
+        cancelButtonColor: "#6b7280",
+        confirmButtonText: "Yes, delete it!",
+        cancelButtonText: "Cancel",
+      });
+
+      if (!result.isConfirmed) return;
 
       try {
         setLoading(true);
-        const res = await fetch(`http://localhost:5001/api/users/${user_id}`, {
-          method: "DELETE",
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/users/${user_id}`,
+          {
+            method: "DELETE",
+          }
+        );
 
         const data = await res.json();
         if (res.ok) {
           setPatients(
             patients.filter((patient) => patient.user_id !== data.user_id)
           );
-          alert("Patient account deleted successfully!");
+          Swal.fire({
+            icon: "success",
+            title: "Deleted!",
+            text: "Patient account has been deleted successfully",
+            timer: 2000,
+            showConfirmButton: false,
+          });
         } else {
           alert(data.error || "Error deleting patient account");
         }
@@ -532,11 +583,22 @@ function Doctor() {
 
         if (!res.ok) {
           const err = await res.json();
-          alert(err.message || "Failed to add patient");
+          Swal.fire({
+            icon: "error",
+            title: "Failed to Add Patient",
+            text: err.message || "Failed to add patient",
+            confirmButtonColor: "#3b82f6",
+          });
           return;
         }
 
-        alert("Patient added successfully!");
+        Swal.fire({
+          icon: "success",
+          title: "Patient Added!",
+          text: "New patient has been added to the system",
+          timer: 2000,
+          showConfirmButton: false,
+        });
         setIsAddModalOpen(false);
         setNewPatient({
           full_name: "",
@@ -1269,11 +1331,21 @@ function Doctor() {
     // Create Nurse Account
     const handleCreateNurse = async () => {
       if (!fullName || !email || !password) {
-        alert("Please fill all fields");
+        Swal.fire({
+          icon: "warning",
+          title: "Missing Information",
+          text: "Please fill in all required fields",
+          confirmButtonColor: "#3b82f6",
+        });
         return;
       }
       if (password.length < 8) {
-        alert("Password must be at least 8 characters long");
+        Swal.fire({
+          icon: "warning",
+          title: "Weak Password",
+          text: "Password must be at least 8 characters long",
+          confirmButtonColor: "#3b82f6",
+        });
         return;
       }
 
@@ -1296,7 +1368,13 @@ function Doctor() {
           setFullName("");
           setEmail("");
           setPassword("");
-          alert("Nurse account created successfully!");
+          Swal.fire({
+            icon: "success",
+            title: "Account Created!",
+            text: "Nurse account has been created successfully",
+            timer: 2000,
+            showConfirmButton: false,
+          });
         } else {
           alert(data.error || "Error creating nurse account");
         }
@@ -1310,19 +1388,38 @@ function Doctor() {
 
     // Delete Nurse Account
     const handleDelete = async (user_id) => {
-      if (!confirm("Are you sure you want to delete this nurse account?"))
-        return;
+      const result = await Swal.fire({
+        icon: "warning",
+        title: "Delete Nurse Account?",
+        text: "This action cannot be undone!",
+        showCancelButton: true,
+        confirmButtonColor: "#ef4444",
+        cancelButtonColor: "#6b7280",
+        confirmButtonText: "Yes, delete it!",
+        cancelButtonText: "Cancel",
+      });
+
+      if (!result.isConfirmed) return;
 
       try {
         setLoading(true);
-        const res = await fetch(`http://localhost:5001/api/users/${user_id}`, {
-          method: "DELETE",
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/users/${user_id}`,
+          {
+            method: "DELETE",
+          }
+        );
 
         const data = await res.json();
         if (res.ok) {
           setNurses(nurses.filter((nurse) => nurse.user_id !== data.user_id));
-          alert("Nurse account deleted successfully!");
+          Swal.fire({
+            icon: "success",
+            title: "Deleted!",
+            text: "Nurse account has been deleted successfully",
+            timer: 2000,
+            showConfirmButton: false,
+          });
         } else {
           alert(data.error || "Error deleting nurse account");
         }
@@ -1353,11 +1450,14 @@ function Doctor() {
 
       try {
         setLoading(true);
-        const res = await fetch(`http://localhost:5001/api/users/${editId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(editForm),
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/users/${editId}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(editForm),
+          }
+        );
 
         const data = await res.json();
         if (res.ok) {
@@ -1366,7 +1466,13 @@ function Doctor() {
           );
           setEditId(null);
           setEditForm({ full_name: "", email: "", password: "" });
-          alert("Nurse account updated successfully!");
+          Swal.fire({
+            icon: "success",
+            title: "Updated!",
+            text: "Nurse account has been updated successfully",
+            timer: 2000,
+            showConfirmButton: false,
+          });
         } else {
           alert(data.error || "Error updating nurse account");
         }
@@ -1690,7 +1796,15 @@ function Doctor() {
 
     // 🖨️ Print function (single record)
     const printRecord = (patient) => {
-      if (!patient) return alert("No record to print.");
+      if (!patient) {
+        Swal.fire({
+          icon: "info",
+          title: "No Record",
+          text: "No medical record available to print",
+          confirmButtonColor: "#3b82f6",
+        });
+        return;
+      }
 
       // Compute age from birth_date at the time of appointment
       let age = "N/A";

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
+import Swal from "sweetalert2";
 
 function SignupPage() {
   const [fullName, setFullName] = useState("");
@@ -26,10 +27,32 @@ function SignupPage() {
 
       localStorage.setItem("token", res.data.token);
 
-      alert("🎉 Signup successful! Welcome to Pediatric System");
-      navigate("/");
-    } catch {
-      setError("Signup failed. Try again.");
+      // ✅ UPDATED
+      Swal.fire({
+        icon: "success",
+        title: "Signup Successful!",
+        text: "Welcome to Pediatric System",
+        confirmButtonColor: "#22c55e",
+        timer: 2000,
+        showConfirmButton: false,
+      }).then(() => {
+        navigate("/");
+      });
+    } catch (err) {
+      console.error("Signup error:", err);
+
+      // ✅ IMPROVED ERROR HANDLING
+      const errorMessage =
+        err.response?.data?.error || "Signup failed. Please try again.";
+
+      Swal.fire({
+        icon: "error",
+        title: "Signup Failed",
+        text: errorMessage,
+        confirmButtonColor: "#22c55e",
+      });
+
+      setError(errorMessage);
     }
   };
 

@@ -27,6 +27,7 @@ import {
   ChevronUp,
   Filter,
 } from "lucide-react";
+import Swal from "sweetalert2";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
 
 function Nurse() {
@@ -178,7 +179,12 @@ function Nurse() {
         setLastUpdated(new Date().toLocaleString());
       } catch (err) {
         console.error("Error loading dashboard summary:", err);
-        alert("Failed to load dashboard data. Please try again later.");
+        Swal.fire({
+          icon: "error",
+          title: "Failed to Load Data",
+          text: "Unable to load dashboard data. Please try again later.",
+          confirmButtonColor: "#3b82f6",
+        });
       } finally {
         setLoading(false);
       }
@@ -486,7 +492,12 @@ function Nurse() {
         setAppointments(data);
       } catch (err) {
         console.error(err);
-        alert("Error fetching appointments");
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to fetch appointments",
+          confirmButtonColor: "#3b82f6",
+        });
       } finally {
         setLoading(false);
       }
@@ -500,7 +511,7 @@ function Nurse() {
     const updateStatus = async (id, status) => {
       try {
         const res = await fetch(
-          `http://localhost:5001/api/appointments/${id}/status`,
+          `${import.meta.env.VITE_API_URL}/appointments/${id}/status`,
           {
             method: "PUT",
             headers: {
@@ -522,7 +533,12 @@ function Nurse() {
             )
           );
         } else {
-          alert(data.error || "Failed to update");
+          Swal.fire({
+            icon: "error",
+            title: "Update Failed",
+            text: data.error || "Failed to update appointment status",
+            confirmButtonColor: "#3b82f6",
+          });
         }
       } catch (err) {
         console.error(err);
@@ -532,10 +548,28 @@ function Nurse() {
 
     // Delete appointment
     const deleteAppointment = async (id) => {
-      if (!confirm("Delete this appointment?")) return;
+      const result = await Swal.fire({
+        icon: "warning",
+        title: "Delete Appointment?",
+        text: "This action cannot be undone!",
+        showCancelButton: true,
+        confirmButtonColor: "#ef4444",
+        cancelButtonColor: "#6b7280",
+        confirmButtonText: "Yes, delete it!",
+        cancelButtonText: "Cancel",
+      });
+      Swal.fire({
+        icon: "success",
+        title: "Deleted!",
+        text: "Appointment has been deleted",
+        timer: 2000,
+        showConfirmButton: false,
+      });
+
+      if (!result.isConfirmed) return;
       try {
         const res = await fetch(
-          `http://localhost:5001/api/appointments/${id}`,
+          `${import.meta.env.VITE_API_URL}/appointments/${id}`,
           {
             method: "DELETE",
             headers: {
@@ -549,7 +583,12 @@ function Nurse() {
             appointments.filter((appt) => appt.appointment_id !== id)
           );
         } else {
-          alert(data.error || "Failed to delete");
+          Swal.fire({
+            icon: "error",
+            title: "Delete Failed",
+            text: data.error || "Failed to delete appointment",
+            confirmButtonColor: "#3b82f6",
+          });
         }
       } catch (err) {
         console.error(err);
@@ -725,12 +764,19 @@ function Nurse() {
                         Approve
                       </button>
                       <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              "Are you sure you want to cancel this appointment?"
-                            )
-                          ) {
+                        onClick={async () => {
+                          const result = await Swal.fire({
+                            icon: "warning",
+                            title: "Cancel Appointment?",
+                            text: "This will mark the appointment as canceled",
+                            showCancelButton: true,
+                            confirmButtonColor: "#f97316",
+                            cancelButtonColor: "#6b7280",
+                            confirmButtonText: "Yes, cancel it",
+                            cancelButtonText: "Go back",
+                          });
+
+                          if (result.isConfirmed) {
                             updateStatus(appt.appointment_id, "Canceled");
                           }
                         }}
@@ -829,7 +875,12 @@ function Nurse() {
           setPatients(onlyPatients);
         } else {
           console.error("Error fetching users:", data.error);
-          alert(data.error || "Error fetching users");
+          Swal.fire({
+            icon: "error",
+            title: "Error",
+            text: data.error || "Failed to fetch patient data",
+            confirmButtonColor: "#3b82f6",
+          });
         }
       } catch (err) {
         console.error("Error fetching users", err);
@@ -849,7 +900,7 @@ function Nurse() {
         setLoadingProfile(true);
         setIsEditMode(false);
         const res = await fetch(
-          `http://localhost:5001/api/patients/${patient.user_id}/profile`
+          `${import.meta.env.VITE_API_URL}/patients/${patient.user_id}/profile`
         );
         if (!res.ok) throw new Error("Failed to load patient profile");
         const data = await res.json();
@@ -858,7 +909,12 @@ function Nurse() {
         setIsModalOpen(true);
       } catch (err) {
         console.error(err);
-        alert("Failed to load patient profile.");
+        Swal.fire({
+          icon: "error",
+          title: "Load Failed",
+          text: "Failed to load patient profile",
+          confirmButtonColor: "#3b82f6",
+        });
       } finally {
         setLoadingProfile(false);
       }
@@ -879,7 +935,7 @@ function Nurse() {
         setLoadingProfile(true);
         const token = localStorage.getItem("token");
         const res = await fetch(
-          `http://localhost:5001/api/patients/${selectedPatient.user_id}`,
+          `${import.meta.env.VITE_API_URL}/patients/${selectedPatient.user_id}`,
           {
             method: "PUT",
             headers: {
@@ -908,11 +964,22 @@ function Nurse() {
         const data = await res.json();
 
         if (!res.ok) {
-          alert(data.message || "Failed to update patient");
+          Swal.fire({
+            icon: "error",
+            title: "Update Failed",
+            text: data.message || "Failed to update patient",
+            confirmButtonColor: "#3b82f6",
+          });
           return;
         }
 
-        alert("Patient updated successfully!");
+        Swal.fire({
+          icon: "success",
+          title: "Updated!",
+          text: "Patient information has been updated",
+          timer: 2000,
+          showConfirmButton: false,
+        });
         setIsEditMode(false);
         setSelectedPatient(data.patient);
         setEditedPatient({ ...data.patient, password: "" });
@@ -932,27 +999,50 @@ function Nurse() {
     };
 
     const handleDeletePatient = async (user_id) => {
-      if (!confirm("Are you sure you want to delete this patient account?"))
-        return;
+      const result = await Swal.fire({
+        icon: "warning",
+        title: "Delete Patient Account?",
+        text: "This action cannot be undone!",
+        showCancelButton: true,
+        confirmButtonColor: "#ef4444",
+        cancelButtonColor: "#6b7280",
+        confirmButtonText: "Yes, delete it!",
+        cancelButtonText: "Cancel",
+      });
 
+      if (!result.isConfirmed) return;
       try {
         setLoading(true);
-        const res = await fetch(`http://localhost:5001/api/users/${user_id}`, {
-          method: "DELETE",
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/users/${user_id}`,
+          {
+            method: "DELETE",
+          }
+        );
 
         const data = await res.json();
         if (res.ok) {
           setPatients(
             patients.filter((patient) => patient.user_id !== data.user_id)
           );
-          alert("Patient account deleted successfully!");
+          Swal.fire({
+            icon: "success",
+            title: "Deleted!",
+            text: "Patient account has been deleted",
+            timer: 2000,
+            showConfirmButton: false,
+          });
         } else {
           alert(data.error || "Error deleting patient account");
         }
       } catch (err) {
         console.error("Error deleting patient", err);
-        alert("Error deleting patient account");
+        Swal.fire({
+          icon: "error",
+          title: "Delete Failed",
+          text: data.error || "Error deleting patient account",
+          confirmButtonColor: "#3b82f6",
+        });
       } finally {
         setLoading(false);
       }
@@ -975,11 +1065,22 @@ function Nurse() {
 
         if (!res.ok) {
           const err = await res.json();
-          alert(err.message || "Failed to add patient");
+          Swal.fire({
+            icon: "error",
+            title: "Failed to Add Patient",
+            text: err.message || "Failed to add patient",
+            confirmButtonColor: "#3b82f6",
+          });
           return;
         }
 
-        alert("Patient added successfully!");
+        Swal.fire({
+          icon: "success",
+          title: "Patient Added!",
+          text: "New patient has been added to the system",
+          timer: 2000,
+          showConfirmButton: false,
+        });
         setIsAddModalOpen(false);
         setNewPatient({
           full_name: "",
@@ -1822,7 +1923,15 @@ function Nurse() {
 
     // 🖨️ Print function (single record)
     const printRecord = (patient) => {
-      if (!patient) return alert("No record to print.");
+      if (!patient) {
+        Swal.fire({
+          icon: "info",
+          title: "No Record",
+          text: "No medical record available to print",
+          confirmButtonColor: "#3b82f6",
+        });
+        return;
+      }
 
       // Compute age from birth_date at the time of appointment
       let age = "N/A";
@@ -2316,7 +2425,12 @@ function Nurse() {
         const data = await res.json();
         setItems(data);
       } catch (err) {
-        alert("Error fetching inventory: " + err.message);
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: `Failed to fetch inventory: ${err.message}`,
+          confirmButtonColor: "#3b82f6",
+        });
       } finally {
         setLoading(false);
       }
@@ -2351,7 +2465,9 @@ function Nurse() {
       if (!name.trim() || stock === "") return alert("Fill all fields");
 
       const url = editingItem
-        ? `http://localhost:5001/api/inventory/update/${editingItem.inventory_id}`
+        ? `${import.meta.env.VITE_API_URL}/inventory/update/${
+            editingItem.inventory_id
+          }`
         : `${import.meta.env.VITE_API_URL}/inventory/add`;
       const method = editingItem ? "PUT" : "POST";
 
@@ -2371,7 +2487,12 @@ function Nurse() {
           setStock("");
           setEditingItem(null);
         } else {
-          alert(data.error || "Failed to save");
+          Swal.fire({
+            icon: "error",
+            title: "Save Failed",
+            text: data.error || "Failed to save product",
+            confirmButtonColor: "#3b82f6",
+          });
         }
       } catch (err) {
         alert("Error saving item: " + err.message);
@@ -2380,16 +2501,37 @@ function Nurse() {
 
     // Delete
     const handleDelete = async (id) => {
-      if (!confirm("Delete this product?")) return;
+      const result = await Swal.fire({
+        icon: "warning",
+        title: "Delete Product?",
+        text: "This action cannot be undone!",
+        showCancelButton: true,
+        confirmButtonColor: "#ef4444",
+        cancelButtonColor: "#6b7280",
+        confirmButtonText: "Yes, delete it!",
+        cancelButtonText: "Cancel",
+      });
+
+      if (!result.isConfirmed) return;
       try {
-        const res = await fetch(`http://localhost:5001/api/inventory/${id}`, {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/inventory/${id}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
         if (res.ok) {
           setItems(items.filter((i) => i.inventory_id !== id));
         } else {
-          alert("Failed to delete");
+          Swal.fire({
+            icon: "error",
+            title: "Delete Failed",
+            text: "Failed to delete product",
+            confirmButtonColor: "#3b82f6",
+          });
         }
       } catch (err) {
         alert("Error deleting item: " + err.message);
@@ -2417,8 +2559,15 @@ function Nurse() {
     };
 
     const submitSell = async () => {
-      if (!sellQty || parseInt(sellQty) <= 0)
-        return alert("Enter valid quantity");
+      if (!sellQty || parseInt(sellQty) <= 0) {
+        Swal.fire({
+          icon: "warning",
+          title: "Invalid Quantity",
+          text: "Please enter a valid quantity",
+          confirmButtonColor: "#3b82f6",
+        });
+        return;
+      }
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/sales`, {
           method: "POST",
@@ -2433,13 +2582,24 @@ function Nurse() {
         });
         const data = await res.json();
         if (res.ok) {
-          alert("Sale recorded!");
+          Swal.fire({
+            icon: "success",
+            title: "Sale Recorded!",
+            text: "Product sale has been recorded successfully",
+            timer: 2000,
+            showConfirmButton: false,
+          });
           fetchInventory();
           fetchSalesSummary();
           setSellItem(null);
           setSellQty("");
         } else {
-          alert(data.error || "Failed to record sale");
+          Swal.fire({
+            icon: "error",
+            title: "Sale Failed",
+            text: data.error || "Failed to record sale",
+            confirmButtonColor: "#3b82f6",
+          });
         }
       } catch (err) {
         alert("Error selling item: " + err.message);

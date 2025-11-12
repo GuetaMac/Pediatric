@@ -30,6 +30,7 @@ import {
   X,
   CheckCircle,
 } from "lucide-react";
+import Swal from "sweetalert2";
 
 // ✅ Appointment types with durations
 const appointmentTypes = {
@@ -234,7 +235,13 @@ function Patient() {
   // ✅ Book appointment
   const handleBookAppointment = async (patientConcerns) => {
     if (!selectedDate || !appointmentType || !selectedTime) {
-      setBookingStatus("❌ Please complete all fields.");
+      Swal.fire({
+        icon: "warning",
+        title: "Incomplete Information",
+        text: "Please complete all fields to book your appointment",
+        confirmButtonColor: "#0ea5e9",
+      });
+      return;
       return;
     }
 
@@ -262,18 +269,35 @@ function Patient() {
 
       const data = await res.json();
       if (res.ok) {
-        setBookingStatus("✅ Appointment booked successfully!");
+        Swal.fire({
+          icon: "success",
+          title: "Appointment Booked!",
+          text: "Your appointment has been booked successfully",
+          confirmButtonColor: "#0ea5e9",
+          timer: 2000,
+          showConfirmButton: false,
+        });
         setSelectedDate(null);
         setAppointmentType("");
         setSelectedTime("");
         setAdditionalServices([]);
         fetchAppointments();
       } else {
-        setBookingStatus("❌ " + data.error);
+        Swal.fire({
+          icon: "error",
+          title: "Booking Failed",
+          text: data.error || "Failed to book appointment",
+          confirmButtonColor: "#0ea5e9",
+        });
       }
       // eslint-disable-next-line no-unused-vars
     } catch (err) {
-      setBookingStatus("⚠️ Server error, please try again later.");
+      Swal.fire({
+        icon: "error",
+        title: "Server Error",
+        text: "Unable to connect to server. Please try again later.",
+        confirmButtonColor: "#0ea5e9",
+      });
     }
   };
 
@@ -515,11 +539,6 @@ function Patient() {
           >
             Book Appointment
           </button>
-          {bookingStatus && (
-            <p className="mt-3 text-sky-700 text-lg font-medium">
-              {bookingStatus}
-            </p>
-          )}
         </div>
 
         {/* Timeline Section */}
@@ -716,7 +735,15 @@ function Patient() {
     };
 
     const printRecord = (patient) => {
-      if (!patient) return alert("No record to print.");
+      if (!patient) {
+        Swal.fire({
+          icon: "info",
+          title: "No Record",
+          text: "No medical record available to print",
+          confirmButtonColor: "#0ea5e9",
+        });
+        return;
+      }
 
       // Compute age from birth_date at the time of appointment
       let age = "N/A";
@@ -1331,14 +1358,18 @@ function Patient() {
                         disabled={importSearchLoading}
                         onClick={async () => {
                           setImportError(null);
+                          // Example: When fields are incomplete
                           if (
                             !importFullName.trim() ||
                             (!importMotherName.trim() &&
                               !importFatherName.trim())
                           ) {
-                            setImportError(
-                              "Please enter your full name and at least one parent name."
-                            );
+                            Swal.fire({
+                              icon: "warning",
+                              title: "Missing Information",
+                              text: "Please enter your full name and at least one parent name",
+                              confirmButtonColor: "#0ea5e9",
+                            });
                             return;
                           }
                           try {
@@ -1502,7 +1533,6 @@ function Patient() {
                           setImportSubmitting(true);
                           const token = localStorage.getItem("token");
 
-                          // Filter out already-imported records from selection
                           const importableIds = Array.from(
                             selectedImportIds
                           ).filter((id) => {
@@ -1514,9 +1544,12 @@ function Patient() {
                           });
 
                           if (importableIds.length === 0) {
-                            setImportError(
-                              "No importable records selected. Please select records that haven't been imported yet."
-                            );
+                            Swal.fire({
+                              icon: "warning",
+                              title: "No Records Selected",
+                              text: "Please select records that haven't been imported yet",
+                              confirmButtonColor: "#0ea5e9",
+                            });
                             setImportSubmitting(false);
                             return;
                           }
@@ -1536,12 +1569,23 @@ function Patient() {
                               }),
                             }
                           );
+
                           if (!res.ok) {
                             const data = await res.json().catch(() => ({}));
                             throw new Error(
                               data.error || `Import failed (${res.status})`
                             );
                           }
+
+                          Swal.fire({
+                            icon: "success",
+                            title: "Import Successful!",
+                            text: `Successfully imported ${importableIds.length} record(s)`,
+                            confirmButtonColor: "#0ea5e9",
+                            timer: 2000,
+                            showConfirmButton: false,
+                          });
+
                           setShowImportModal(false);
                           setImportFullName("");
                           setImportMotherName("");
@@ -1550,9 +1594,13 @@ function Patient() {
                           setSelectedImportIds(new Set());
                           await fetchPatientRecords();
                         } catch (err) {
-                          setImportError(
-                            err.message || "Import failed. Please try again."
-                          );
+                          Swal.fire({
+                            icon: "error",
+                            title: "Import Failed",
+                            text:
+                              err.message || "Import failed. Please try again.",
+                            confirmButtonColor: "#0ea5e9",
+                          });
                         } finally {
                           setImportSubmitting(false);
                         }

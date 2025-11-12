@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
+import Swal from "sweetalert2";
 
 function LoginPage() {
   const [email, setEmail] = useState("");
@@ -121,14 +122,31 @@ function LoginPage() {
       // Show verification modal
       setShowVerificationModal(true);
       setResendTimer(60);
-      alert("📧 Verification code sent to " + email);
+      Swal.fire({
+        icon: "success",
+        title: "Code Sent!",
+        text: `Verification code sent to ${email}`,
+        confirmButtonColor: "#0ea5e9",
+        timer: 3000,
+        showConfirmButton: false,
+      });
     } catch (err) {
       console.error("Error sending code:", err);
       const serverMsg =
         err.response?.data?.error || "Failed to send verification code";
       // If email already registered, inform and direct to login
       if (serverMsg.toLowerCase().includes("email already registered")) {
-        alert("This email is already registered. You can log in with it.");
+        Swal.fire({
+          icon: "info",
+          title: "Email Already Registered",
+          text: "This email is already registered. Please log in instead.",
+          confirmButtonColor: "#0ea5e9",
+          confirmButtonText: "Go to Login",
+        }).then(() => {
+          setIsSignupOpen(false);
+          setIsOpen(true);
+          setError("");
+        });
         setIsSignupOpen(false);
         setIsOpen(true);
         setError("");
@@ -158,7 +176,13 @@ function LoginPage() {
         code: verificationCode,
       });
 
-      alert("🎉 Signup successful! Your account has been verified.");
+      Swal.fire({
+        icon: "success",
+        title: "Welcome!",
+        text: "Signup successful! Your account has been verified.",
+        confirmButtonColor: "#0ea5e9",
+        confirmButtonText: "Continue to Login",
+      });
 
       // Reset states
       setShowVerificationModal(false);
@@ -187,7 +211,14 @@ function LoginPage() {
         email: pendingSignupData.email,
       });
       setResendTimer(60);
-      alert("📧 New verification code sent!");
+      Swal.fire({
+        icon: "info",
+        title: "Code Resent",
+        text: "New verification code sent to your email!",
+        confirmButtonColor: "#0ea5e9",
+        timer: 2000,
+        showConfirmButton: false,
+      });
       setError("");
       // eslint-disable-next-line no-unused-vars
     } catch (err) {
@@ -225,7 +256,14 @@ function LoginPage() {
         localStorage.setItem("patient", JSON.stringify(patientData));
       }
 
-      alert("✅ Login successful!");
+      Swal.fire({
+        icon: "success",
+        title: "Login Successful!",
+        text: "Redirecting to dashboard...",
+        confirmButtonColor: "#0ea5e9",
+        timer: 1500,
+        showConfirmButton: false,
+      });
       setIsOpen(false);
       setLoginAttempts(0);
 
@@ -509,17 +547,23 @@ function LoginPage() {
                         required
                         className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                       />
-                      <div className="flex flex-col">
-                        <label className="text-sm font-medium text-gray-700 mb-1">
-                          Birthdate
+                      <div className="flex flex-col col-span-1 sm:col-span-2">
+                        <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                          <span className="text-sky-600"></span>
+                          Patient's Date of Birth
+                          <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="date"
                           value={birthDate}
                           onChange={(e) => setBirthDate(e.target.value)}
+                          max={new Date().toISOString().split("T")[0]}
                           required
-                          className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                          className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation bg-white hover:border-sky-300"
                         />
+                        <p className="text-xs text-gray-500 mt-1 ml-1">
+                          Select the patient's birth month, day, and year
+                        </p>
                       </div>
                       <select
                         value={gender}

@@ -8,7 +8,7 @@ import {
   Mail,
   Calendar,
 } from "lucide-react";
-
+import Swal from "sweetalert2";
 function PatientProfile() {
   const [userInfo, setUserInfo] = useState({
     full_name: "",
@@ -75,13 +75,28 @@ function PatientProfile() {
         console.log("✅ Loaded patient_profiles record:", data);
         updatePatientData(data);
       } else if (res.status === 404) {
-        setMessage("No patient profile found for this account.");
+        Swal.fire({
+          icon: "info",
+          title: "Profile Not Found",
+          text: "No patient profile found for this account. Please contact the clinic staff.",
+          confirmButtonColor: "#0ea5e9",
+        });
       } else {
-        setMessage("Failed to load your profile data.");
+        Swal.fire({
+          icon: "error",
+          title: "Load Failed",
+          text: "Failed to load your profile data. Please try again.",
+          confirmButtonColor: "#0ea5e9",
+        });
       }
     } catch (err) {
       console.error("❌ Error fetching patient profile:", err);
-      setMessage("Unable to load profile. Please check your connection.");
+      Swal.fire({
+        icon: "error",
+        title: "Connection Error",
+        text: "Unable to load profile. Please check your internet connection.",
+        confirmButtonColor: "#0ea5e9",
+      });
     }
   };
 
@@ -216,32 +231,79 @@ function PatientProfile() {
   };
 
   const downloadQR = () => {
-    if (!qrRef.current) return;
+    if (!qrRef.current) {
+      Swal.fire({
+        icon: "error",
+        title: "Download Failed",
+        text: "QR code not available. Please refresh the page.",
+        confirmButtonColor: "#0ea5e9",
+      });
+      return;
+    }
+
     const svg = qrRef.current.querySelector("svg");
-    if (!svg) return;
+    if (!svg) {
+      Swal.fire({
+        icon: "error",
+        title: "Download Failed",
+        text: "QR code not available. Please refresh the page.",
+        confirmButtonColor: "#0ea5e9",
+      });
+      return;
+    }
 
-    const svgData = new XMLSerializer().serializeToString(svg);
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    const img = new Image();
-    const svgBlob = new Blob([svgData], {
-      type: "image/svg+xml;charset=utf-8",
-    });
-    const url = URL.createObjectURL(svgBlob);
+    try {
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      const img = new Image();
+      const svgBlob = new Blob([svgData], {
+        type: "image/svg+xml;charset=utf-8",
+      });
+      const url = URL.createObjectURL(svgBlob);
 
-    img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-      URL.revokeObjectURL(url);
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
 
-      const pngUrl = canvas.toDataURL("image/png");
-      const link = document.createElement("a");
-      link.href = pngUrl;
-      link.download = "PatientQR.png";
-      link.click();
-    };
-    img.src = url;
+        const pngUrl = canvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.href = pngUrl;
+        link.download = "PatientQR.png";
+        link.click();
+
+        // Success notification
+        Swal.fire({
+          icon: "success",
+          title: "QR Code Downloaded!",
+          text: "Your QR code has been saved successfully",
+          confirmButtonColor: "#0ea5e9",
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      };
+
+      img.onerror = () => {
+        Swal.fire({
+          icon: "error",
+          title: "Download Failed",
+          text: "Failed to generate QR code image. Please try again.",
+          confirmButtonColor: "#0ea5e9",
+        });
+      };
+
+      img.src = url;
+    } catch (err) {
+      console.error("Error downloading QR:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Download Failed",
+        text: "An error occurred while downloading. Please try again.",
+        confirmButtonColor: "#0ea5e9",
+      });
+    }
   };
 
   return (

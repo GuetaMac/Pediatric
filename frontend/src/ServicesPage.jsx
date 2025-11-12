@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import {
   Stethoscope,
   Syringe,
@@ -149,17 +150,31 @@ function ServicesPage() {
       // Show verification modal
       setShowVerificationModal(true);
       setResendTimer(60);
-      alert("📧 Verification code sent to " + email);
+      Swal.fire({
+        icon: "success",
+        title: "Code Sent!",
+        text: `Verification code sent to ${email}`,
+        confirmButtonColor: "#0ea5e9",
+        timer: 3000,
+        showConfirmButton: false,
+      });
     } catch (err) {
       console.error("Error sending code:", err);
       const serverMsg =
         err.response?.data?.error || "Failed to send verification code";
       // If email already registered, inform and direct to login
       if (serverMsg.toLowerCase().includes("email already registered")) {
-        alert("This email is already registered. You can log in with it.");
-        setIsSignupOpen(false);
-        setIsOpen(true);
-        setError("");
+        Swal.fire({
+          icon: "info",
+          title: "Email Already Registered",
+          text: "This email is already registered. Please log in instead.",
+          confirmButtonColor: "#0ea5e9",
+          confirmButtonText: "Go to Login",
+        }).then(() => {
+          setIsSignupOpen(false);
+          setIsOpen(true);
+          setError("");
+        });
       } else {
         setError(serverMsg);
       }
@@ -186,7 +201,13 @@ function ServicesPage() {
         code: verificationCode,
       });
 
-      alert("🎉 Signup successful! Your account has been verified.");
+      Swal.fire({
+        icon: "success",
+        title: "Welcome!",
+        text: "Signup successful! Your account has been verified.",
+        confirmButtonColor: "#0ea5e9",
+        confirmButtonText: "Continue to Login",
+      });
 
       // Reset states
       setShowVerificationModal(false);
@@ -215,7 +236,14 @@ function ServicesPage() {
         email: pendingSignupData.email,
       });
       setResendTimer(60);
-      alert("📧 New verification code sent!");
+      Swal.fire({
+        icon: "info",
+        title: "Code Resent",
+        text: "New verification code sent to your email!",
+        confirmButtonColor: "#0ea5e9",
+        timer: 2000,
+        showConfirmButton: false,
+      });
       setError("");
       // eslint-disable-next-line no-unused-vars
     } catch (err) {
@@ -253,7 +281,14 @@ function ServicesPage() {
         localStorage.setItem("patient", JSON.stringify(patientData));
       }
 
-      alert("✅ Login successful!");
+      Swal.fire({
+        icon: "success",
+        title: "Login Successful!",
+        text: "Redirecting to dashboard...",
+        confirmButtonColor: "#0ea5e9",
+        timer: 1500,
+        showConfirmButton: false,
+      });
       setIsOpen(false);
       setLoginAttempts(0);
 
