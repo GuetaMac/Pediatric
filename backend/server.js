@@ -2165,6 +2165,67 @@ app.post("/walkin", async (req, res) => {
     .json({ message: "Saved successfully", id: result.rows[0].id });
 });
 
+// 📍 POST vitals for a patient (convenience endpoint for kiosks)
+// Creates a completed appointment and saves a medical record so external
+// clients can POST vitals without an existing appointment_id or auth.
+app.post("/patients/:patient_id/vitals", async (req, res) => {
+  try {
+    const { patient_id } = req.params;
+    const { pulse_rate, temperature, height, weight, diagnosis, remarks } =
+      req.body;
+
+    const pid = parseInt(patient_id, 10);
+    if (isNaN(pid)) {
+      return res.status(400).json({ error: "Invalid patient_id" });
+    }
+
+    // Ensure patient exists
+    const userCheck = await pool.query(
+      "SELECT user_id FROM users WHERE user_id = $1",
+      [pid]
+    );
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: "Patient not found" });
+    }
+
+    // Create a simple appointment record (Completed) to attach vitals to
+    const appt = await pool.query(
+      `INSERT INTO appointments
+         (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, created_at)
+       VALUES ($1, NOW()::date, NOW()::time, 'Vitals', 'Completed', '', 'None', NOW())
+       RETURNING appointment_id`,
+      [pid]
+    );
+
+    const appointment_id = appt.rows[0].appointment_id;
+
+    // Insert medical record
+    const mr = await pool.query(
+      `INSERT INTO medical_records
+         (appointment_id, weight, height, temperature, pulse_rate, diagnosis, remarks, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING *`,
+      [
+        appointment_id,
+        weight == null || weight === "" ? null : weight,
+        height == null || height === "" ? null : height,
+        temperature == null || temperature === "" ? null : temperature,
+        pulse_rate == null || pulse_rate === "" ? null : pulse_rate,
+        diagnosis || null,
+        remarks || null,
+      ]
+    );
+
+    return res.status(201).json({
+      message: "Vitals saved",
+      appointment_id,
+      medical_record: mr.rows[0],
+    });
+  } catch (err) {
+    console.error("Error saving vitals endpoint:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 app.listen(port, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
 });
