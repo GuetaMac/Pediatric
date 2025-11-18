@@ -7,7 +7,7 @@ import {
   HeartPulse,
 } from "lucide-react";
 
-function PatientDashboard() {
+function PatientDashboard({ onNavigateToAppointments }) {
   const [userInfo, setUserInfo] = useState(null);
   const [appointment, setAppointment] = useState(null);
 
@@ -84,9 +84,9 @@ function PatientDashboard() {
       desc: "Personalized medical advice from pediatric specialists.",
     },
     {
-      title: "Health Monitoring",
+      title: "Ear Piercing",
       icon: <HeartPulse className="w-10 h-10 text-pink-500" />,
-      desc: "Track vital signs and wellness through the Castillo Children Clinic System.",
+      desc: "Ensure a safe and comfortable ear piercing experience",
     },
   ];
 
@@ -148,7 +148,10 @@ function PatientDashboard() {
         )}
 
         <div className="mt-6 text-center">
-          <button className="px-6 py-2 bg-sky-500 text-white rounded-full font-semibold shadow-sm hover:bg-sky-600 transition">
+          <button
+            onClick={onNavigateToAppointments}
+            className="px-6 py-2 bg-sky-500 text-white rounded-full font-semibold shadow-sm hover:bg-sky-600 transition"
+          >
             View Appointment Details
           </button>
         </div>

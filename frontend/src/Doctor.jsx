@@ -340,6 +340,49 @@ function Doctor() {
                             })}`
                           : `Invalid date/time`}
                       </p>
+
+                      {/* Vitals / Medical record summary */}
+                      {(appt.weight ||
+                        appt.height ||
+                        appt.temperature ||
+                        appt.pulse_rate ||
+                        appt.diagnosis ||
+                        appt.remarks) && (
+                        <div className="mt-2 text-sm text-gray-700">
+                          <div className="flex flex-wrap gap-3 items-center">
+                            {appt.weight != null && (
+                              <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                Weight: {appt.weight}
+                              </span>
+                            )}
+                            {appt.height != null && (
+                              <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                Height: {appt.height}
+                              </span>
+                            )}
+                            {appt.temperature != null && (
+                              <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                Temp: {appt.temperature}°
+                              </span>
+                            )}
+                            {appt.pulse_rate != null && (
+                              <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                Pulse: {appt.pulse_rate} bpm
+                              </span>
+                            )}
+                          </div>
+                          {appt.diagnosis && (
+                            <p className="mt-1 text-xs">
+                              <strong>Diagnosis:</strong> {appt.diagnosis}
+                            </p>
+                          )}
+                          {appt.remarks && (
+                            <p className="mt-1 text-xs">
+                              <strong>Remarks:</strong> {appt.remarks}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <span
                       className={`text-xs px-2 sm:px-3 py-1 rounded-full font-medium self-start sm:self-auto ${
@@ -458,29 +501,6 @@ function Doctor() {
       try {
         setLoadingProfile(true);
         const token = localStorage.getItem("token");
-
-        // Prepare the update payload
-        const updatePayload = {
-          full_name: editedPatient.full_name,
-          email: editedPatient.email,
-          birth_date: editedPatient.birth_date,
-          gender: editedPatient.gender,
-          guardian: editedPatient.guardian || "",
-          guardian_number: editedPatient.guardian_number || "",
-          phone_number: editedPatient.phone_number || "",
-          address: editedPatient.address || "",
-          blood_type: editedPatient.blood_type || "",
-          allergies: editedPatient.allergies || "",
-          chronic_conditions: editedPatient.chronic_conditions || "",
-          mother_name: editedPatient.mother_name || "",
-          father_name: editedPatient.father_name || "",
-        };
-
-        // Only include password if it's not empty
-        if (editedPatient.password && editedPatient.password.trim() !== "") {
-          updatePayload.password = editedPatient.password;
-        }
-
         const res = await fetch(
           `${import.meta.env.VITE_API_URL}/patients/${selectedPatient.user_id}`,
           {
@@ -489,7 +509,22 @@ function Doctor() {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify(updatePayload),
+            body: JSON.stringify({
+              full_name: editedPatient.full_name,
+              email: editedPatient.email,
+              password: editedPatient.password || undefined, // Only send if provided
+              birth_date: editedPatient.birth_date,
+              gender: editedPatient.gender,
+              guardian: editedPatient.guardian || "",
+              guardian_number: editedPatient.guardian_number || "",
+              phone_number: editedPatient.phone_number || "",
+              address: editedPatient.address || "",
+              blood_type: editedPatient.blood_type || "",
+              allergies: editedPatient.allergies || "",
+              chronic_conditions: editedPatient.chronic_conditions || "",
+              mother_name: editedPatient.mother_name || "",
+              father_name: editedPatient.father_name || "",
+            }),
           }
         );
 
@@ -499,7 +534,7 @@ function Doctor() {
           Swal.fire({
             icon: "error",
             title: "Update Failed",
-            text: data.message || data.error || "Failed to update patient",
+            text: data.message || "Failed to update patient",
             confirmButtonColor: "#3b82f6",
           });
           return;
@@ -518,12 +553,7 @@ function Doctor() {
         fetchPatients(); // Refresh the list
       } catch (err) {
         console.error("Error updating patient:", err);
-        Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: "Error updating patient. Please try again.",
-          confirmButtonColor: "#3b82f6",
-        });
+        alert("Error updating patient");
       } finally {
         setLoadingProfile(false);
       }

@@ -1022,6 +1022,18 @@ function Patient() {
 
                           {/* Vitals */}
                           <div className="space-y-2 text-sm text-blue-700">
+                            {record.temperature && (
+                              <div className="flex items-center">
+                                <Activity className="w-4 h-4 mr-2 text-yellow-500" />
+                                <span>Temperature: {record.temperature}°C</span>
+                              </div>
+                            )}
+                            {record.pulse_rate && (
+                              <div className="flex items-center">
+                                <Activity className="w-4 h-4 mr-2 text-yellow-500" />
+                                <span>Pulse: {record.pulse_rate} bpm</span>
+                              </div>
+                            )}
                             {record.weight && (
                               <div className="flex items-center">
                                 <Activity className="w-4 h-4 mr-2 text-yellow-500" />
@@ -1052,225 +1064,351 @@ function Patient() {
 
           {/* ---------- Detail Modal ---------- */}
           {showModal && selectedRecord && (
-            <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
-              {/* ^^^  changed overlay to a soft translucent white  ^^^ */}
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-screen overflow-y-auto border-t-8 border-yellow-400">
-                {/* Modal Header */}
-                <div className="p-6 border-b border-blue-100">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-blue-900 flex items-center">
-                      <FileText className="w-6 h-6 mr-2 text-yellow-500" />
-                      Medical Record Details
-                    </h2>
+            <div className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/30">
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-screen overflow-y-auto">
+                {/* Modern Header with Gradient */}
+                <div className="bg-gradient-to-r from-blue-600 to-sky-500 px-6 md:px-8 py-8 text-white rounded-t-3xl">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-white/20 p-3 rounded-full">
+                        <FileText className="w-6 h-6 md:w-7 md:h-7" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl md:text-3xl font-bold">
+                          Medical Record
+                        </h2>
+                        <p className="text-blue-100 text-sm md:text-base">
+                          {selectedRecord.appointment_type}
+                        </p>
+                      </div>
+                    </div>
                     <button
                       onClick={closeModal}
-                      className="text-blue-500 hover:text-yellow-500 text-2xl"
+                      className="p-2 hover:bg-white/20 rounded-full transition-colors text-2xl"
                     >
                       ×
                     </button>
                   </div>
-                  <p className="text-sm text-blue-600 mt-1">
-                    Appointment Date: {selectedRecord.appointment_date}
-                  </p>
+                  <div className="bg-white/10 px-4 py-2 rounded-lg inline-block">
+                    <p className="text-sm md:text-base">
+                      📅{" "}
+                      {new Date(
+                        selectedRecord.appointment_date
+                      ).toLocaleDateString("en-US", {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Modal Body */}
-                <div className="p-6 space-y-6">
-                  {/* Basic Info Boxes */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                      <h4 className="font-semibold text-blue-800 mb-1">
-                        Weight
-                      </h4>
-                      <p className="text-2xl font-bold text-blue-600">
-                        {selectedRecord.weight || "Not recorded"}
-                        {selectedRecord.weight && (
-                          <span className="text-sm ml-1">kg</span>
-                        )}
-                      </p>
-                    </div>
-
-                    <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
-                      <h4 className="font-semibold text-yellow-800 mb-1">
-                        Height
-                      </h4>
-                      <p className="text-2xl font-bold text-yellow-600">
-                        {selectedRecord.height || "Not recorded"}
-                        {selectedRecord.height && (
-                          <span className="text-sm ml-1">cm</span>
-                        )}
-                      </p>
-                    </div>
-
-                    {selectedRecord.birth_date ? (
-                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                        <h4 className="font-semibold text-blue-800 mb-1">
-                          Age (at appointment)
-                        </h4>
-                        <p className="text-2xl font-bold text-blue-600">
-                          {(() => {
-                            const birthDate = new Date(
-                              selectedRecord.birth_date
-                            );
-                            const appointmentDate =
-                              selectedRecord.appointment_date
-                                ? new Date(selectedRecord.appointment_date)
-                                : new Date();
-
-                            // Calculate age in years and months
-                            let years =
-                              appointmentDate.getFullYear() -
-                              birthDate.getFullYear();
-                            let months =
-                              appointmentDate.getMonth() - birthDate.getMonth();
-
-                            if (
-                              months < 0 ||
-                              (months === 0 &&
-                                appointmentDate.getDate() < birthDate.getDate())
-                            ) {
-                              years--;
-                              months += 12;
-                            }
-                            if (
-                              appointmentDate.getDate() < birthDate.getDate()
-                            ) {
-                              months--;
-                              if (months < 0) {
-                                months += 12;
-                                years--;
-                              }
-                            }
-
-                            // If less than 2 years old, show in months
-                            if (years < 2) {
-                              const totalMonths = years * 12 + months;
-                              return `${totalMonths} ${
-                                totalMonths === 1 ? "month" : "months"
-                              }`;
-                            }
-
-                            // Otherwise show in years
-                            if (months === 0) {
-                              return `${years} ${years === 1 ? "yr" : "yrs"}`;
-                            }
-                            return `${years} ${
-                              years === 1 ? "yr" : "yrs"
-                            } ${months} ${months === 1 ? "month" : "months"}`;
-                          })()}
+                <div className="p-6 md:p-8 space-y-8">
+                  {/* Patient Information Card */}
+                  <div className="bg-gradient-to-br from-blue-50 to-sky-50 rounded-2xl p-6 border border-blue-200 shadow-sm">
+                    <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2">
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                        👤
+                      </div>
+                      Patient Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-blue-600 font-semibold mb-1">
+                          Full Name
+                        </p>
+                        <p className="text-lg font-bold text-blue-900">
+                          {selectedRecord.full_name || "N/A"}
                         </p>
                       </div>
-                    ) : (
-                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                        <h4 className="font-semibold text-blue-800 mb-1">
-                          Age
-                        </h4>
-                        <p className="text-2xl font-bold text-blue-600">
-                          Not recorded
+                      <div>
+                        <p className="text-sm text-blue-600 font-semibold mb-1">
+                          Age (at appointment)
+                        </p>
+                        <p className="text-lg font-bold text-blue-900">
+                          {selectedRecord.birth_date
+                            ? (() => {
+                                const birthDate = new Date(
+                                  selectedRecord.birth_date
+                                );
+                                const appointmentDate =
+                                  selectedRecord.appointment_date
+                                    ? new Date(selectedRecord.appointment_date)
+                                    : new Date();
+                                let years =
+                                  appointmentDate.getFullYear() -
+                                  birthDate.getFullYear();
+                                let months =
+                                  appointmentDate.getMonth() -
+                                  birthDate.getMonth();
+                                if (
+                                  months < 0 ||
+                                  (months === 0 &&
+                                    appointmentDate.getDate() <
+                                      birthDate.getDate())
+                                ) {
+                                  years--;
+                                  months += 12;
+                                }
+                                if (
+                                  appointmentDate.getDate() <
+                                  birthDate.getDate()
+                                ) {
+                                  months--;
+                                  if (months < 0) {
+                                    months += 12;
+                                    years--;
+                                  }
+                                }
+                                if (years < 2) {
+                                  const totalMonths = years * 12 + months;
+                                  return `${totalMonths} ${
+                                    totalMonths === 1 ? "month" : "months"
+                                  }`;
+                                }
+                                if (months === 0) {
+                                  return `${years} ${
+                                    years === 1 ? "yr" : "yrs"
+                                  }`;
+                                }
+                                return `${years} ${
+                                  years === 1 ? "yr" : "yrs"
+                                } ${months} ${
+                                  months === 1 ? "month" : "months"
+                                }`;
+                              })()
+                            : "N/A"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vital Signs Section */}
+                  <div>
+                    <h3 className="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2">
+                      <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                        ❤️
+                      </div>
+                      Vital Signs
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {/* Temperature */}
+                      <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-5 border-2 border-orange-200 shadow-sm hover:shadow-md transition-shadow">
+                        <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide mb-2">
+                          Temperature
+                        </p>
+                        <p className="text-3xl font-bold text-orange-600">
+                          {selectedRecord.temperature ? (
+                            <>
+                              {selectedRecord.temperature}
+                              <span className="text-lg">°C</span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 text-sm">—</span>
+                          )}
+                        </p>
+                        {selectedRecord.temperature && (
+                          <p className="text-xs text-orange-600 mt-2">
+                            {selectedRecord.temperature > 37.5
+                              ? "🔴 Elevated"
+                              : "✅ Normal"}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Pulse Rate */}
+                      <div className="bg-gradient-to-br from-pink-50 to-red-50 rounded-xl p-5 border-2 border-pink-200 shadow-sm hover:shadow-md transition-shadow">
+                        <p className="text-xs font-semibold text-pink-700 uppercase tracking-wide mb-2">
+                          Pulse Rate
+                        </p>
+                        <p className="text-3xl font-bold text-pink-600">
+                          {selectedRecord.pulse_rate ? (
+                            <>
+                              {selectedRecord.pulse_rate}
+                              <span className="text-lg">bpm</span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 text-sm">—</span>
+                          )}
+                        </p>
+                        {selectedRecord.pulse_rate && (
+                          <p className="text-xs text-pink-600 mt-2">
+                            {selectedRecord.pulse_rate < 60 ||
+                            selectedRecord.pulse_rate > 100
+                              ? "⚠️ Irregular"
+                              : "✅ Regular"}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Weight */}
+                      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-5 border-2 border-blue-200 shadow-sm hover:shadow-md transition-shadow">
+                        <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">
+                          Weight
+                        </p>
+                        <p className="text-3xl font-bold text-blue-600">
+                          {selectedRecord.weight ? (
+                            <>
+                              {selectedRecord.weight}
+                              <span className="text-lg">kg</span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 text-sm">—</span>
+                          )}
+                        </p>
+                      </div>
+
+                      {/* Height */}
+                      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-5 border-2 border-green-200 shadow-sm hover:shadow-md transition-shadow">
+                        <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">
+                          Height
+                        </p>
+                        <p className="text-3xl font-bold text-green-600">
+                          {selectedRecord.height ? (
+                            <>
+                              {selectedRecord.height}
+                              <span className="text-lg">cm</span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 text-sm">—</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* BMI Section */}
+                  {selectedRecord.weight && selectedRecord.height && (
+                    <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl p-6 border-2 border-yellow-200 shadow-sm">
+                      <h3 className="text-lg font-bold text-yellow-900 mb-4 flex items-center gap-2">
+                        <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                          📊
+                        </div>
+                        Body Mass Index (BMI)
+                      </h3>
+                      <div className="flex items-end gap-6">
+                        <div>
+                          <p className="text-5xl font-bold text-yellow-600">
+                            {(
+                              selectedRecord.weight /
+                              ((selectedRecord.height / 100) *
+                                (selectedRecord.height / 100))
+                            ).toFixed(1)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-yellow-700">
+                            {(() => {
+                              const bmi =
+                                selectedRecord.weight /
+                                ((selectedRecord.height / 100) *
+                                  (selectedRecord.height / 100));
+                              if (bmi < 18.5) return "Underweight";
+                              if (bmi < 25) return "Normal";
+                              if (bmi < 30) return "Overweight";
+                              return "Obese";
+                            })()}
+                          </p>
+                          <p className="text-sm text-yellow-600 mt-2">
+                            Classification
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Clinical Assessment */}
+                  <div className="space-y-4">
+                    {/* Diagnosis */}
+                    <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-6 border-l-4 border-purple-500 shadow-sm">
+                      <h3 className="text-lg font-bold text-purple-900 mb-3 flex items-center gap-2">
+                        <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                          🔍
+                        </div>
+                        Diagnosis
+                      </h3>
+                      <p className="text-blue-900 leading-relaxed">
+                        {selectedRecord.diagnosis || "No diagnosis recorded"}
+                      </p>
+                    </div>
+
+                    {/* Treatment & Remarks */}
+                    {selectedRecord.remarks && (
+                      <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl p-6 border-l-4 border-teal-500 shadow-sm">
+                        <h3 className="text-lg font-bold text-teal-900 mb-3 flex items-center gap-2">
+                          <div className="w-8 h-8 bg-teal-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                            💊
+                          </div>
+                          Treatment & Remarks
+                        </h3>
+                        <p className="text-blue-900 leading-relaxed whitespace-pre-wrap">
+                          {selectedRecord.remarks}
                         </p>
                       </div>
                     )}
                   </div>
 
-                  {/* BMI */}
-                  {selectedRecord.weight && selectedRecord.height && (
-                    <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
-                      <h4 className="font-semibold text-yellow-800 mb-2">
-                        Body Mass Index (BMI)
-                      </h4>
-                      <p className="text-2xl font-bold text-yellow-600">
-                        {(
-                          selectedRecord.weight /
-                          ((selectedRecord.height / 100) *
-                            (selectedRecord.height / 100))
-                        ).toFixed(1)}
-                      </p>
-                      <p className="text-sm text-yellow-700 mt-1">
-                        {(() => {
-                          const bmi =
-                            selectedRecord.weight /
-                            ((selectedRecord.height / 100) *
-                              (selectedRecord.height / 100));
-                          if (bmi < 18.5) return "Underweight";
-                          if (bmi < 25) return "Normal weight";
-                          if (bmi < 30) return "Overweight";
-                          return "Obese";
-                        })()}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Diagnosis */}
-                  <div>
-                    <h4 className="font-semibold text-blue-900 mb-3 flex items-center">
-                      <Activity className="w-5 h-5 mr-2 text-yellow-500" />
-                      Diagnosis
-                    </h4>
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                      <p className="text-blue-800">
-                        {selectedRecord.diagnosis || "No diagnosis recorded"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Treatment & Remarks */}
-                  {selectedRecord.remarks && (
-                    <div>
-                      <h4 className="font-semibold text-blue-900 mb-3 flex items-center">
-                        <FileText className="w-5 h-5 mr-2 text-yellow-500" />
-                        Treatment & Remarks
-                      </h4>
-                      <div className="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-400">
-                        <p className="text-blue-800 whitespace-pre-wrap">
-                          {selectedRecord.remarks}
+                  {/* Appointment Info */}
+                  <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-2xl p-6 border border-gray-200 shadow-sm">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      <div className="w-8 h-8 bg-gray-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                        📅
+                      </div>
+                      Appointment Details
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div>
+                        <p className="text-sm text-gray-600 font-semibold mb-2">
+                          Date
+                        </p>
+                        <p className="text-lg font-bold text-gray-900">
+                          {selectedRecord.appointment_date}
                         </p>
                       </div>
-                    </div>
-                  )}
-
-                  {/* Appointment Info */}
-                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                    <h4 className="font-semibold text-blue-900 mb-2">
-                      Appointment Information
-                    </h4>
-                    <div className="text-sm text-blue-700 space-y-1">
-                      <p>
-                        <strong>Date:</strong> {selectedRecord.appointment_date}
-                      </p>
                       {selectedRecord.appointment_time && (
-                        <p>
-                          <strong>Time:</strong>{" "}
-                          {selectedRecord.appointment_time}
-                        </p>
+                        <div>
+                          <p className="text-sm text-gray-600 font-semibold mb-2">
+                            Time
+                          </p>
+                          <p className="text-lg font-bold text-gray-900">
+                            {selectedRecord.appointment_time}
+                          </p>
+                        </div>
                       )}
                       {selectedRecord.updated_at && (
-                        <p>
-                          <strong>Last Updated:</strong>{" "}
-                          {new Date(
-                            selectedRecord.updated_at
-                          ).toLocaleDateString()}
-                        </p>
+                        <div>
+                          <p className="text-sm text-gray-600 font-semibold mb-2">
+                            Last Updated
+                          </p>
+                          <p className="text-lg font-bold text-gray-900">
+                            {new Date(
+                              selectedRecord.updated_at
+                            ).toLocaleDateString()}
+                          </p>
+                        </div>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Modal Footer */}
-                <div className="p-6 border-t border-blue-100 bg-blue-50 rounded-b-2xl">
-                  <div className="flex justify-between items-center">
-                    <p className="text-xs text-blue-600">
-                      This is your official medical record. Keep this
-                      information confidential.
-                    </p>
+                {/* Modern Footer */}
+                <div className="bg-gradient-to-r from-gray-50 to-slate-50 px-6 md:px-8 py-6 border-t border-gray-200 rounded-b-3xl flex items-center justify-between flex-wrap gap-4">
+                  <p className="text-xs md:text-sm text-gray-600">
+                    ⚠️ This is your official medical record. Keep this
+                    information confidential.
+                  </p>
+                  <div className="flex gap-3">
                     <button
                       onClick={() => printRecord(selectedRecord)}
-                      className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                      className="px-5 py-2 md:px-6 md:py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-all transform hover:scale-105 shadow-md"
                     >
-                      Print Record
+                      🖨️ Print Record
                     </button>
                     <button
                       onClick={closeModal}
-                      className="px-6 py-2 bg-yellow-500 text-blue-900 font-semibold rounded-lg hover:bg-yellow-400 transition-colors"
+                      className="px-5 py-2 md:px-6 md:py-3 bg-gray-300 text-gray-900 font-semibold rounded-lg hover:bg-gray-400 transition-all transform hover:scale-105 shadow-md"
                     >
                       Close
                     </button>
@@ -1633,7 +1771,11 @@ function Patient() {
   const renderContent = () => {
     switch (activePage) {
       case "home":
-        return <Analysis />;
+        return (
+          <Analysis
+            onNavigateToAppointments={() => setActivePage("appointments")}
+          />
+        );
 
       case "appointments":
         return <AppointmentsPage />;

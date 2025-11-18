@@ -537,7 +537,41 @@ app.put("/users/:user_id", async (req, res) => {
 
     let mrResult;
     if (existingMR.rows.length > 0) {
-      // Update
+      // Update: preserve existing values when the field is not present in the request
+      const cur = existingMR.rows[0];
+      const has = (k) => Object.prototype.hasOwnProperty.call(req.body, k);
+
+      const weightToSet = has("weight")
+        ? weight === ""
+          ? null
+          : weight
+        : cur.weight;
+      const heightToSet = has("height")
+        ? height === ""
+          ? null
+          : height
+        : cur.height;
+      const temperatureToSet = has("temperature")
+        ? temperature === ""
+          ? null
+          : temperature
+        : cur.temperature;
+      const pulseRateToSet = has("pulse_rate")
+        ? pulse_rate === ""
+          ? null
+          : pulse_rate
+        : cur.pulse_rate;
+      const diagnosisToSet = has("diagnosis")
+        ? diagnosis === ""
+          ? null
+          : diagnosis
+        : cur.diagnosis;
+      const remarksToSet = has("remarks")
+        ? remarks === ""
+          ? null
+          : remarks
+        : cur.remarks;
+
       const upd = await client.query(
         `UPDATE medical_records SET
            weight = $1,
@@ -549,12 +583,12 @@ app.put("/users/:user_id", async (req, res) => {
            updated_at = NOW()
          WHERE appointment_id = $7 RETURNING *`,
         [
-          weight == null || weight === "" ? null : weight,
-          height == null || height === "" ? null : height,
-          temperature == null || temperature === "" ? null : temperature,
-          pulse_rate == null || pulse_rate === "" ? null : pulse_rate,
-          diagnosis || null,
-          remarks || null,
+          weightToSet,
+          heightToSet,
+          temperatureToSet,
+          pulseRateToSet,
+          diagnosisToSet,
+          remarksToSet,
           appointmentIdToUse,
         ]
       );
@@ -657,6 +691,7 @@ app.get("/appointments/nurse", auth, async (req, res) => {
   }
 });
 
+// 🩺 GET specific patient profile by user_id
 // PUT endpoint to update patient
 app.put("/patients/:user_id", async (req, res) => {
   const { user_id } = req.params;
@@ -840,9 +875,16 @@ app.get("/appointments/doctor", auth, async (req, res) => {
               a.appointment_type, 
               a.status, 
               u.full_name, 
-              u.email
+              u.email,
+              m.weight,
+              m.height,
+              m.temperature,
+              m.pulse_rate,
+              m.diagnosis,
+              m.remarks
        FROM appointments a
        JOIN users u ON a.user_id = u.user_id
+       LEFT JOIN medical_records m ON a.appointment_id = m.appointment_id
        WHERE LOWER(a.status) = 'approved'
          AND a.appointment_date::date = CURRENT_DATE
        ORDER BY a.appointment_time`
@@ -854,7 +896,15 @@ app.get("/appointments/doctor", auth, async (req, res) => {
     const processedRows = result.rows.map((row) => ({
       ...row,
       appointment_date: row.appointment_date.split("T")[0], // Ensure YYYY-MM-DD format
-      appointment_time: row.appointment_time.substring(0, 8), // Ensure HH:MM:SS format
+      appointment_time: row.appointment_time
+        ? row.appointment_time.substring(0, 8)
+        : null, // Ensure HH:MM:SS format
+      weight: row.weight || null,
+      height: row.height || null,
+      temperature: row.temperature || null,
+      pulse_rate: row.pulse_rate || null,
+      diagnosis: row.diagnosis || null,
+      remarks: row.remarks || null,
     }));
 
     console.log("Processed rows:", processedRows);
@@ -1365,6 +1415,41 @@ app.post("/medical-records", auth, async (req, res) => {
 
     let result;
     if (check.rows.length > 0) {
+      // Update existing record but preserve fields not provided in the request
+      const cur = check.rows[0];
+      const has = (k) => Object.prototype.hasOwnProperty.call(req.body, k);
+
+      const weightToSet = has("weight")
+        ? weight === ""
+          ? null
+          : weight
+        : cur.weight;
+      const heightToSet = has("height")
+        ? height === ""
+          ? null
+          : height
+        : cur.height;
+      const temperatureToSet = has("temperature")
+        ? temperature === ""
+          ? null
+          : temperature
+        : cur.temperature;
+      const pulseRateToSet = has("pulse_rate")
+        ? pulse_rate === ""
+          ? null
+          : pulse_rate
+        : cur.pulse_rate;
+      const diagnosisToSet = has("diagnosis")
+        ? diagnosis === ""
+          ? null
+          : diagnosis
+        : cur.diagnosis;
+      const remarksToSet = has("remarks")
+        ? remarks === ""
+          ? null
+          : remarks
+        : cur.remarks;
+
       // ✅ Update existing record
       result = await pool.query(
         `UPDATE medical_records
@@ -1372,12 +1457,12 @@ app.post("/medical-records", auth, async (req, res) => {
              temperature=$5, pulse_rate=$6, updated_at=NOW()
          WHERE appointment_id=$7 RETURNING *`,
         [
-          weight,
-          height,
-          diagnosis,
-          remarks,
-          temperature,
-          pulse_rate,
+          weightToSet,
+          heightToSet,
+          diagnosisToSet,
+          remarksToSet,
+          temperatureToSet,
+          pulseRateToSet,
           appointment_id,
         ]
       );
@@ -2493,7 +2578,7 @@ app.post("/patients/:patient_id/vitals", async (req, res) => {
       const appt = await client.query(
         `INSERT INTO appointments
            (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, created_at)
-         VALUES ($1, NOW()::date, TO_CHAR(NOW(), 'HH12:MI AM'), 'WalkIn', 'Approved', '', 'None', NOW())
+        VALUES ($1, NOW()::date, NOW()::time, 'WalkIn', 'Approved', '', 'None', NOW())
          RETURNING appointment_id`,
         [pid]
       );
@@ -2512,7 +2597,41 @@ app.post("/patients/:patient_id/vitals", async (req, res) => {
 
     let mrResult;
     if (existingMR.rows.length > 0) {
-      // Update existing medical record
+      // Update existing medical record but preserve fields not provided in the request
+      const cur = existingMR.rows[0];
+      const has = (k) => Object.prototype.hasOwnProperty.call(req.body, k);
+
+      const weightToSet = has("weight")
+        ? weight === ""
+          ? null
+          : weight
+        : cur.weight;
+      const heightToSet = has("height")
+        ? height === ""
+          ? null
+          : height
+        : cur.height;
+      const temperatureToSet = has("temperature")
+        ? temperature === ""
+          ? null
+          : temperature
+        : cur.temperature;
+      const pulseRateToSet = has("pulse_rate")
+        ? pulse_rate === ""
+          ? null
+          : pulse_rate
+        : cur.pulse_rate;
+      const diagnosisToSet = has("diagnosis")
+        ? diagnosis === ""
+          ? null
+          : diagnosis
+        : cur.diagnosis;
+      const remarksToSet = has("remarks")
+        ? remarks === ""
+          ? null
+          : remarks
+        : cur.remarks;
+
       const upd = await client.query(
         `UPDATE medical_records SET
            weight = $1,
@@ -2524,12 +2643,12 @@ app.post("/patients/:patient_id/vitals", async (req, res) => {
            updated_at = NOW()
          WHERE appointment_id = $7 RETURNING *`,
         [
-          weight == null || weight === "" ? null : weight,
-          height == null || height === "" ? null : height,
-          temperature == null || temperature === "" ? null : temperature,
-          pulse_rate == null || pulse_rate === "" ? null : pulse_rate,
-          diagnosis || null,
-          remarks || null,
+          weightToSet,
+          heightToSet,
+          temperatureToSet,
+          pulseRateToSet,
+          diagnosisToSet,
+          remarksToSet,
           appointmentIdToUse,
         ]
       );
