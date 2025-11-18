@@ -2462,10 +2462,13 @@ app.post("/patients/:patient_id/vitals", async (req, res) => {
     // If still none, create a new appointment marked as Approved (walk-in)
     let createdAppointment = false;
     if (!appointmentIdToUse) {
+      // Create a walk-in appointment. Use a consistent appointment_type so
+      // medical records group under "WalkIn" instead of creating a "Vitals" folder.
+      // Format appointment_time as '09:00 AM' so front-end displays a friendly time.
       const appt = await client.query(
         `INSERT INTO appointments
            (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, created_at)
-         VALUES ($1, NOW()::date, NOW()::time, 'Vitals', 'Approved', '', 'None', NOW())
+         VALUES ($1, NOW()::date, TO_CHAR(NOW(), 'HH12:MI AM'), 'WalkIn', 'Approved', '', 'None', NOW())
          RETURNING appointment_id`,
         [pid]
       );

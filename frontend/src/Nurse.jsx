@@ -150,7 +150,17 @@ function Nurse() {
             return dateMatch && statusMatch;
           })
           .sort((a, b) => {
-            // Sort by created_at (first approved, first served)
+            // Ensure scheduled appointments come before walk-ins.
+            const isWalk = (x) => {
+              const t = (x.appointment_type || "").toString().toLowerCase();
+              return /walk[- ]?in/.test(t) || t.includes("walkin");
+            };
+
+            const walkA = isWalk(a) ? 1 : 0;
+            const walkB = isWalk(b) ? 1 : 0;
+            if (walkA !== walkB) return walkA - walkB; // non-walk (0) first
+
+            // Fallback: order by creation time (earlier created first)
             const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
             const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
             return timeA - timeB;
