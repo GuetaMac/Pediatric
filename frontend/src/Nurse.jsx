@@ -286,7 +286,7 @@ function Nurse() {
                   {/* LEFT COLUMN: Scheduled Appointments */}
                   <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 sm:p-6 rounded-2xl shadow border-l-4 border-blue-600">
                     <h3 className="text-lg sm:text-xl font-semibold text-blue-700 mb-4 flex items-center">
-                      <Calendar className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
+                      <CalendarDays className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
                       Scheduled Appointments ({scheduledAppts.length})
                     </h3>
 
