@@ -247,16 +247,29 @@ function Nurse() {
           </div>
         )}
 
-        {/* Patient Queue Section */}
+        {/* Patient Queue Section - Two Columns */}
         <section>
           <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center">
             <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6 mr-2 text-purple-600" />
             Today's Patient Queue
           </h2>
           {(() => {
-            // Use the queue directly - already filtered for today + approved
             const approvedToday = queue;
-            const nowServing = approvedToday[0];
+
+            // Split into scheduled and walk-in appointments
+            const scheduledAppts = approvedToday.filter((p) => {
+              const isWalkIn =
+                /walk[- ]?in/i.test(p.appointment_type) ||
+                p.appointment_type.toLowerCase().includes("walkin");
+              return !isWalkIn;
+            });
+
+            const walkInAppts = approvedToday.filter((p) => {
+              const isWalkIn =
+                /walk[- ]?in/i.test(p.appointment_type) ||
+                p.appointment_type.toLowerCase().includes("walkin");
+              return isWalkIn;
+            });
 
             if (approvedToday.length === 0) {
               return (
@@ -268,135 +281,158 @@ function Nurse() {
 
             return (
               <>
-                {/* Now Serving Card */}
-                <div className="bg-green-50 border border-green-200 p-4 sm:p-6 rounded-2xl shadow mb-4 sm:mb-6">
-                  <h3 className="text-lg sm:text-xl font-semibold text-green-700 mb-2">
-                    Now Serving
-                  </h3>
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                    <div className="text-base sm:text-lg font-medium text-gray-800 flex items-center gap-2">
-                      <User className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-                      {nowServing.full_name || `User #${nowServing.user_id}`}
-                    </div>
-                    <div className="text-sm sm:text-base text-gray-600 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                      <span>
-                        <span className="font-semibold">Time:</span>{" "}
-                        {nowServing.appointment_time}
-                      </span>
-                      <span className="hidden sm:inline">|</span>
-                      <span>
-                        <span className="font-semibold">Purpose:</span>{" "}
-                        {nowServing.appointment_type}
-                      </span>
-                      <span className="hidden sm:inline">|</span>
-                      <span>
-                        <span className="font-semibold">Reason:</span>{" "}
-                        {nowServing.concerns || "N/A"}
-                      </span>
-                    </div>
+                {/* Two-Column Layout */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                  {/* LEFT COLUMN: Scheduled Appointments */}
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 sm:p-6 rounded-2xl shadow border-l-4 border-blue-600">
+                    <h3 className="text-lg sm:text-xl font-semibold text-blue-700 mb-4 flex items-center">
+                      <Calendar className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
+                      Scheduled Appointments ({scheduledAppts.length})
+                    </h3>
+
+                    {scheduledAppts.length === 0 ? (
+                      <div className="text-gray-500 text-center text-sm sm:text-base py-4">
+                        No scheduled appointments for today.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {scheduledAppts.map((patient, index) => (
+                          <div
+                            key={patient.appointment_id}
+                            className="bg-white p-3 sm:p-4 rounded-lg shadow hover:shadow-md transition border border-blue-200"
+                          >
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2 flex-1">
+                                <span className="font-bold text-blue-600 text-sm sm:text-base">
+                                  #{index + 1}
+                                </span>
+                                <User className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                <span className="font-semibold text-gray-800 text-sm sm:text-base truncate">
+                                  {patient.full_name ||
+                                    `User #${patient.user_id}`}
+                                </span>
+                              </div>
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 whitespace-nowrap">
+                                Approved
+                              </span>
+                            </div>
+                            <div className="space-y-1 text-xs sm:text-sm">
+                              <p>
+                                <span className="font-semibold text-gray-700">
+                                  Time:
+                                </span>{" "}
+                                {patient.appointment_time}
+                              </p>
+                              <p>
+                                <span className="font-semibold text-gray-700">
+                                  Type:
+                                </span>{" "}
+                                {patient.appointment_type}
+                              </p>
+                              <p>
+                                <span className="font-semibold text-gray-700">
+                                  Reason:
+                                </span>{" "}
+                                {patient.concerns || "N/A"}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* RIGHT COLUMN: Walk-in Patients */}
+                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 sm:p-6 rounded-2xl shadow border-l-4 border-orange-600">
+                    <h3 className="text-lg sm:text-xl font-semibold text-orange-700 mb-4 flex items-center">
+                      <Users className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
+                      Walk-in Patients ({walkInAppts.length})
+                    </h3>
+
+                    {walkInAppts.length === 0 ? (
+                      <div className="text-gray-500 text-center text-sm sm:text-base py-4">
+                        No walk-in patients for today.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {walkInAppts.map((patient, index) => (
+                          <div
+                            key={patient.appointment_id}
+                            className="bg-white p-3 sm:p-4 rounded-lg shadow hover:shadow-md transition border border-orange-200"
+                          >
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2 flex-1">
+                                <span className="font-bold text-orange-600 text-sm sm:text-base">
+                                  #{index + 1}
+                                </span>
+                                <Users className="w-4 h-4 text-orange-600 flex-shrink-0" />
+                                <span className="font-semibold text-gray-800 text-sm sm:text-base truncate">
+                                  {patient.full_name ||
+                                    `User #${patient.user_id}`}
+                                </span>
+                              </div>
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 whitespace-nowrap">
+                                Just Arrived
+                              </span>
+                            </div>
+                            <div className="space-y-1 text-xs sm:text-sm">
+                              <p>
+                                <span className="font-semibold text-gray-700">
+                                  Time:
+                                </span>{" "}
+                                {patient.appointment_time}
+                              </p>
+                              <p>
+                                <span className="font-semibold text-gray-700">
+                                  Status:
+                                </span>{" "}
+                                Walk-in
+                              </p>
+                              <p>
+                                <span className="font-semibold text-gray-700">
+                                  Reason:
+                                </span>{" "}
+                                {patient.concerns || "N/A"}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Desktop Table */}
-                <div className="hidden md:block overflow-x-auto bg-white rounded-2xl shadow">
-                  <table className="min-w-full border-collapse">
-                    <thead>
-                      <tr className="bg-blue-100 text-left text-gray-700 uppercase text-sm">
-                        <th className="px-4 lg:px-6 py-3 rounded-tl-2xl">#</th>
-                        <th className="px-4 lg:px-6 py-3">Patient Name</th>
-                        <th className="px-4 lg:px-6 py-3">Time</th>
-                        <th className="px-4 lg:px-6 py-3">Status</th>
-                        <th className="px-4 lg:px-6 py-3">Type</th>
-                        <th className="px-4 lg:px-6 py-3 rounded-tr-2xl">
-                          Reason
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {approvedToday.map((patient, index) => (
-                        <tr
-                          key={patient.appointment_id}
-                          className={`border-t hover:bg-blue-50 transition ${
-                            index % 2 === 0 ? "bg-white" : "bg-blue-50/40"
-                          } ${index === 0 ? "ring-2 ring-green-200" : ""}`}
-                        >
-                          <td className="px-4 lg:px-6 py-3 font-medium">
-                            {index + 1}
-                          </td>
-                          <td className="px-4 lg:px-6 py-3 flex items-center gap-2">
-                            <User className="w-4 h-4 text-blue-600" />
-                            {patient.full_name || `User #${patient.user_id}`}
-                          </td>
-                          <td className="px-4 lg:px-6 py-3 text-gray-700 font-medium">
-                            {patient.appointment_time}
-                          </td>
-                          <td className="px-4 lg:px-6 py-3">
-                            <span className="px-2 sm:px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                              {patient.status}
-                            </span>
-                          </td>
-                          <td className="px-4 lg:px-6 py-3 text-gray-700">
-                            {patient.appointment_type}
-                          </td>
-                          <td className="px-4 lg:px-6 py-3 text-gray-700">
-                            {patient.concerns || "N/A"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile Cards */}
-                <div className="md:hidden space-y-3">
-                  {approvedToday.map((patient, index) => (
-                    <div
-                      key={patient.appointment_id}
-                      className={`bg-white p-4 rounded-xl shadow border ${
-                        index === 0
-                          ? "ring-2 ring-green-200 border-green-300"
-                          : "border-gray-200"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-blue-600">
-                            #{index + 1}
-                          </span>
-                          <User className="w-4 h-4 text-blue-600" />
-                          <span className="font-semibold text-gray-800">
-                            {patient.full_name || `User #${patient.user_id}`}
-                          </span>
-                        </div>
-                        {index === 0 && (
-                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                            Now Serving
-                          </span>
-                        )}
+                {/* Now Serving Card - Always shows first scheduled or walk-in */}
+                {approvedToday.length > 0 && (
+                  <div className="mt-4 sm:mt-6 bg-green-50 border border-green-200 p-4 sm:p-6 rounded-2xl shadow">
+                    <h3 className="text-lg sm:text-xl font-semibold text-green-700 mb-2">
+                      Now Serving
+                    </h3>
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                      <div className="text-base sm:text-lg font-medium text-gray-800 flex items-center gap-2">
+                        <User className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+                        {approvedToday[0].full_name ||
+                          `User #${approvedToday[0].user_id}`}
                       </div>
-                      <div className="space-y-1 text-sm">
-                        <p>
+                      <div className="text-sm sm:text-base text-gray-600 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                        <span>
                           <span className="font-semibold">Time:</span>{" "}
-                          {patient.appointment_time}
-                        </p>
-                        <p>
+                          {approvedToday[0].appointment_time}
+                        </span>
+                        <span className="hidden sm:inline">|</span>
+                        <span>
                           <span className="font-semibold">Type:</span>{" "}
-                          {patient.appointment_type}
-                        </p>
-                        <p>
-                          <span className="font-semibold">Status:</span>
-                          <span className="ml-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                            {patient.status}
-                          </span>
-                        </p>
-                        <p>
+                          {approvedToday[0].appointment_type}
+                        </span>
+                        <span className="hidden sm:inline">|</span>
+                        <span>
                           <span className="font-semibold">Reason:</span>{" "}
-                          {patient.concerns || "N/A"}
-                        </p>
+                          {approvedToday[0].concerns || "N/A"}
+                        </span>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
               </>
             );
           })()}
