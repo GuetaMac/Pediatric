@@ -158,7 +158,16 @@ function Nurse() {
 
             const walkA = isWalk(a) ? 1 : 0;
             const walkB = isWalk(b) ? 1 : 0;
-            if (walkA !== walkB) return walkA - walkB; // non-walk (0) first
+
+            console.log(
+              `[Sort Debug] ${a.full_name} (type=${a.appointment_type}, walk=${walkA}) vs ${b.full_name} (type=${b.appointment_type}, walk=${walkB})`
+            );
+
+            if (walkA !== walkB) {
+              const result = walkA - walkB;
+              console.log(`  -> Return ${result} (scheduled first)`);
+              return result;
+            }
 
             // Fallback: order by creation time (earlier created first)
             const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;

@@ -1054,7 +1054,7 @@ app.get("/appointments/nurse", async (req, res) => {
         a.created_at
       FROM appointments a
       JOIN users u ON a.user_id = u.user_id
-      ORDER BY a.appointment_date ASC, a.appointment_time ASC;
+      ORDER BY a.created_at ASC;
     `;
     const result = await pool.query(query);
     res.json(result.rows);
@@ -2430,10 +2430,29 @@ app.post("/patients/:patient_id/vitals", async (req, res) => {
       );
       if (apCheck.rows.length > 0) {
         appointmentIdToUse = apCheck.rows[0].appointment_id;
+        console.log(
+          `[Vitals] Priority 1: Using provided appointment_id = ${appointmentIdToUse}`
+        );
       }
     }
 
-    // Priority 2: Find an existing approved appointment for today
+    // Priority 2: Find an existing approved WalkIn appointment (any day, prefer most recent)
+    if (!appointmentIdToUse) {
+      const approvedWalkIn = await client.query(
+        `SELECT appointment_id FROM appointments
+         WHERE user_id = $1 AND LOWER(status) = 'approved' AND LOWER(appointment_type) = 'walkin'
+         ORDER BY appointment_date DESC, appointment_time DESC LIMIT 1`,
+        [pid]
+      );
+      if (approvedWalkIn.rows.length > 0) {
+        appointmentIdToUse = approvedWalkIn.rows[0].appointment_id;
+        console.log(
+          `[Vitals] Priority 2: Found existing WalkIn appointment = ${appointmentIdToUse}`
+        );
+      }
+    }
+
+    // Priority 3: Find an existing approved appointment for today (any type)
     if (!appointmentIdToUse) {
       const approvedToday = await client.query(
         `SELECT appointment_id FROM appointments
@@ -2443,10 +2462,13 @@ app.post("/patients/:patient_id/vitals", async (req, res) => {
       );
       if (approvedToday.rows.length > 0) {
         appointmentIdToUse = approvedToday.rows[0].appointment_id;
+        console.log(
+          `[Vitals] Priority 3: Found approved appointment today = ${appointmentIdToUse}`
+        );
       }
     }
 
-    // Priority 3: Find any other approved appointment (most recent)
+    // Priority 4: Find any other approved appointment (most recent)
     if (!appointmentIdToUse) {
       const approvedAny = await client.query(
         `SELECT appointment_id FROM appointments
@@ -2456,6 +2478,9 @@ app.post("/patients/:patient_id/vitals", async (req, res) => {
       );
       if (approvedAny.rows.length > 0) {
         appointmentIdToUse = approvedAny.rows[0].appointment_id;
+        console.log(
+          `[Vitals] Priority 4: Found any approved appointment = ${appointmentIdToUse}`
+        );
       }
     }
 
@@ -2474,6 +2499,9 @@ app.post("/patients/:patient_id/vitals", async (req, res) => {
       );
       appointmentIdToUse = appt.rows[0].appointment_id;
       createdAppointment = true;
+      console.log(
+        `[Vitals] Priority 5: Created new WalkIn appointment = ${appointmentIdToUse}`
+      );
     }
 
     // Upsert medical record for the chosen appointment: update if exists, otherwise insert
