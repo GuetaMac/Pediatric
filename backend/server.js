@@ -657,7 +657,138 @@ app.get("/appointments/nurse", auth, async (req, res) => {
   }
 });
 
-// 🩺 GET specific patient profile by user_id
+// PUT endpoint to update patient
+app.put("/patients/:user_id", async (req, res) => {
+  const { user_id } = req.params;
+  const {
+    full_name,
+    email,
+    password,
+    birth_date,
+    gender,
+    guardian,
+    guardian_number,
+    phone_number,
+    address,
+    blood_type,
+    allergies,
+    chronic_conditions,
+    mother_name,
+    father_name,
+  } = req.body;
+
+  try {
+    // Start a transaction
+    await pool.query("BEGIN");
+
+    // Format birth_date to YYYY-MM-DD (remove time if present)
+    const formattedBirthDate = birth_date ? birth_date.split("T")[0] : null;
+
+    // Update users table
+    let userUpdateQuery = `
+      UPDATE users 
+      SET full_name = $1, email = $2, birth_date = $3, gender = $4
+    `;
+    let userParams = [full_name, email, formattedBirthDate, gender];
+
+    // Only update password if provided
+    if (password && password.trim() !== "") {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      userUpdateQuery += `, password = $5 WHERE user_id = $6 RETURNING *`;
+      userParams.push(hashedPassword, user_id);
+    } else {
+      userUpdateQuery += ` WHERE user_id = $5 RETURNING *`;
+      userParams.push(user_id);
+    }
+
+    const userResult = await pool.query(userUpdateQuery, userParams);
+
+    if (userResult.rows.length === 0) {
+      await pool.query("ROLLBACK");
+      return res.status(404).json({ error: "Patient not found" });
+    }
+
+    // Update or insert patient_profiles
+    const profileQuery = `
+      INSERT INTO patient_profiles (
+        user_id, guardian, guardian_number, phone_number, 
+        address, blood_type, allergies, chronic_conditions, 
+        mother_name, father_name
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ON CONFLICT (user_id) 
+      DO UPDATE SET
+        guardian = EXCLUDED.guardian,
+        guardian_number = EXCLUDED.guardian_number,
+        phone_number = EXCLUDED.phone_number,
+        address = EXCLUDED.address,
+        blood_type = EXCLUDED.blood_type,
+        allergies = EXCLUDED.allergies,
+        chronic_conditions = EXCLUDED.chronic_conditions,
+        mother_name = EXCLUDED.mother_name,
+        father_name = EXCLUDED.father_name
+      RETURNING *
+    `;
+
+    await pool.query(profileQuery, [
+      user_id,
+      guardian || null,
+      guardian_number || null,
+      phone_number || null,
+      address || null,
+      blood_type || null,
+      allergies || null,
+      chronic_conditions || null,
+      mother_name || null,
+      father_name || null,
+    ]);
+
+    // Commit transaction
+    await pool.query("COMMIT");
+
+    // Fetch complete updated patient data
+    const result = await pool.query(
+      `SELECT 
+        u.user_id, 
+        u.full_name, 
+        u.email, 
+        TO_CHAR(u.birth_date, 'YYYY-MM-DD') as birth_date,
+        u.gender, 
+        u.role,
+        p.guardian,
+        p.guardian_number,
+        p.phone_number,
+        p.address,
+        p.blood_type,
+        p.allergies,
+        p.chronic_conditions,
+        p.father_name,
+        p.mother_name
+      FROM users u
+      LEFT JOIN patient_profiles p ON u.user_id = p.user_id
+      WHERE u.user_id = $1`,
+      [user_id]
+    );
+
+    res.json({
+      message: "Patient updated successfully",
+      patient: result.rows[0],
+    });
+  } catch (err) {
+    await pool.query("ROLLBACK");
+    console.error("Error updating patient:", err.message);
+
+    if (err.code === "23505") {
+      return res.status(400).json({ error: "Email already exists" });
+    }
+
+    res.status(500).json({
+      error: "Server error while updating patient",
+      message: err.message,
+    });
+  }
+});
+
 app.get("/patients/:user_id/profile", async (req, res) => {
   const { user_id } = req.params;
 
@@ -2252,196 +2383,161 @@ app.post("/walkin", async (req, res) => {
     .json({ message: "Saved successfully", id: result.rows[0].id });
 });
 
-// 📍 POST vitals for a patient (convenience endpoint for kiosks)
-// Creates a completed appointment and saves a medical record so external
-// clients can POST vitals without an existing appointment_id or auth.
+// 📍 POST vitals for a patient (kiosk workflow)
+// Kiosk Workflow:
+// 1. Check for existing approved appointment (today → any day)
+// 2. If found: attach vitals to it (keep status=Approved), return 200
+// 3. If not found: create new Walk-in appointment with status=Approved + attach vitals, return 201
+// 4. Appointment stays Approved until nurse/doctor marks it Completed
 app.post("/patients/:patient_id/vitals", async (req, res) => {
+  const client = await pool.connect();
   try {
     const { patient_id } = req.params;
-    const { pulse_rate, temperature, height, weight, diagnosis, remarks } =
-      req.body;
+    const {
+      pulse_rate,
+      temperature,
+      height,
+      weight,
+      diagnosis,
+      remarks,
+      appointment_id: providedAppointmentId,
+    } = req.body;
 
     const pid = parseInt(patient_id, 10);
     if (isNaN(pid)) {
+      client.release();
       return res.status(400).json({ error: "Invalid patient_id" });
     }
 
     // Ensure patient exists
-    const userCheck = await pool.query(
+    const userCheck = await client.query(
       "SELECT user_id FROM users WHERE user_id = $1",
       [pid]
     );
     if (userCheck.rows.length === 0) {
+      client.release();
       return res.status(404).json({ error: "Patient not found" });
     }
 
-    // Create a simple appointment record (Completed) to attach vitals to
-    const appt = await pool.query(
-      `INSERT INTO appointments
-         (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, created_at)
-       VALUES ($1, NOW()::date, NOW()::time, 'Vitals', 'Completed', '', 'None', NOW())
-       RETURNING appointment_id`,
-      [pid]
+    await client.query("BEGIN");
+
+    // Priority 1: If client provided an appointment_id, try to use it (but do not change status)
+    let appointmentIdToUse = null;
+    if (providedAppointmentId) {
+      const apCheck = await client.query(
+        "SELECT appointment_id, status FROM appointments WHERE appointment_id = $1 AND user_id = $2",
+        [providedAppointmentId, pid]
+      );
+      if (apCheck.rows.length > 0) {
+        appointmentIdToUse = apCheck.rows[0].appointment_id;
+      }
+    }
+
+    // Priority 2: Find an existing approved appointment for today
+    if (!appointmentIdToUse) {
+      const approvedToday = await client.query(
+        `SELECT appointment_id FROM appointments
+         WHERE user_id = $1 AND LOWER(status) = 'approved' AND appointment_date::date = CURRENT_DATE
+         ORDER BY appointment_date DESC, appointment_time DESC LIMIT 1`,
+        [pid]
+      );
+      if (approvedToday.rows.length > 0) {
+        appointmentIdToUse = approvedToday.rows[0].appointment_id;
+      }
+    }
+
+    // Priority 3: Find any other approved appointment (most recent)
+    if (!appointmentIdToUse) {
+      const approvedAny = await client.query(
+        `SELECT appointment_id FROM appointments
+         WHERE user_id = $1 AND LOWER(status) = 'approved'
+         ORDER BY appointment_date DESC, appointment_time DESC LIMIT 1`,
+        [pid]
+      );
+      if (approvedAny.rows.length > 0) {
+        appointmentIdToUse = approvedAny.rows[0].appointment_id;
+      }
+    }
+
+    // If still none, create a new appointment marked as Approved (walk-in)
+    let createdAppointment = false;
+    if (!appointmentIdToUse) {
+      const appt = await client.query(
+        `INSERT INTO appointments
+           (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, created_at)
+         VALUES ($1, NOW()::date, NOW()::time, 'Vitals', 'Approved', '', 'None', NOW())
+         RETURNING appointment_id`,
+        [pid]
+      );
+      appointmentIdToUse = appt.rows[0].appointment_id;
+      createdAppointment = true;
+    }
+
+    // Upsert medical record for the chosen appointment: update if exists, otherwise insert
+    const existingMR = await client.query(
+      "SELECT * FROM medical_records WHERE appointment_id = $1",
+      [appointmentIdToUse]
     );
 
-    const appointment_id = appt.rows[0].appointment_id;
+    let mrResult;
+    if (existingMR.rows.length > 0) {
+      // Update existing medical record
+      const upd = await client.query(
+        `UPDATE medical_records SET
+           weight = $1,
+           height = $2,
+           temperature = $3,
+           pulse_rate = $4,
+           diagnosis = $5,
+           remarks = $6,
+           updated_at = NOW()
+         WHERE appointment_id = $7 RETURNING *`,
+        [
+          weight == null || weight === "" ? null : weight,
+          height == null || height === "" ? null : height,
+          temperature == null || temperature === "" ? null : temperature,
+          pulse_rate == null || pulse_rate === "" ? null : pulse_rate,
+          diagnosis || null,
+          remarks || null,
+          appointmentIdToUse,
+        ]
+      );
+      mrResult = upd.rows[0];
+    } else {
+      // Insert new medical record
+      const ins = await client.query(
+        `INSERT INTO medical_records
+           (appointment_id, weight, height, temperature, pulse_rate, diagnosis, remarks, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING *`,
+        [
+          appointmentIdToUse,
+          weight == null || weight === "" ? null : weight,
+          height == null || height === "" ? null : height,
+          temperature == null || temperature === "" ? null : temperature,
+          pulse_rate == null || pulse_rate === "" ? null : pulse_rate,
+          diagnosis || null,
+          remarks || null,
+        ]
+      );
+      mrResult = ins.rows[0];
+    }
 
-    // Insert medical record
-    const mr = await pool.query(
-      `INSERT INTO medical_records
-         (appointment_id, weight, height, temperature, pulse_rate, diagnosis, remarks, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) RETURNING *`,
-      [
-        appointment_id,
-        weight == null || weight === "" ? null : weight,
-        height == null || height === "" ? null : height,
-        temperature == null || temperature === "" ? null : temperature,
-        pulse_rate == null || pulse_rate === "" ? null : pulse_rate,
-        diagnosis || null,
-        remarks || null,
-      ]
-    );
+    await client.query("COMMIT");
+    client.release();
 
-    return res.status(201).json({
-      message: "Vitals saved",
-      appointment_id,
-      medical_record: mr.rows[0],
+    return res.status(createdAppointment ? 201 : 200).json({
+      message: createdAppointment
+        ? "Walk-in appointment created and vitals saved"
+        : "Vitals attached to approved appointment",
+      appointment_id: appointmentIdToUse,
+      createdAppointment,
+      medical_record: mrResult,
     });
   } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
     console.error("Error saving vitals endpoint:", err);
     return res.status(500).json({ error: "Server error" });
-  }
-});
-
-// PUT endpoint to update patient
-app.put("/patients/:user_id", async (req, res) => {
-  const { user_id } = req.params;
-  const {
-    full_name,
-    email,
-    password,
-    birth_date,
-    gender,
-    guardian,
-    guardian_number,
-    phone_number,
-    address,
-    blood_type,
-    allergies,
-    chronic_conditions,
-    mother_name,
-    father_name,
-  } = req.body;
-
-  try {
-    // Start a transaction
-    await pool.query("BEGIN");
-
-    // Format birth_date to YYYY-MM-DD (remove time if present)
-    const formattedBirthDate = birth_date ? birth_date.split("T")[0] : null;
-
-    // Update users table
-    let userUpdateQuery = `
-      UPDATE users 
-      SET full_name = $1, email = $2, birth_date = $3, gender = $4
-    `;
-    let userParams = [full_name, email, formattedBirthDate, gender];
-
-    // Only update password if provided
-    if (password && password.trim() !== "") {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      userUpdateQuery += `, password = $5 WHERE user_id = $6 RETURNING *`;
-      userParams.push(hashedPassword, user_id);
-    } else {
-      userUpdateQuery += ` WHERE user_id = $5 RETURNING *`;
-      userParams.push(user_id);
-    }
-
-    const userResult = await pool.query(userUpdateQuery, userParams);
-
-    if (userResult.rows.length === 0) {
-      await pool.query("ROLLBACK");
-      return res.status(404).json({ error: "Patient not found" });
-    }
-
-    // Update or insert patient_profiles
-    const profileQuery = `
-      INSERT INTO patient_profiles (
-        user_id, guardian, guardian_number, phone_number, 
-        address, blood_type, allergies, chronic_conditions, 
-        mother_name, father_name
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT (user_id) 
-      DO UPDATE SET
-        guardian = EXCLUDED.guardian,
-        guardian_number = EXCLUDED.guardian_number,
-        phone_number = EXCLUDED.phone_number,
-        address = EXCLUDED.address,
-        blood_type = EXCLUDED.blood_type,
-        allergies = EXCLUDED.allergies,
-        chronic_conditions = EXCLUDED.chronic_conditions,
-        mother_name = EXCLUDED.mother_name,
-        father_name = EXCLUDED.father_name
-      RETURNING *
-    `;
-
-    await pool.query(profileQuery, [
-      user_id,
-      guardian || null,
-      guardian_number || null,
-      phone_number || null,
-      address || null,
-      blood_type || null,
-      allergies || null,
-      chronic_conditions || null,
-      mother_name || null,
-      father_name || null,
-    ]);
-
-    // Commit transaction
-    await pool.query("COMMIT");
-
-    // Fetch complete updated patient data
-    const result = await pool.query(
-      `SELECT 
-        u.user_id, 
-        u.full_name, 
-        u.email, 
-        TO_CHAR(u.birth_date, 'YYYY-MM-DD') as birth_date,
-        u.gender, 
-        u.role,
-        p.guardian,
-        p.guardian_number,
-        p.phone_number,
-        p.address,
-        p.blood_type,
-        p.allergies,
-        p.chronic_conditions,
-        p.father_name,
-        p.mother_name
-      FROM users u
-      LEFT JOIN patient_profiles p ON u.user_id = p.user_id
-      WHERE u.user_id = $1`,
-      [user_id]
-    );
-
-    res.json({
-      message: "Patient updated successfully",
-      patient: result.rows[0],
-    });
-  } catch (err) {
-    await pool.query("ROLLBACK");
-    console.error("Error updating patient:", err.message);
-
-    if (err.code === "23505") {
-      return res.status(400).json({ error: "Email already exists" });
-    }
-
-    res.status(500).json({
-      error: "Server error while updating patient",
-      message: err.message,
-    });
   }
 });
 
