@@ -458,6 +458,29 @@ function Doctor() {
       try {
         setLoadingProfile(true);
         const token = localStorage.getItem("token");
+
+        // Prepare the update payload
+        const updatePayload = {
+          full_name: editedPatient.full_name,
+          email: editedPatient.email,
+          birth_date: editedPatient.birth_date,
+          gender: editedPatient.gender,
+          guardian: editedPatient.guardian || "",
+          guardian_number: editedPatient.guardian_number || "",
+          phone_number: editedPatient.phone_number || "",
+          address: editedPatient.address || "",
+          blood_type: editedPatient.blood_type || "",
+          allergies: editedPatient.allergies || "",
+          chronic_conditions: editedPatient.chronic_conditions || "",
+          mother_name: editedPatient.mother_name || "",
+          father_name: editedPatient.father_name || "",
+        };
+
+        // Only include password if it's not empty
+        if (editedPatient.password && editedPatient.password.trim() !== "") {
+          updatePayload.password = editedPatient.password;
+        }
+
         const res = await fetch(
           `${import.meta.env.VITE_API_URL}/patients/${selectedPatient.user_id}`,
           {
@@ -466,22 +489,7 @@ function Doctor() {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({
-              full_name: editedPatient.full_name,
-              email: editedPatient.email,
-              password: editedPatient.password || undefined, // Only send if provided
-              birth_date: editedPatient.birth_date,
-              gender: editedPatient.gender,
-              guardian: editedPatient.guardian || "",
-              guardian_number: editedPatient.guardian_number || "",
-              phone_number: editedPatient.phone_number || "",
-              address: editedPatient.address || "",
-              blood_type: editedPatient.blood_type || "",
-              allergies: editedPatient.allergies || "",
-              chronic_conditions: editedPatient.chronic_conditions || "",
-              mother_name: editedPatient.mother_name || "",
-              father_name: editedPatient.father_name || "",
-            }),
+            body: JSON.stringify(updatePayload),
           }
         );
 
@@ -491,7 +499,7 @@ function Doctor() {
           Swal.fire({
             icon: "error",
             title: "Update Failed",
-            text: data.message || "Failed to update patient",
+            text: data.message || data.error || "Failed to update patient",
             confirmButtonColor: "#3b82f6",
           });
           return;
@@ -510,7 +518,12 @@ function Doctor() {
         fetchPatients(); // Refresh the list
       } catch (err) {
         console.error("Error updating patient:", err);
-        alert("Error updating patient");
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Error updating patient. Please try again.",
+          confirmButtonColor: "#3b82f6",
+        });
       } finally {
         setLoadingProfile(false);
       }
