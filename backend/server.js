@@ -518,12 +518,21 @@ app.put("/users/:user_id", async (req, res) => {
     // If still none, create a new appointment marked as Approved (walk-in)
     let createdAppointment = false;
     if (!appointmentIdToUse) {
+      // Get current time in HH:MM:SS format from the Node.js server (client's timezone)
+      const now = new Date();
+      const currentTime = now.toLocaleTimeString("en-US", {
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+
       const appt = await client.query(
         `INSERT INTO appointments
            (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, created_at)
-         VALUES ($1, NOW()::date, NOW()::time, 'Walk-in', 'Approved', '', 'None', NOW())
+         VALUES ($1, NOW()::date, $2::time, 'Walk-in', 'Approved', '', 'None', NOW())
          RETURNING appointment_id`,
-        [pid]
+        [pid, currentTime]
       );
       appointmentIdToUse = appt.rows[0].appointment_id;
       createdAppointment = true;
@@ -691,7 +700,6 @@ app.get("/appointments/nurse", auth, async (req, res) => {
   }
 });
 
-// 🩺 GET specific patient profile by user_id
 // PUT endpoint to update patient
 app.put("/patients/:user_id", async (req, res) => {
   const { user_id } = req.params;
@@ -2574,18 +2582,26 @@ app.post("/patients/:patient_id/vitals", async (req, res) => {
     if (!appointmentIdToUse) {
       // Create a walk-in appointment. Use a consistent appointment_type so
       // medical records group under "WalkIn" instead of creating a "Vitals" folder.
-      // Format appointment_time as '09:00 AM' so front-end displays a friendly time.
+      // Get current time in HH:MM:SS format to ensure correct time recording
+      const now = new Date();
+      const currentTime = now.toLocaleTimeString("en-US", {
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+
       const appt = await client.query(
         `INSERT INTO appointments
            (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, created_at)
-        VALUES ($1, NOW()::date, NOW()::time, 'WalkIn', 'Approved', '', 'None', NOW())
+        VALUES ($1, NOW()::date, $2::time, 'WalkIn', 'Approved', '', 'None', NOW())
          RETURNING appointment_id`,
-        [pid]
+        [pid, currentTime]
       );
       appointmentIdToUse = appt.rows[0].appointment_id;
       createdAppointment = true;
       console.log(
-        `[Vitals] Priority 5: Created new WalkIn appointment = ${appointmentIdToUse}`
+        `[Vitals] Priority 5: Created new WalkIn appointment = ${appointmentIdToUse} at time ${currentTime}`
       );
     }
 
