@@ -339,12 +339,6 @@ function ServicesPage() {
             >
               Services
             </Link>
-            <Link
-              to="/contact"
-              className="text-gray-700 hover:text-sky-600 font-medium transition text-sm lg:text-base"
-            >
-              Contact
-            </Link>
           </nav>
 
           {/* Desktop Buttons */}
@@ -412,13 +406,7 @@ function ServicesPage() {
             >
               Services
             </Link>
-            <Link
-              to="/contact"
-              className="block text-gray-700 hover:text-sky-600 font-medium transition py-2.5 sm:py-2 px-3 rounded-lg hover:bg-gray-50 active:bg-gray-100 min-h-[44px] flex items-center touch-manipulation"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Contact
-            </Link>
+
             <div className="pt-2 border-t border-gray-200 space-y-2.5 sm:space-y-2">
               <button
                 onClick={() => {

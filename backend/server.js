@@ -122,6 +122,96 @@ app.post("/send-verification", async (req, res) => {
   }
 });
 
+// 🔹 FORGOT PASSWORD - Send Code
+app.post("/forgot-password", async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    // Check if email exists
+    const userCheck = await pool.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
+
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: "Email not found" });
+    }
+
+    // Generate 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Delete old codes
+    await pool.query("DELETE FROM verification_codes WHERE email = $1", [
+      email,
+    ]);
+
+    // Insert new code
+    await pool.query(
+      "INSERT INTO verification_codes (email, code, expires_at) VALUES ($1, $2, $3)",
+      [email, code, expiresAt]
+    );
+
+    // Send email
+    await transporter.sendMail({
+      from: '"Castillo Children Clinic" <your-email@gmail.com>',
+      to: email,
+      subject: "Password Reset Code",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #0284c7;">Password Reset Request</h2>
+          <p>You requested to reset your password. Use this code:</p>
+          <div style="background: #fef3c7; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+            <h1 style="color: #d97706; font-size: 36px; margin: 0; letter-spacing: 5px;">${code}</h1>
+          </div>
+          <p>This code will expire in <strong>10 minutes</strong>.</p>
+          <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email.</p>
+        </div>
+      `,
+    });
+
+    res.json({ message: "Reset code sent to your email" });
+  } catch (err) {
+    console.error("Error sending reset code:", err);
+    res.status(500).json({ error: "Failed to send reset code" });
+  }
+});
+
+// 🔹 VERIFY CODE & RESET PASSWORD
+app.post("/reset-password", async (req, res) => {
+  const { email, code, newPassword } = req.body;
+
+  try {
+    // Check verification code
+    const codeCheck = await pool.query(
+      "SELECT * FROM verification_codes WHERE email = $1 AND code = $2 AND expires_at > NOW()",
+      [email, code]
+    );
+
+    if (codeCheck.rows.length === 0) {
+      return res.status(400).json({ error: "Invalid or expired code" });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await pool.query("UPDATE users SET password = $1 WHERE email = $2", [
+      hashedPassword,
+      email,
+    ]);
+
+    // Delete used code
+    await pool.query("DELETE FROM verification_codes WHERE email = $1", [
+      email,
+    ]);
+
+    res.json({ message: "Password reset successful" });
+  } catch (err) {
+    console.error("Error resetting password:", err);
+    res.status(500).json({ error: "Failed to reset password" });
+  }
+});
+
 // 🔹 STEP 2: Verify Code & Complete Signup
 app.post("/verify-and-signup", async (req, res) => {
   const {

@@ -26,6 +26,8 @@ import {
   ChevronDown,
   ChevronUp,
   Filter,
+  Calendar,
+  ChevronRight,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
@@ -519,6 +521,9 @@ function Nurse() {
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(false);
     const [filter, setFilter] = useState("All");
+    const [searchQuery, setSearchQuery] = useState("");
+    // 🔹 NEW: Track which appointments are expanded
+    const [expandedIds, setExpandedIds] = useState([]);
 
     // Format date as "Month Day, Year"
     const formatDate = (dateStr) => {
@@ -547,12 +552,7 @@ function Nurse() {
         setAppointments(data);
       } catch (err) {
         console.error(err);
-        Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: "Failed to fetch appointments",
-          confirmButtonColor: "#3b82f6",
-        });
+        alert("Failed to fetch appointments");
       } finally {
         setLoading(false);
       }
@@ -588,12 +588,7 @@ function Nurse() {
             )
           );
         } else {
-          Swal.fire({
-            icon: "error",
-            title: "Update Failed",
-            text: data.error || "Failed to update appointment status",
-            confirmButtonColor: "#3b82f6",
-          });
+          alert(data.error || "Failed to update appointment status");
         }
       } catch (err) {
         console.error(err);
@@ -603,25 +598,8 @@ function Nurse() {
 
     // Delete appointment
     const deleteAppointment = async (id) => {
-      const result = await Swal.fire({
-        icon: "warning",
-        title: "Delete Appointment?",
-        text: "This action cannot be undone!",
-        showCancelButton: true,
-        confirmButtonColor: "#ef4444",
-        cancelButtonColor: "#6b7280",
-        confirmButtonText: "Yes, delete it!",
-        cancelButtonText: "Cancel",
-      });
-      Swal.fire({
-        icon: "success",
-        title: "Deleted!",
-        text: "Appointment has been deleted",
-        timer: 2000,
-        showConfirmButton: false,
-      });
+      if (!confirm("Delete this appointment? This cannot be undone!")) return;
 
-      if (!result.isConfirmed) return;
       try {
         const res = await fetch(
           `${import.meta.env.VITE_API_URL}/appointments/${id}`,
@@ -637,13 +615,9 @@ function Nurse() {
           setAppointments(
             appointments.filter((appt) => appt.appointment_id !== id)
           );
+          alert("Appointment deleted");
         } else {
-          Swal.fire({
-            icon: "error",
-            title: "Delete Failed",
-            text: data.error || "Failed to delete appointment",
-            confirmButtonColor: "#3b82f6",
-          });
+          alert(data.error || "Failed to delete appointment");
         }
       } catch (err) {
         console.error(err);
@@ -651,17 +625,27 @@ function Nurse() {
       }
     };
 
-    // 🔹 Filter logic
-    const filteredAppointments =
-      filter === "All"
-        ? appointments
-        : appointments.filter((appt) => {
-            const apptStatus = appt.status?.toLowerCase().trim();
-            const filterStatus = filter.toLowerCase().trim();
-            return apptStatus === filterStatus;
-          });
+    // 🔹 Toggle expand/collapse
+    const toggleExpand = (id) => {
+      setExpandedIds((prev) =>
+        prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+      );
+    };
 
-    // 🔹 Sorting logic — today’s appointments first, then upcoming ones (by date/time)
+    // Filter logic
+    const filteredAppointments = appointments.filter((appt) => {
+      const matchesStatus =
+        filter === "All" ||
+        appt.status?.toLowerCase().trim() === filter.toLowerCase().trim();
+
+      const matchesSearch =
+        searchQuery === "" ||
+        appt.full_name?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      return matchesStatus && matchesSearch;
+    });
+
+    // Sorting logic
     const sortedAppointments = [...filteredAppointments].sort((a, b) => {
       const dateA = new Date(`${a.appointment_date}T${a.appointment_time}`);
       const dateB = new Date(`${b.appointment_date}T${b.appointment_time}`);
@@ -670,13 +654,12 @@ function Nurse() {
       const isTodayA = a.appointment_date === today;
       const isTodayB = b.appointment_date === today;
 
-      // Today’s appointments go first
       if (isTodayA && !isTodayB) return -1;
       if (!isTodayA && isTodayB) return 1;
 
-      // Otherwise, sort by date/time
       return dateA - dateB;
     });
+
     const statusOptions = [
       "All",
       "pending",
@@ -684,57 +667,77 @@ function Nurse() {
       "Completed",
       "Canceled",
     ];
+
     return (
       <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
-        {/* ---------- Cohesive Header Bar for Appointment Queue (Enhanced Filter) ---------- */}
+        {/* Header Bar */}
         <div className="flex flex-col gap-4 p-4 bg-white border-b border-gray-200 rounded-xl shadow-lg">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
-            {/* Title */}
+          <div className="flex flex-col gap-3">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center">
-              {/* Optional: Add a relevant icon like CalendarCheck or Users here */}
               Daily Appointment Queue
             </h1>
 
-            {/* Filter and Refresh Actions */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Segmented Filter Buttons (Appealing Style) */}
-              <div className="inline-flex rounded-xl bg-gray-100 p-0.5 text-xs sm:text-sm shadow-inner">
-                {statusOptions.map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setFilter(status)}
-                    className={`px-3 py-1.5 font-semibold transition-all duration-200 ${
-                      filter === status
-                        ? // Active: Strong blue background, white text, and an elevated shadow
-                          "bg-blue-600 text-white shadow-lg shadow-blue-300/50 hover:bg-blue-700"
-                        : // Inactive: Hover changes background slightly and text color to match the blue theme
-                          "text-gray-600 hover:bg-gray-200 hover:text-blue-600"
-                    } rounded-xl`} // Use rounded-xl to match container
-                  >
-                    {status}
-                  </button>
-                ))}
+            <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+              {/* Search Input */}
+              <div className="relative flex-1 max-w-md">
+                <input
+                  type="text"
+                  placeholder="Search by patient name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                />
+                <svg
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
               </div>
 
-              {/* Refresh Button */}
-              <button
-                onClick={fetchAppointments}
-                disabled={loading}
-                className="p-1.5 sm:p-2 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 transition disabled:opacity-50 shadow-md"
-                title="Refresh Appointments"
-              >
-                <RefreshCw
-                  className={`w-4 h-4 sm:w-5 sm:h-5 ${
-                    loading ? "animate-spin" : ""
-                  }`}
-                />
-              </button>
+              {/* Filter and Refresh */}
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="inline-flex rounded-xl bg-gray-100 p-0.5 text-xs sm:text-sm shadow-inner">
+                  {statusOptions.map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => setFilter(status)}
+                      className={`px-3 py-1.5 font-semibold transition-all duration-200 ${
+                        filter === status
+                          ? "bg-blue-600 text-white shadow-lg shadow-blue-300/50 hover:bg-blue-700"
+                          : "text-gray-600 hover:bg-gray-200 hover:text-blue-600"
+                      } rounded-xl`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={fetchAppointments}
+                  disabled={loading}
+                  className="p-1.5 sm:p-2 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 transition disabled:opacity-50 shadow-md"
+                  title="Refresh Appointments"
+                >
+                  <RefreshCw
+                    className={`w-4 h-4 sm:w-5 sm:h-5 ${
+                      loading ? "animate-spin" : ""
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
         </div>
-        {/* ---------- End Cohesive Header Bar ---------- */}
 
-        {/* Appointment List / Grid */}
+        {/* Appointment List */}
         {loading ? (
           <div className="flex items-center justify-center p-6">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -742,148 +745,164 @@ function Nurse() {
           </div>
         ) : sortedAppointments.length === 0 ? (
           <p className="text-gray-600 text-center py-8">
-            No {filter !== "All" && filter.toLowerCase()} appointments found.
+            {searchQuery
+              ? `No results found for "${searchQuery}"`
+              : `No ${
+                  filter !== "All" ? filter.toLowerCase() : ""
+                } appointments found.`}
           </p>
         ) : (
-          <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2">
-            {sortedAppointments.map((appt, index) => (
-              <div
-                key={appt.appointment_id}
-                // Increased top padding to make room for the queue number
-                className="relative p-4 sm:p-5 pt-10 bg-white border rounded-xl shadow hover:shadow-lg transition"
-              >
-                {/* NEW: Prominent Queue Number for Flow/Order */}
-                <div className="absolute top-0 left-0 bg-blue-600 text-white rounded-tr-xl rounded-bl-lg px-3 py-1 text-base font-extrabold shadow-lg">
-                  #{index + 1}
-                </div>
+          <div className="space-y-2">
+            {sortedAppointments.map((appt, index) => {
+              const isExpanded = expandedIds.includes(appt.appointment_id);
 
-                {/* Patient Info */}
-                <div className="mb-3 mt-1">
-                  <p className="font-extrabold text-base sm:text-lg text-gray-800">
-                    {appt.full_name}
-                  </p>
-                  <p className="text-xs sm:text-sm text-gray-500">
-                    {appt.email}
-                  </p>
-                </div>
+              return (
+                <div
+                  key={appt.appointment_id}
+                  className="bg-white border rounded-xl shadow hover:shadow-lg transition overflow-hidden"
+                >
+                  {/* 🔹 COLLAPSED VIEW - Clickable header */}
+                  <button
+                    onClick={() => toggleExpand(appt.appointment_id)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition text-left"
+                  >
+                    <div className="flex items-center gap-3 flex-1">
+                      {/* Queue Number */}
+                      <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold text-sm">
+                        #{index + 1}
+                      </div>
 
-                {/* Appointment Info (Refined Hierarchy) */}
-                <div className="text-sm space-y-1 mb-3">
-                  <p className="font-semibold">
-                    {/* Elevated Date/Time visibility */}
-                    <span className="text-gray-700">Date:</span>{" "}
-                    {formatDate(appt.appointment_date)} -{" "}
-                    {appt.appointment_time}
-                  </p>
-                  <p>
-                    <b>Type:</b> {appt.appointment_type}
-                  </p>
-                  <p>
-                    <b>Status:</b>{" "}
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                        appt.status?.toLowerCase() === "approved"
-                          ? "bg-green-100 text-green-700"
-                          : appt.status?.toLowerCase() === "completed"
-                          ? "bg-blue-100 text-blue-700"
-                          : appt.status?.toLowerCase() === "canceled"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}
-                    >
-                      {appt.status}
-                    </span>
-                  </p>
-                  {/* Patient Concerns */}
-                  <p className="pt-1">
-                    <b>Concerns:</b> {appt.concerns || "N/A"}
-                  </p>
-                  {/* Additional Services */}
-                  <p>
-                    <b>Services:</b> {appt.additional_services || "None"}
-                  </p>
-                </div>
+                      {/* Patient Name */}
+                      <div className="flex-1">
+                        <p className="font-bold text-base sm:text-lg text-gray-800">
+                          {appt.full_name}
+                        </p>
+                      </div>
 
-                {/* Actions (Primary actions are now larger and more prominent) */}
-                <div className="flex flex-wrap gap-2 pt-2 border-t mt-4">
-                  {appt.status?.toLowerCase() === "pending" && (
-                    <>
-                      <button
-                        onClick={() =>
-                          updateStatus(appt.appointment_id, "Approved")
-                        }
-                        // Primary action blue/green for approval
-                        className="flex items-center px-4 py-2 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                      {/* Date */}
+                      <div className="hidden sm:block text-sm text-gray-600 font-medium">
+                        {formatDate(appt.appointment_date)}
+                      </div>
+
+                      {/* Status Badge */}
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                          appt.status?.toLowerCase() === "approved"
+                            ? "bg-green-100 text-green-700"
+                            : appt.status?.toLowerCase() === "completed"
+                            ? "bg-blue-100 text-blue-700"
+                            : appt.status?.toLowerCase() === "canceled"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-yellow-100 text-yellow-700"
+                        }`}
                       >
-                        <CheckCircle className="w-4 h-4 mr-1.5" />
-                        Approve
-                      </button>
-                      <button
-                        onClick={async () => {
-                          const result = await Swal.fire({
-                            icon: "warning",
-                            title: "Cancel Appointment?",
-                            text: "This will mark the appointment as canceled",
-                            showCancelButton: true,
-                            confirmButtonColor: "#f97316",
-                            cancelButtonColor: "#6b7280",
-                            confirmButtonText: "Yes, cancel it",
-                            cancelButtonText: "Go back",
-                          });
+                        {appt.status}
+                      </span>
 
-                          if (result.isConfirmed) {
-                            updateStatus(appt.appointment_id, "Canceled");
-                          }
-                        }}
-                        className="flex items-center px-4 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
-                      >
-                        <X className="w-4 h-4 mr-1.5" />
-                        Cancel
-                      </button>
-                    </>
+                      {/* Expand/Collapse Icon */}
+                      {isExpanded ? (
+                        <ChevronDown className="w-5 h-5 text-gray-400" />
+                      ) : (
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* 🔹 EXPANDED VIEW - Full details */}
+                  {isExpanded && (
+                    <div className="px-4 pb-4 pt-2 border-t bg-gray-50">
+                      {/* Patient Info */}
+                      <div className="mb-3">
+                        <p className="text-xs sm:text-sm text-gray-500">
+                          {appt.email}
+                        </p>
+                      </div>
+
+                      {/* Appointment Details */}
+                      <div className="text-sm space-y-1 mb-3">
+                        <p className="font-semibold">
+                          <span className="text-gray-700">Date:</span>{" "}
+                          {formatDate(appt.appointment_date)} -{" "}
+                          {appt.appointment_time}
+                        </p>
+                        <p>
+                          <b>Type:</b> {appt.appointment_type}
+                        </p>
+                        <p>
+                          <b>Concerns:</b> {appt.concerns || "N/A"}
+                        </p>
+                        <p>
+                          <b>Services:</b> {appt.additional_services || "None"}
+                        </p>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap gap-2 pt-2 border-t">
+                        {appt.status?.toLowerCase() === "pending" && (
+                          <>
+                            <button
+                              onClick={() =>
+                                updateStatus(appt.appointment_id, "Approved")
+                              }
+                              className="flex items-center px-4 py-2 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1.5" />
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm("Cancel this appointment?")) {
+                                  updateStatus(appt.appointment_id, "Canceled");
+                                }
+                              }}
+                              className="flex items-center px-4 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
+                            >
+                              <X className="w-4 h-4 mr-1.5" />
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                        {appt.status?.toLowerCase() === "approved" && (
+                          <>
+                            <button
+                              onClick={() =>
+                                updateStatus(appt.appointment_id, "Completed")
+                              }
+                              className="flex items-center px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                            >
+                              <ClipboardCheck className="w-4 h-4 mr-1.5" />
+                              Complete
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm("Cancel this appointment?")) {
+                                  updateStatus(appt.appointment_id, "Canceled");
+                                }
+                              }}
+                              className="flex items-center px-4 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
+                            >
+                              <X className="w-4 h-4 mr-1.5" />
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                        {appt.status?.toLowerCase() !== "canceled" && (
+                          <button
+                            onClick={() =>
+                              deleteAppointment(appt.appointment_id)
+                            }
+                            className="flex items-center px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                          >
+                            <Trash2 className="w-4 h-4 mr-1.5" />
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   )}
-                  {appt.status?.toLowerCase() === "approved" && (
-                    <>
-                      <button
-                        onClick={() =>
-                          updateStatus(appt.appointment_id, "Completed")
-                        }
-                        // Primary action blue for completion
-                        className="flex items-center px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                      >
-                        <ClipboardCheck className="w-4 h-4 mr-1.5" />
-                        Complete
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              "Are you sure you want to cancel this appointment?"
-                            )
-                          ) {
-                            updateStatus(appt.appointment_id, "Canceled");
-                          }
-                        }}
-                        className="flex items-center px-4 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
-                      >
-                        <X className="w-4 h-4 mr-1.5" />
-                        Cancel
-                      </button>
-                    </>
-                  )}
-                  {appt.status?.toLowerCase() !== "canceled" && (
-                    <button
-                      onClick={() => deleteAppointment(appt.appointment_id)}
-                      // Delete remains red, but its size is consistent with others
-                      className="flex items-center px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-                    >
-                      <Trash2 className="w-4 h-4 mr-1.5" />
-                      Delete
-                    </button>
-                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -1837,8 +1856,7 @@ function Nurse() {
       </div>
     );
   };
-
-  // MEDICAL RECORDS PAGE
+  // MEDICAL RECORDS PAGE - FIXED VERSION
   const MedicalRecords = () => {
     const [patients, setPatients] = useState([]);
     const [showModal, setShowModal] = useState(false);
@@ -1854,8 +1872,9 @@ function Nurse() {
       remarks: "",
     });
     const [openFolders, setOpenFolders] = useState({});
-    const [patientSearch, setPatientSearch] = useState(""); // Search for patient folders
-    const [recordSearch, setRecordSearch] = useState({}); // Search for records within each folder (keyed by patient name)
+    const [patientSearch, setPatientSearch] = useState("");
+    const [recordSearch, setRecordSearch] = useState({});
+    const [openRecords, setOpenRecords] = useState({});
 
     useEffect(() => {
       console.log("Component mounted, fetching patients...");
@@ -1897,7 +1916,6 @@ function Nurse() {
         });
     }, []);
 
-    // ✅ Update both the displayed input and formData
     const handleChange = (e, appointmentId) => {
       const { name, value } = e.target;
 
@@ -1976,7 +1994,6 @@ function Nurse() {
       }
     };
 
-    // 🖨️ Print function (single record)
     const printRecord = (patient) => {
       if (!patient) {
         Swal.fire({
@@ -1988,7 +2005,6 @@ function Nurse() {
         return;
       }
 
-      // Compute age from birth_date at the time of appointment
       let age = "N/A";
       if (patient.birth_date && patient.appointment_date) {
         const birth = new Date(patient.birth_date);
@@ -2004,7 +2020,6 @@ function Nurse() {
         age = `${age} yrs`;
       }
 
-      // Format appointment date and time
       const appointmentDate = patient.appointment_date
         ? new Date(patient.appointment_date).toLocaleDateString()
         : "N/A";
@@ -2013,90 +2028,89 @@ function Nurse() {
 
       const printWindow = window.open("", "_blank");
       printWindow.document.write(`
-        <html>
-          <head>
-            <title>Patient Record - ${patient.full_name}</title>
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                padding: 30px;
-                line-height: 1.6;
-                color: #333;
-              }
-              h2 {
-                color: #2563eb;
-                border-bottom: 2px solid #2563eb;
-                padding-bottom: 5px;
-              }
-              p {
-                margin: 6px 0;
-              }
-              .field {
-                margin-bottom: 10px;
-              }
-              .label {
-                font-weight: bold;
-                color: #1e3a8a;
-              }
-              button {
-                margin-top: 20px;
-                padding: 8px 16px;
-                background: #2563eb;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                cursor: pointer;
-              }
-              button:hover {
-                background: #1d4ed8;
-              }
-              .section {
-                margin-bottom: 20px;
-              }
-            </style>
-          </head>
-          <body>
-            <h2>Appointment Details</h2>
-            <div class="section">
-              <p class="field"><span class="label">Appointment Type:</span> ${appointmentType}</p>
-              <p class="field"><span class="label">Date:</span> ${appointmentDate}</p>
-              <p class="field"><span class="label">Time:</span> ${appointmentTime}</p>
-            </div>
+      <html>
+        <head>
+          <title>Patient Record - ${patient.full_name}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              padding: 30px;
+              line-height: 1.6;
+              color: #333;
+            }
+            h2 {
+              color: #2563eb;
+              border-bottom: 2px solid #2563eb;
+              padding-bottom: 5px;
+            }
+            p {
+              margin: 6px 0;
+            }
+            .field {
+              margin-bottom: 10px;
+            }
+            .label {
+              font-weight: bold;
+              color: #1e3a8a;
+            }
+            button {
+              margin-top: 20px;
+              padding: 8px 16px;
+              background: #2563eb;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+            }
+            button:hover {
+              background: #1d4ed8;
+            }
+            .section {
+              margin-bottom: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <h2>Appointment Details</h2>
+          <div class="section">
+            <p class="field"><span class="label">Appointment Type:</span> ${appointmentType}</p>
+            <p class="field"><span class="label">Date:</span> ${appointmentDate}</p>
+            <p class="field"><span class="label">Time:</span> ${appointmentTime}</p>
+          </div>
 
-            <h2>Medical Record</h2>
-            <div class="section">
-              <p class="field"><span class="label">Full Name:</span> ${
-                patient.full_name
-              }</p>
-              <p class="field"><span class="label">Age:</span> ${age}</p>
-              <p class="field"><span class="label">Temperature:</span> ${
-                patient.temperature || "N/A"
-              }</p>
-              <p class="field"><span class="label">Pulse Rate:</span> ${
-                patient.pulse_rate || "N/A"
-              }</p>
-              <p class="field"><span class="label">Height:</span> ${
-                patient.height || "N/A"
-              }</p>
-              <p class="field"><span class="label">Weight:</span> ${
-                patient.weight || "N/A"
-              }</p>
-              <p class="field"><span class="label">Diagnosis:</span> ${
-                patient.diagnosis || "N/A"
-              }</p>
-              <p class="field"><span class="label">Remarks:</span> ${
-                patient.remarks || "N/A"
-              }</p>
-            </div>
+          <h2>Medical Record</h2>
+          <div class="section">
+            <p class="field"><span class="label">Full Name:</span> ${
+              patient.full_name
+            }</p>
+            <p class="field"><span class="label">Age:</span> ${age}</p>
+            <p class="field"><span class="label">Temperature:</span> ${
+              patient.temperature || "N/A"
+            }</p>
+            <p class="field"><span class="label">Pulse Rate:</span> ${
+              patient.pulse_rate || "N/A"
+            }</p>
+            <p class="field"><span class="label">Height:</span> ${
+              patient.height || "N/A"
+            }</p>
+            <p class="field"><span class="label">Weight:</span> ${
+              patient.weight || "N/A"
+            }</p>
+            <p class="field"><span class="label">Diagnosis:</span> ${
+              patient.diagnosis || "N/A"
+            }</p>
+            <p class="field"><span class="label">Remarks:</span> ${
+              patient.remarks || "N/A"
+            }</p>
+          </div>
 
-            <button onclick="window.print()">Print this page</button>
-          </body>
-        </html>
-      `);
+          <button onclick="window.print()">Print this page</button>
+        </body>
+      </html>
+    `);
       printWindow.document.close();
     };
 
-    // Loading state
     if (loading) {
       return (
         <div className="flex items-center justify-center min-h-screen">
@@ -2108,7 +2122,6 @@ function Nurse() {
       );
     }
 
-    // ✅ Group appointments (records) by patient
     const groupedPatients = patients.reduce((acc, curr) => {
       const name = curr.full_name;
       if (!acc[name]) acc[name] = [];
@@ -2116,7 +2129,6 @@ function Nurse() {
       return acc;
     }, {});
 
-    // Filter patient folders by patient name search
     const filteredGroupedPatients = Object.entries(groupedPatients).filter(
       ([patientName]) => {
         if (!patientSearch.trim()) return true;
@@ -2124,7 +2136,6 @@ function Nurse() {
       }
     );
 
-    // Filter records within a folder by date or type
     const filterRecords = (records, searchTerm) => {
       if (!searchTerm || !searchTerm.trim()) return records;
       const term = searchTerm.toLowerCase().trim();
@@ -2135,7 +2146,6 @@ function Nurse() {
       });
     };
 
-    // Error state
     if (error) {
       return (
         <div className="flex items-center justify-center min-h-screen">
@@ -2171,7 +2181,7 @@ function Nurse() {
             Patient Medical Records
           </h1>
 
-          {/* Outer Search Bar - Search for Patient Folders */}
+          {/* Outer Search Bar */}
           {patients.length > 0 && (
             <div className="mb-6">
               <div className="relative">
@@ -2267,7 +2277,7 @@ function Nurse() {
                     {/* Folder Body */}
                     {openFolders[patientName] && (
                       <div className="p-6 border-t border-blue-200 bg-blue-50/40 rounded-b-xl space-y-6">
-                        {/* Inner Search Bar - Search for Records by Date or Type */}
+                        {/* Inner Search Bar */}
                         <div className="mb-4">
                           <div className="relative">
                             <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -2291,140 +2301,177 @@ function Nurse() {
                             <p>No records match your search.</p>
                           </div>
                         ) : (
-                          filteredRecords.map((p) => (
-                            <div
-                              key={p.appointment_id}
-                              className="border border-blue-200 rounded-lg bg-white shadow-sm p-5"
-                            >
-                              <div className="mb-3">
-                                <h4 className="font-semibold text-blue-800">
-                                  Appointment Date: {p.appointment_date}
-                                </h4>
-                                <p className="text-sm text-gray-600">
-                                  <h4 className="font-semibold text-blue-800">
-                                    Appointment Type: {p.appointment_type}
-                                  </h4>
-                                </p>
-                                <p className="text-sm text-gray-500">
-                                  {p.diagnosis
-                                    ? "Has medical record"
-                                    : "No record yet"}
-                                </p>
-                              </div>
+                          <div className="space-y-2">
+                            {filteredRecords.map((p) => {
+                              const recordKey = `${patientName}-${p.appointment_id}`;
+                              const isOpen = openRecords[recordKey];
 
-                              {/* Editable Inputs */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
-                                {[
-                                  "weight",
-                                  "height",
-                                  "temperature",
-                                  "pulse_rate",
-                                  "diagnosis",
-                                ].map((field) => (
-                                  <div key={field}>
-                                    <label className="block text-xs sm:text-sm font-medium text-blue-700 mb-1 capitalize">
-                                      {field.replace("_", " ")}
-                                    </label>
-                                    <input
-                                      type={
-                                        ["diagnosis"].includes(field)
-                                          ? "text"
-                                          : "number"
-                                      }
-                                      value={p[field] ?? ""}
-                                      onChange={(e) =>
-                                        handleChange(e, p.appointment_id)
-                                      }
-                                      name={field}
-                                      placeholder={`Enter ${field}`}
-                                      className="w-full border border-blue-300 p-2 sm:p-3 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm sm:text-base"
-                                    />
-                                  </div>
-                                ))}
+                              return (
+                                <div
+                                  key={p.appointment_id}
+                                  className="border border-blue-200 rounded-lg bg-white shadow-sm overflow-hidden"
+                                >
+                                  {/* 📋 CLICKABLE HEADER */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setOpenRecords((prev) => ({
+                                        ...prev,
+                                        [recordKey]: !prev[recordKey],
+                                      }))
+                                    }
+                                    className="w-full flex items-center justify-between p-4 hover:bg-blue-50 transition-colors text-left"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Calendar className="w-5 h-5 text-blue-500" />
+                                      <div>
+                                        <p className="font-semibold text-blue-800">
+                                          {p.appointment_date} -{" "}
+                                          {p.appointment_type}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          {p.diagnosis
+                                            ? "✓ Has medical record"
+                                            : "○ No record yet"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    {isOpen ? (
+                                      <ChevronUp className="w-5 h-5 text-blue-500" />
+                                    ) : (
+                                      <ChevronDown className="w-5 h-5 text-blue-500" />
+                                    )}
+                                  </button>
 
-                                {/* Age (computed at appointment time) */}
-                                <div>
-                                  <label className="block text-sm font-medium text-blue-700 mb-1">
-                                    Age (at appointment)
-                                  </label>
-                                  <p className="border border-blue-200 p-3 rounded-lg bg-gray-50">
-                                    {p.birth_date && p.appointment_date
-                                      ? (() => {
-                                          const birth = new Date(p.birth_date);
-                                          const appointmentDate = new Date(
-                                            p.appointment_date
-                                          );
-                                          let age =
-                                            appointmentDate.getFullYear() -
-                                            birth.getFullYear();
-                                          const m =
-                                            appointmentDate.getMonth() -
-                                            birth.getMonth();
-                                          if (
-                                            m < 0 ||
-                                            (m === 0 &&
-                                              appointmentDate.getDate() <
-                                                birth.getDate())
-                                          ) {
-                                            age--;
+                                  {/* 📝 EXPANDABLE CONTENT */}
+                                  {isOpen && (
+                                    <div className="p-5 border-t border-blue-100 bg-blue-50/30">
+                                      {/* Editable Inputs */}
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+                                        {[
+                                          "weight",
+                                          "height",
+                                          "temperature",
+                                          "pulse_rate",
+                                          "diagnosis",
+                                        ].map((field) => (
+                                          <div key={field}>
+                                            <label className="block text-xs sm:text-sm font-medium text-blue-700 mb-1 capitalize">
+                                              {field.replace("_", " ")}
+                                            </label>
+                                            <input
+                                              type={
+                                                ["diagnosis"].includes(field)
+                                                  ? "text"
+                                                  : "number"
+                                              }
+                                              value={p[field] ?? ""}
+                                              onChange={(e) =>
+                                                handleChange(
+                                                  e,
+                                                  p.appointment_id
+                                                )
+                                              }
+                                              name={field}
+                                              placeholder={`Enter ${field}`}
+                                              className="w-full border border-blue-300 p-2 sm:p-3 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm sm:text-base"
+                                            />
+                                          </div>
+                                        ))}
+
+                                        {/* Age */}
+                                        <div>
+                                          <label className="block text-sm font-medium text-blue-700 mb-1">
+                                            Age (at appointment)
+                                          </label>
+                                          <p className="border border-blue-200 p-3 rounded-lg bg-gray-50">
+                                            {p.birth_date && p.appointment_date
+                                              ? (() => {
+                                                  const birth = new Date(
+                                                    p.birth_date
+                                                  );
+                                                  const appointmentDate =
+                                                    new Date(
+                                                      p.appointment_date
+                                                    );
+                                                  let age =
+                                                    appointmentDate.getFullYear() -
+                                                    birth.getFullYear();
+                                                  const m =
+                                                    appointmentDate.getMonth() -
+                                                    birth.getMonth();
+                                                  if (
+                                                    m < 0 ||
+                                                    (m === 0 &&
+                                                      appointmentDate.getDate() <
+                                                        birth.getDate())
+                                                  ) {
+                                                    age--;
+                                                  }
+                                                  return `${age} yrs`;
+                                                })()
+                                              : "Not recorded"}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {/* Remarks */}
+                                      <div className="mb-6">
+                                        <label className="block text-sm font-medium text-blue-700 mb-1">
+                                          Remarks / Treatments
+                                        </label>
+                                        <textarea
+                                          name="remarks"
+                                          value={p.remarks ?? ""}
+                                          onChange={(e) =>
+                                            handleChange(e, p.appointment_id)
                                           }
-                                          return `${age} yrs`;
-                                        })()
-                                      : "Not recorded"}
-                                  </p>
+                                          placeholder="Enter remarks and treatments"
+                                          rows="4"
+                                          className="w-full border border-blue-300 p-3 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
+                                        />
+                                      </div>
+
+                                      {/* Buttons */}
+                                      <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setOpenRecords((prev) => ({
+                                              ...prev,
+                                              [recordKey]: false,
+                                            }))
+                                          }
+                                          className="px-4 sm:px-6 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm sm:text-base"
+                                        >
+                                          Close
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            saveRecord(p.appointment_id)
+                                          }
+                                          className="px-4 sm:px-6 py-2 bg-yellow-400 text-blue-900 font-semibold rounded-lg hover:bg-yellow-500 transition-colors text-sm sm:text-base"
+                                        >
+                                          {p.diagnosis ? "Update" : "Add"}{" "}
+                                          Record
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => printRecord(p)}
+                                          className="px-4 sm:px-6 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors text-sm sm:text-base"
+                                        >
+                                          Print Record
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
-
-                              {/* Remarks */}
-                              <div className="mb-6">
-                                <label className="block text-sm font-medium text-blue-700 mb-1">
-                                  Remarks / Treatments
-                                </label>
-                                <textarea
-                                  name="remarks"
-                                  value={p.remarks ?? ""}
-                                  onChange={(e) =>
-                                    handleChange(e, p.appointment_id)
-                                  }
-                                  placeholder="Enter remarks and treatments"
-                                  rows="4"
-                                  className="w-full border border-blue-300 p-3 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
-                                />
-                              </div>
-
-                              {/* Buttons */}
-                              <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setOpenFolders((prev) => ({
-                                      ...prev,
-                                      [patientName]: false,
-                                    }))
-                                  }
-                                  className="px-4 sm:px-6 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm sm:text-base"
-                                >
-                                  Close
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => saveRecord(p.appointment_id)}
-                                  className="px-4 sm:px-6 py-2 bg-yellow-400 text-blue-900 font-semibold rounded-lg hover:bg-yellow-500 transition-colors text-sm sm:text-base"
-                                >
-                                  {p.diagnosis ? "Update" : "Add"} Record
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => printRecord(p)}
-                                  className="px-4 sm:px-6 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors text-sm sm:text-base"
-                                >
-                                  Print Record
-                                </button>
-                              </div>
-                            </div>
-                          ))
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
                     )}
@@ -2435,7 +2482,7 @@ function Nurse() {
           )}
         </div>
 
-        {/* ✅ SUCCESS MODAL (Place here, after main container) */}
+        {/* Success Modal */}
         {showModal && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
             <div className="bg-white p-6 rounded-xl shadow-lg border-t-4 border-green-500 text-center">

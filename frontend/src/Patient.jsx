@@ -672,12 +672,11 @@ function Patient() {
           // ignore
         }
       };
-      loadUser();
-    }, []);
-    useEffect(() => {
-      fetchPatientRecords();
-    }, []);
 
+      // Load user info and medical records on mount
+      loadUser();
+      fetchPatientRecords(); // ✅ ADD THIS LINE
+    }, []); // Empty dependency array ensures this runs once on mount
     const fetchPatientRecords = async () => {
       try {
         setLoading(true);
@@ -1429,7 +1428,7 @@ function Patient() {
                     <button
                       onClick={() => {
                         setShowImportModal(false);
-                        setImportFullName("");
+                        // Keep importFullName persistent - don't clear it
                         setImportMotherName("");
                         setImportFatherName("");
                         setImportResults([]);
@@ -1650,7 +1649,7 @@ function Patient() {
                     <button
                       onClick={() => {
                         setShowImportModal(false);
-                        setImportFullName("");
+                        // Keep importFullName persistent
                         setImportMotherName("");
                         setImportFatherName("");
                         setImportResults([]);
@@ -1725,7 +1724,7 @@ function Patient() {
                           });
 
                           setShowImportModal(false);
-                          setImportFullName("");
+                          // Keep importFullName persistent
                           setImportMotherName("");
                           setImportFatherName("");
                           setImportResults([]);
@@ -1764,7 +1763,7 @@ function Patient() {
   const menuItems = [
     { id: "home", label: "Home", icon: Home },
     { id: "appointments", label: "Appointments", icon: Calendar },
-    { id: "checkup", label: "Checkup History", icon: ClipboardList },
+    { id: "checkup", label: "Medical Records", icon: ClipboardList },
     { id: "profile", label: "Profile", icon: User },
   ];
 
@@ -1809,33 +1808,52 @@ function Patient() {
       >
         <div className="p-4 sm:p-6">
           {/* Logo + Branding */}
-          <div className="flex items-center justify-between mb-6 sm:mb-8">
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Logo in white circle */}
-              <div className="bg-white p-1.5 sm:p-2 rounded-full flex items-center justify-center shadow-md">
-                <img
-                  src="/clinicsclogo.png"
-                  alt="Clinic Logo"
-                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover"
-                />
+          <div className="mb-6 sm:mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {/* Logo in white circle */}
+                <div className="bg-white p-1.5 sm:p-2 rounded-full flex items-center justify-center shadow-md">
+                  <img
+                    src="/clinicsclogo.png"
+                    alt="Clinic Logo"
+                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover"
+                  />
+                </div>
+
+                {/* Text Branding */}
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold">Castillo</h2>
+                  <p className="text-blue-200 text-xs sm:text-sm">
+                    Children Clinic
+                  </p>
+                </div>
               </div>
 
-              {/* Text Branding */}
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold">Castillo</h2>
-                <p className="text-blue-200 text-xs sm:text-sm">
-                  Children Clinic
-                </p>
-              </div>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="md:hidden text-white hover:text-yellow-400 text-2xl transition-colors"
+                aria-label="Close menu"
+              >
+                ×
+              </button>
             </div>
 
-            <button
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="md:hidden text-white hover:text-yellow-400 text-2xl"
-              aria-label="Close menu"
-            >
-              ×
-            </button>
+            {/* Patient Info Card - Mobile Only */}
+            <div className="md:hidden bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/20 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="bg-gradient-to-br from-yellow-400 to-yellow-500 p-2 sm:p-2.5 rounded-full shadow-md flex-shrink-0">
+                  <User className="w-5 h-5 sm:w-6 sm:h-6 text-blue-900" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-blue-200 font-medium mb-0.5">
+                    Logged in as
+                  </p>
+                  <p className="text-sm sm:text-base font-bold text-white truncate">
+                    {patientName}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Navigation Menu */}
@@ -1863,21 +1881,11 @@ function Patient() {
           </nav>
         </div>
 
-        {/* Bottom section */}
-        <div className="absolute bottom-0 left-0 right-0 w-64 sm:w-72 p-4 sm:p-6 bg-blue-800 bg-opacity-50">
-          <div className="flex items-center mb-3 sm:mb-4">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-pink-500 rounded-full flex items-center justify-center mr-2 sm:mr-3">
-              <User className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm sm:text-base truncate">
-                {patientName}
-              </p>
-            </div>
-          </div>
+        {/* Bottom section - Logout Only */}
+        <div className="absolute bottom-0 left-0 right-0 w-64 sm:w-72 p-4 sm:p-6 bg-blue-900/50 backdrop-blur-sm">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center px-3 sm:px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm sm:text-base"
+            className="w-full flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all shadow-lg hover:shadow-xl font-semibold text-sm sm:text-base"
           >
             <LogOut className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
             Logout

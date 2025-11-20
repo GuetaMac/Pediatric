@@ -1701,6 +1701,7 @@ function Doctor() {
   };
 
   // ---- Medical Records Page ----
+  // MEDICAL RECORDS PAGE - FIXED VERSION
   const MedicalRecords = () => {
     const [patients, setPatients] = useState([]);
     const [showModal, setShowModal] = useState(false);
@@ -1716,8 +1717,10 @@ function Doctor() {
       remarks: "",
     });
     const [openFolders, setOpenFolders] = useState({});
-    const [patientSearch, setPatientSearch] = useState(""); // Search for patient folders
-    const [recordSearch, setRecordSearch] = useState({}); // Search for records within each folder (keyed by patient name)
+    const [patientSearch, setPatientSearch] = useState("");
+    const [recordSearch, setRecordSearch] = useState({});
+    const [openRecords, setOpenRecords] = useState({});
+
     useEffect(() => {
       console.log("Component mounted, fetching patients...");
       setLoading(true);
@@ -1758,7 +1761,6 @@ function Doctor() {
         });
     }, []);
 
-    // ✅ Update both the displayed input and formData
     const handleChange = (e, appointmentId) => {
       const { name, value } = e.target;
 
@@ -1837,7 +1839,6 @@ function Doctor() {
       }
     };
 
-    // 🖨️ Print function (single record)
     const printRecord = (patient) => {
       if (!patient) {
         Swal.fire({
@@ -1849,7 +1850,6 @@ function Doctor() {
         return;
       }
 
-      // Compute age from birth_date at the time of appointment
       let age = "N/A";
       if (patient.birth_date && patient.appointment_date) {
         const birth = new Date(patient.birth_date);
@@ -1865,7 +1865,6 @@ function Doctor() {
         age = `${age} yrs`;
       }
 
-      // Format appointment date and time
       const appointmentDate = patient.appointment_date
         ? new Date(patient.appointment_date).toLocaleDateString()
         : "N/A";
@@ -1874,90 +1873,89 @@ function Doctor() {
 
       const printWindow = window.open("", "_blank");
       printWindow.document.write(`
-    <html>
-      <head>
-        <title>Patient Record - ${patient.full_name}</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            padding: 30px;
-            line-height: 1.6;
-            color: #333;
-          }
-          h2 {
-            color: #2563eb;
-            border-bottom: 2px solid #2563eb;
-            padding-bottom: 5px;
-          }
-          p {
-            margin: 6px 0;
-          }
-          .field {
-            margin-bottom: 10px;
-          }
-          .label {
-            font-weight: bold;
-            color: #1e3a8a;
-          }
-          button {
-            margin-top: 20px;
-            padding: 8px 16px;
-            background: #2563eb;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-          }
-          button:hover {
-            background: #1d4ed8;
-          }
-          .section {
-            margin-bottom: 20px;
-          }
-        </style>
-      </head>
-      <body>
-        <h2>Appointment Details</h2>
-        <div class="section">
-          <p class="field"><span class="label">Appointment Type:</span> ${appointmentType}</p>
-          <p class="field"><span class="label">Date:</span> ${appointmentDate}</p>
-          <p class="field"><span class="label">Time:</span> ${appointmentTime}</p>
-        </div>
+      <html>
+        <head>
+          <title>Patient Record - ${patient.full_name}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              padding: 30px;
+              line-height: 1.6;
+              color: #333;
+            }
+            h2 {
+              color: #2563eb;
+              border-bottom: 2px solid #2563eb;
+              padding-bottom: 5px;
+            }
+            p {
+              margin: 6px 0;
+            }
+            .field {
+              margin-bottom: 10px;
+            }
+            .label {
+              font-weight: bold;
+              color: #1e3a8a;
+            }
+            button {
+              margin-top: 20px;
+              padding: 8px 16px;
+              background: #2563eb;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+            }
+            button:hover {
+              background: #1d4ed8;
+            }
+            .section {
+              margin-bottom: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <h2>Appointment Details</h2>
+          <div class="section">
+            <p class="field"><span class="label">Appointment Type:</span> ${appointmentType}</p>
+            <p class="field"><span class="label">Date:</span> ${appointmentDate}</p>
+            <p class="field"><span class="label">Time:</span> ${appointmentTime}</p>
+          </div>
 
-        <h2>Medical Record</h2>
-        <div class="section">
-          <p class="field"><span class="label">Full Name:</span> ${
-            patient.full_name
-          }</p>
-          <p class="field"><span class="label">Age:</span> ${age}</p>
-          <p class="field"><span class="label">Temperature:</span> ${
-            patient.temperature || "N/A"
-          }</p>
-          <p class="field"><span class="label">Pulse Rate:</span> ${
-            patient.pulse_rate || "N/A"
-          }</p>
-          <p class="field"><span class="label">Height:</span> ${
-            patient.height || "N/A"
-          }</p>
-          <p class="field"><span class="label">Weight:</span> ${
-            patient.weight || "N/A"
-          }</p>
-          <p class="field"><span class="label">Diagnosis:</span> ${
-            patient.diagnosis || "N/A"
-          }</p>
-          <p class="field"><span class="label">Remarks:</span> ${
-            patient.remarks || "N/A"
-          }</p>
-        </div>
+          <h2>Medical Record</h2>
+          <div class="section">
+            <p class="field"><span class="label">Full Name:</span> ${
+              patient.full_name
+            }</p>
+            <p class="field"><span class="label">Age:</span> ${age}</p>
+            <p class="field"><span class="label">Temperature:</span> ${
+              patient.temperature || "N/A"
+            }</p>
+            <p class="field"><span class="label">Pulse Rate:</span> ${
+              patient.pulse_rate || "N/A"
+            }</p>
+            <p class="field"><span class="label">Height:</span> ${
+              patient.height || "N/A"
+            }</p>
+            <p class="field"><span class="label">Weight:</span> ${
+              patient.weight || "N/A"
+            }</p>
+            <p class="field"><span class="label">Diagnosis:</span> ${
+              patient.diagnosis || "N/A"
+            }</p>
+            <p class="field"><span class="label">Remarks:</span> ${
+              patient.remarks || "N/A"
+            }</p>
+          </div>
 
-        <button onclick="window.print()">Print this page</button>
-      </body>
-    </html>
-  `);
+          <button onclick="window.print()">Print this page</button>
+        </body>
+      </html>
+    `);
       printWindow.document.close();
     };
 
-    // Loading state
     if (loading) {
       return (
         <div className="flex items-center justify-center min-h-screen">
@@ -1968,6 +1966,21 @@ function Doctor() {
         </div>
       );
     }
+
+    const groupedPatients = patients.reduce((acc, curr) => {
+      const name = curr.full_name;
+      if (!acc[name]) acc[name] = [];
+      acc[name].push(curr);
+      return acc;
+    }, {});
+
+    const filteredGroupedPatients = Object.entries(groupedPatients).filter(
+      ([patientName]) => {
+        if (!patientSearch.trim()) return true;
+        return patientName.toLowerCase().includes(patientSearch.toLowerCase());
+      }
+    );
+
     const filterRecords = (records, searchTerm) => {
       if (!searchTerm || !searchTerm.trim()) return records;
       const term = searchTerm.toLowerCase().trim();
@@ -1977,38 +1990,7 @@ function Doctor() {
         return dateMatch || typeMatch;
       });
     };
-    const calculateAge = (birthDate, appointmentDate) => {
-      if (!birthDate) return "Not recorded";
-      const birth = new Date(birthDate);
-      const appointmentDateForAge = appointmentDate
-        ? new Date(appointmentDate)
-        : new Date();
-      let age = appointmentDateForAge.getFullYear() - birth.getFullYear();
-      const m = appointmentDateForAge.getMonth() - birth.getMonth();
-      if (
-        m < 0 ||
-        (m === 0 && appointmentDateForAge.getDate() < birth.getDate())
-      ) {
-        age--;
-      }
-      return `${age} yrs`;
-    };
-    const groupedPatients = patients.reduce((acc, curr) => {
-      const name = curr.full_name;
-      if (!acc[name]) acc[name] = [];
-      acc[name].push(curr);
-      return acc;
-    }, {});
 
-    // Filter patient folders by patient name search
-    const filteredGroupedPatients = Object.entries(groupedPatients).filter(
-      ([patientName]) => {
-        if (!patientSearch.trim()) return true;
-        return patientName.toLowerCase().includes(patientSearch.toLowerCase());
-      }
-    );
-
-    // Error state
     if (error) {
       return (
         <div className="flex items-center justify-center min-h-screen">
@@ -2037,38 +2019,35 @@ function Doctor() {
 
     return (
       <div className="min-h-screen bg-transparent p-4 sm:p-6 md:p-8">
-        <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 border-t-4 sm:border-t-8 border-blue-600">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 border-t-4 sm:border-t-8 border-blue-500">
           {/* Header */}
-          <h1 className="text-2xl sm:text-3xl font-extrabold mb-4 sm:mb-6 md:mb-8 flex items-center gap-2 sm:gap-3 text-blue-800">
-            <FileText className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-yellow-500" />
+          <h1 className="text-2xl sm:text-3xl font-extrabold mb-4 sm:mb-6 md:mb-8 flex items-center gap-2 sm:gap-3 text-blue-700">
+            <FileText className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-yellow-400" />
             Patient Medical Records
           </h1>
 
-          {/* Outer Search Bar - Search for Patient Folders */}
+          {/* Outer Search Bar */}
           {patients.length > 0 && (
-            <div className="mb-8">
+            <div className="mb-6">
               <div className="relative">
                 <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
-                  placeholder="Search patient by name or ID..."
+                  placeholder="Search patient by name..."
                   value={patientSearch}
                   onChange={(e) => setPatientSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-sm sm:text-base transition duration-150"
+                  className="w-full pl-10 pr-4 py-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm sm:text-base"
                 />
               </div>
             </div>
           )}
 
-          {/* --- */}
-
-          {/* Conditional Display (No Records/Search Results/Records List) */}
+          {/* No Records */}
           {patients.length === 0 ? (
-            // No Records State
             <div className="text-center py-16">
               <FileText className="w-16 h-16 text-blue-300 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-blue-700 mb-2">
-                No Completed Appointments
+                No completed appointments
               </h3>
               <p className="text-blue-500">
                 Medical records will appear here once appointments are
@@ -2076,30 +2055,26 @@ function Doctor() {
               </p>
             </div>
           ) : filteredGroupedPatients.length === 0 ? (
-            // No Search Match State
             <div className="text-center py-16">
               <FileText className="w-16 h-16 text-blue-300 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-blue-700 mb-2">
-                No Patients Found
+                No patients found
               </h3>
               <p className="text-blue-500">
-                No patient folders match your current search criteria.
+                No patient folders match your search.
               </p>
             </div>
           ) : (
-            // Patient Folders List
             <div className="space-y-6">
               {filteredGroupedPatients.map(([patientName, records]) => {
                 const filteredRecords = filterRecords(
                   records,
                   recordSearch[patientName] || ""
                 );
-                const lastRecord = records[0]; // Assuming records are sorted descending by date
-
                 return (
                   <div
                     key={patientName}
-                    className="bg-white border border-blue-200 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                    className="bg-white border border-blue-200 rounded-xl shadow-md hover:shadow-lg transition-all"
                   >
                     {/* Folder Header */}
                     <button
@@ -2110,36 +2085,26 @@ function Doctor() {
                           [patientName]: !prev[patientName],
                         }))
                       }
-                      className={`w-full flex items-center justify-between p-4 sm:p-6 transition-colors rounded-xl ${
-                        openFolders[patientName]
-                          ? "bg-blue-50/70"
-                          : "hover:bg-blue-50"
-                      }`}
+                      className="w-full flex items-center justify-between p-6 hover:bg-blue-50 rounded-xl transition-colors"
                     >
                       <div className="flex items-center gap-4 text-left">
                         <Folder
-                          className={`w-8 h-8 sm:w-10 sm:h-10 transition-colors ${
+                          className={`w-10 h-10 ${
                             openFolders[patientName]
-                              ? "text-yellow-600"
-                              : "text-yellow-500"
+                              ? "text-yellow-500"
+                              : "text-yellow-400"
                           }`}
                         />
-                        <div className="flex flex-col">
-                          <h3 className="text-lg font-extrabold text-blue-900 leading-tight">
+                        <div>
+                          <h3 className="text-lg font-bold text-blue-800">
                             {patientName}
                           </h3>
-                          <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                            <span className="font-semibold text-blue-700">
-                              {records.length}{" "}
-                              {records.length > 1 ? "Records" : "Record"}
-                            </span>
-                            {lastRecord && (
-                              <span className="ml-3">
-                                (Last Visit: {lastRecord.appointment_date})
-                              </span>
-                            )}
+                          <p className="text-sm text-blue-600">
+                            {records.length}{" "}
+                            {records.length > 1 ? "records" : "record"}
                             {filteredRecords.length !== records.length && (
-                              <span className="ml-3 text-yellow-600 font-medium">
+                              <span className="text-blue-500">
+                                {" "}
                                 ({filteredRecords.length} shown)
                               </span>
                             )}
@@ -2148,22 +2113,22 @@ function Doctor() {
                       </div>
 
                       {openFolders[patientName] ? (
-                        <ChevronUp className="text-blue-500 w-6 h-6 ml-4" />
+                        <ChevronUp className="text-blue-500 w-6 h-6" />
                       ) : (
-                        <ChevronDown className="text-blue-500 w-6 h-6 ml-4" />
+                        <ChevronDown className="text-blue-500 w-6 h-6" />
                       )}
                     </button>
 
                     {/* Folder Body */}
                     {openFolders[patientName] && (
-                      <div className="p-4 sm:p-6 border-t border-blue-200 bg-blue-50/40 rounded-b-xl space-y-6">
+                      <div className="p-6 border-t border-blue-200 bg-blue-50/40 rounded-b-xl space-y-6">
                         {/* Inner Search Bar */}
                         <div className="mb-4">
                           <div className="relative">
                             <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                             <input
                               type="text"
-                              placeholder="Search records by date, type, or diagnosis..."
+                              placeholder="Search records by date or appointment type..."
                               value={recordSearch[patientName] || ""}
                               onChange={(e) =>
                                 setRecordSearch((prev) => ({
@@ -2171,160 +2136,187 @@ function Doctor() {
                                   [patientName]: e.target.value,
                                 }))
                               }
-                              className="w-full pl-9 pr-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-sm"
+                              className="w-full pl-9 pr-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm"
                             />
                           </div>
                         </div>
 
-                        {/* Records List/Empty State */}
                         {filteredRecords.length === 0 ? (
                           <div className="text-center py-8 text-gray-500">
-                            <p>No records match your search criteria.</p>
+                            <p>No records match your search.</p>
                           </div>
                         ) : (
-                          filteredRecords.map((p) => (
-                            <div
-                              key={p.appointment_id}
-                              className="border border-blue-300 rounded-xl bg-white shadow-md p-5 sm:p-6 transition-shadow"
-                            >
-                              <div className="flex justify-between items-start mb-4 border-b border-gray-100 pb-3">
-                                <div>
-                                  <h4 className="font-bold text-lg text-blue-800">
-                                    {p.appointment_type}
-                                  </h4>
-                                  <p className="text-sm text-gray-600">
-                                    Date: **{p.appointment_date}**
-                                  </p>
-                                </div>
-                                <p
-                                  className={`text-sm font-semibold px-3 py-1 rounded-full ${
-                                    p.diagnosis
-                                      ? "bg-green-100 text-green-700"
-                                      : "bg-red-100 text-red-700"
-                                  }`}
-                                >
-                                  {p.diagnosis
-                                    ? "Record Completed"
-                                    : "Record Pending"}
-                                </p>
-                              </div>
+                          <div className="space-y-2">
+                            {filteredRecords.map((p) => {
+                              const recordKey = `${patientName}-${p.appointment_id}`;
+                              const isOpen = openRecords[recordKey];
 
-                              <h5 className="text-sm font-bold text-blue-700 mb-2 mt-4 uppercase tracking-wider">
-                                Vital Signs
-                              </h5>
-                              {/* Editable Inputs - Vital Signs */}
-                              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-                                {[
-                                  { field: "weight", unit: "kg" },
-                                  { field: "height", unit: "cm" },
-                                  { field: "temperature", unit: "°C" },
-                                  { field: "pulse_rate", unit: "BPM" },
-                                ].map(({ field, unit }) => (
-                                  <div key={field}>
-                                    <label className="block text-xs sm:text-sm font-medium text-blue-700 mb-1 capitalize">
-                                      {field.replace("_", " ")}
-                                    </label>
-                                    <div className="relative">
-                                      <input
-                                        type="number"
-                                        value={p[field] ?? ""}
-                                        onChange={(e) =>
-                                          handleChange(e, p.appointment_id)
-                                        }
-                                        name={field}
-                                        placeholder={`Enter ${field}`}
-                                        className="w-full border border-blue-300 p-2 sm:p-3 pr-10 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-sm sm:text-base"
-                                      />
-                                      <span className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 text-xs font-medium">
-                                        {unit}
-                                      </span>
+                              return (
+                                <div
+                                  key={p.appointment_id}
+                                  className="border border-blue-200 rounded-lg bg-white shadow-sm overflow-hidden"
+                                >
+                                  {/* 📋 CLICKABLE HEADER */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setOpenRecords((prev) => ({
+                                        ...prev,
+                                        [recordKey]: !prev[recordKey],
+                                      }))
+                                    }
+                                    className="w-full flex items-center justify-between p-4 hover:bg-blue-50 transition-colors text-left"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Calendar className="w-5 h-5 text-blue-500" />
+                                      <div>
+                                        <p className="font-semibold text-blue-800">
+                                          {p.appointment_date} -{" "}
+                                          {p.appointment_type}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          {p.diagnosis
+                                            ? "✓ Has medical record"
+                                            : "○ No record yet"}
+                                        </p>
+                                      </div>
                                     </div>
-                                  </div>
-                                ))}
-
-                                {/* Age (computed at appointment time, read-only) */}
-                                <div>
-                                  <label className="block text-xs sm:text-sm font-medium text-blue-700 mb-1">
-                                    Patient Age (at appointment)
-                                  </label>
-                                  <p className="border border-blue-200 p-2 sm:p-3 rounded-lg bg-gray-100 text-gray-700 font-semibold text-sm sm:text-base">
-                                    {calculateAge(
-                                      p.birth_date,
-                                      p.appointment_date
+                                    {isOpen ? (
+                                      <ChevronUp className="w-5 h-5 text-blue-500" />
+                                    ) : (
+                                      <ChevronDown className="w-5 h-5 text-blue-500" />
                                     )}
-                                  </p>
+                                  </button>
+
+                                  {/* 📝 EXPANDABLE CONTENT */}
+                                  {isOpen && (
+                                    <div className="p-5 border-t border-blue-100 bg-blue-50/30">
+                                      {/* Editable Inputs */}
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+                                        {[
+                                          "weight",
+                                          "height",
+                                          "temperature",
+                                          "pulse_rate",
+                                          "diagnosis",
+                                        ].map((field) => (
+                                          <div key={field}>
+                                            <label className="block text-xs sm:text-sm font-medium text-blue-700 mb-1 capitalize">
+                                              {field.replace("_", " ")}
+                                            </label>
+                                            <input
+                                              type={
+                                                ["diagnosis"].includes(field)
+                                                  ? "text"
+                                                  : "number"
+                                              }
+                                              value={p[field] ?? ""}
+                                              onChange={(e) =>
+                                                handleChange(
+                                                  e,
+                                                  p.appointment_id
+                                                )
+                                              }
+                                              name={field}
+                                              placeholder={`Enter ${field}`}
+                                              className="w-full border border-blue-300 p-2 sm:p-3 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm sm:text-base"
+                                            />
+                                          </div>
+                                        ))}
+
+                                        {/* Age */}
+                                        <div>
+                                          <label className="block text-sm font-medium text-blue-700 mb-1">
+                                            Age (at appointment)
+                                          </label>
+                                          <p className="border border-blue-200 p-3 rounded-lg bg-gray-50">
+                                            {p.birth_date && p.appointment_date
+                                              ? (() => {
+                                                  const birth = new Date(
+                                                    p.birth_date
+                                                  );
+                                                  const appointmentDate =
+                                                    new Date(
+                                                      p.appointment_date
+                                                    );
+                                                  let age =
+                                                    appointmentDate.getFullYear() -
+                                                    birth.getFullYear();
+                                                  const m =
+                                                    appointmentDate.getMonth() -
+                                                    birth.getMonth();
+                                                  if (
+                                                    m < 0 ||
+                                                    (m === 0 &&
+                                                      appointmentDate.getDate() <
+                                                        birth.getDate())
+                                                  ) {
+                                                    age--;
+                                                  }
+                                                  return `${age} yrs`;
+                                                })()
+                                              : "Not recorded"}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {/* Remarks */}
+                                      <div className="mb-6">
+                                        <label className="block text-sm font-medium text-blue-700 mb-1">
+                                          Remarks / Treatments
+                                        </label>
+                                        <textarea
+                                          name="remarks"
+                                          value={p.remarks ?? ""}
+                                          onChange={(e) =>
+                                            handleChange(e, p.appointment_id)
+                                          }
+                                          placeholder="Enter remarks and treatments"
+                                          rows="4"
+                                          className="w-full border border-blue-300 p-3 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
+                                        />
+                                      </div>
+
+                                      {/* Buttons */}
+                                      <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setOpenRecords((prev) => ({
+                                              ...prev,
+                                              [recordKey]: false,
+                                            }))
+                                          }
+                                          className="px-4 sm:px-6 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm sm:text-base"
+                                        >
+                                          Close
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            saveRecord(p.appointment_id)
+                                          }
+                                          className="px-4 sm:px-6 py-2 bg-yellow-400 text-blue-900 font-semibold rounded-lg hover:bg-yellow-500 transition-colors text-sm sm:text-base"
+                                        >
+                                          {p.diagnosis ? "Update" : "Add"}{" "}
+                                          Record
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => printRecord(p)}
+                                          className="px-4 sm:px-6 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors text-sm sm:text-base"
+                                        >
+                                          Print Record
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
-
-                              <h5 className="text-sm font-bold text-blue-700 mb-2 uppercase tracking-wider">
-                                Diagnosis & Treatment
-                              </h5>
-
-                              {/* Diagnosis */}
-                              <div className="mb-4">
-                                <label className="block text-sm font-medium text-blue-700 mb-1">
-                                  Diagnosis
-                                </label>
-                                <input
-                                  type="text"
-                                  value={p.diagnosis ?? ""}
-                                  onChange={(e) =>
-                                    handleChange(e, p.appointment_id)
-                                  }
-                                  name="diagnosis"
-                                  placeholder="Enter primary diagnosis/assessment"
-                                  className="w-full border border-blue-300 p-3 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-sm sm:text-base"
-                                />
-                              </div>
-
-                              {/* Remarks */}
-                              <div className="mb-6">
-                                <label className="block text-sm font-medium text-blue-700 mb-1">
-                                  Remarks / Treatments
-                                </label>
-                                <textarea
-                                  name="remarks"
-                                  value={p.remarks ?? ""}
-                                  onChange={(e) =>
-                                    handleChange(e, p.appointment_id)
-                                  }
-                                  placeholder="Enter detailed remarks, prescribed treatments, or follow-up notes"
-                                  rows="4"
-                                  className="w-full border border-blue-300 p-3 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
-                                />
-                              </div>
-
-                              {/* Buttons */}
-                              <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 border-t pt-4">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setOpenFolders((prev) => ({
-                                      ...prev,
-                                      [patientName]: false,
-                                    }))
-                                  }
-                                  className="order-3 sm:order-1 px-4 sm:px-6 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm sm:text-base font-medium"
-                                >
-                                  Close
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => printRecord(p, patientName)}
-                                  className="order-2 sm:order-2 px-4 sm:px-6 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors text-sm sm:text-base"
-                                >
-                                  Print Record
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => saveRecord(p.appointment_id)}
-                                  className="order-1 sm:order-3 px-4 sm:px-6 py-2 bg-yellow-500 text-blue-900 font-extrabold rounded-lg hover:bg-yellow-600 transition-colors text-sm sm:text-base shadow-lg"
-                                >
-                                  {p.diagnosis ? "Update" : "Add"} Record
-                                </button>
-                              </div>
-                            </div>
-                          ))
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
                     )}
@@ -2335,20 +2327,18 @@ function Doctor() {
           )}
         </div>
 
-        {/* --- */}
-
-        {/* ✅ SUCCESS MODAL */}
+        {/* Success Modal */}
         {showModal && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50 p-4">
-            <div className="bg-white p-6 rounded-xl shadow-2xl border-t-4 border-green-600 text-center max-w-sm w-full">
-              <h2 className="text-xl font-bold text-green-700 mb-3 flex items-center justify-center gap-2">
+          <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+            <div className="bg-white p-6 rounded-xl shadow-lg border-t-4 border-green-500 text-center">
+              <h2 className="text-lg font-semibold text-green-600 mb-2">
                 ✅ Record Saved Successfully!
               </h2>
-              <p className="text-gray-600 mb-4">
-                The medical record has been updated and saved to the database.
+              <p className="text-gray-600">
+                The medical record has been updated.
               </p>
               <button
-                className="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold"
+                className="mt-4 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
                 onClick={() => setShowModal(false)}
               >
                 OK

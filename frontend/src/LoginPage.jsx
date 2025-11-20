@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate, Link } from "react-router-dom";
 import Swal from "sweetalert2";
+import Footer from "./Footer"; // ✅ ADD THIS
 
 function LoginPage() {
   const [email, setEmail] = useState("");
@@ -25,6 +26,15 @@ function LoginPage() {
   const [cooldown, setCooldown] = useState(0);
   const [transition, setTransition] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  // Add these states at the top with other useState
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [resetTimer, setResetTimer] = useState(0);
+  const [isSendingReset, setIsSendingReset] = useState(false);
 
   const navigate = useNavigate();
 
@@ -33,6 +43,13 @@ function LoginPage() {
     const timer = setInterval(() => setCooldown((c) => c - 1), 1000);
     return () => clearInterval(timer);
   }, [cooldown]);
+
+  // Timer for forgot password resend
+  useEffect(() => {
+    if (resetTimer <= 0) return;
+    const timer = setInterval(() => setResetTimer((c) => c - 1), 1000);
+    return () => clearInterval(timer);
+  }, [resetTimer]);
 
   // Close mobile menu on window resize to desktop
   useEffect(() => {
@@ -344,8 +361,125 @@ function LoginPage() {
     }, 400);
   };
 
+  // 🔹 Send Forgot Password Code
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setError("");
+    setIsSendingReset(true);
+
+    try {
+      await axios.post(`${import.meta.env.VITE_API_URL}/forgot-password`, {
+        email: forgotEmail,
+      });
+
+      setShowForgotPassword(false);
+      setShowResetPassword(true);
+      setResetTimer(60);
+
+      Swal.fire({
+        icon: "success",
+        title: "Code Sent!",
+        text: `Reset code sent to ${forgotEmail}`,
+        confirmButtonColor: "#0ea5e9",
+        timer: 3000,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      const msg = err.response?.data?.error || "Failed to send reset code";
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: msg,
+        confirmButtonColor: "#0ea5e9",
+      });
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
+  // 🔹 Reset Password with Code
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (newPassword !== confirmPassword) {
+      setError("Passwords don't match");
+      return;
+    }
+
+    const isStrongPassword = (pwd) =>
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(pwd);
+
+    if (!isStrongPassword(newPassword)) {
+      Swal.fire({
+        icon: "error",
+        title: "Weak Password",
+        html: `
+        <p>Password must include:</p>
+        <ul style="text-align: left; margin-top: 10px;">
+          <li>✓ At least 8 characters</li>
+          <li>✓ Uppercase letter (A-Z)</li>
+          <li>✓ Lowercase letter (a-z)</li>
+          <li>✓ Number (0-9)</li>
+          <li>✓ Special character (!@#$%^&*)</li>
+        </ul>
+      `,
+        confirmButtonColor: "#0ea5e9",
+      });
+      return;
+    }
+
+    try {
+      await axios.post(`${import.meta.env.VITE_API_URL}/reset-password`, {
+        email: forgotEmail,
+        code: resetCode,
+        newPassword,
+      });
+
+      Swal.fire({
+        icon: "success",
+        title: "Success!",
+        text: "Password reset successful. You can now login.",
+        confirmButtonColor: "#0ea5e9",
+      });
+
+      // Reset states and switch to login
+      setShowResetPassword(false);
+      setForgotEmail("");
+      setResetCode("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setIsOpen(true);
+    } catch (err) {
+      setError(err.response?.data?.error || "Failed to reset password");
+    }
+  };
+
+  // 🔹 Resend Reset Code
+  const handleResendResetCode = async () => {
+    setIsSendingReset(true);
+    try {
+      await axios.post(`${import.meta.env.VITE_API_URL}/forgot-password`, {
+        email: forgotEmail,
+      });
+      setResetTimer(60);
+      Swal.fire({
+        icon: "info",
+        title: "Code Resent",
+        text: "New reset code sent!",
+        confirmButtonColor: "#0ea5e9",
+        timer: 2000,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      setError("Failed to resend code");
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex flex-col min-h-screen">
       {/* Navbar */}
       <header className="w-full bg-white shadow-sm fixed top-0 left-0 z-40">
         <div className="max-w-7xl mx-auto flex items-center justify-between py-2.5 sm:py-3 md:py-4 px-3 sm:px-4 md:px-6">
@@ -376,12 +510,7 @@ function LoginPage() {
             >
               Services
             </Link>
-            <Link
-              to="/contact"
-              className="text-gray-700 hover:text-sky-600 font-medium transition text-sm lg:text-base"
-            >
-              Contact
-            </Link>
+            {/* ✅ CONTACT LINK REMOVED - NOW IN FOOTER */}
           </nav>
 
           {/* Desktop Buttons */}
@@ -449,13 +578,7 @@ function LoginPage() {
             >
               Services
             </Link>
-            <Link
-              to="/contact"
-              className="block text-gray-700 hover:text-sky-600 font-medium transition py-2.5 sm:py-2 px-3 rounded-lg hover:bg-gray-50 active:bg-gray-100 min-h-[44px] flex items-center touch-manipulation"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Contact
-            </Link>
+
             <div className="pt-2 border-t border-gray-200 space-y-2.5 sm:space-y-2">
               <button
                 onClick={() => {
@@ -482,7 +605,7 @@ function LoginPage() {
 
       {/* Hero Section */}
       <div
-        className="flex-1 bg-cover bg-center bg-no-repeat relative flex items-center justify-center md:justify-start pt-16 sm:pt-20 md:pt-24 lg:pt-28 min-h-[50vh] sm:min-h-[55vh] md:min-h-[60vh] lg:min-h-[70vh]"
+        className="bg-cover bg-center bg-no-repeat relative flex items-center justify-center md:justify-start min-h-screen pt-16 sm:pt-20 md:pt-24 lg:pt-28"
         style={{ backgroundImage: "url('/ClinicRegistration.png')" }}
       >
         <div className="absolute inset-0 bg-black/30"></div>
@@ -898,6 +1021,15 @@ function LoginPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
                     />
+                    <div className="text-right">
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotPassword(true)}
+                        className="text-sky-600 hover:underline text-sm font-medium"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
                     <button
                       type="submit"
                       disabled={cooldown > 0}
@@ -943,8 +1075,184 @@ function LoginPage() {
               </>
             )}
           </div>
+          {/* 🔹 FORGOT PASSWORD MODAL */}
+          {showForgotPassword && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setForgotEmail("");
+                    setError("");
+                  }}
+                  className="w-full text-sm text-gray-600 hover:text-sky-600"
+                >
+                  Back to Login
+                </button>
+
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-3xl">🔑</span>
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                    Forgot Password?
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Enter your email to receive a reset code
+                  </p>
+                </div>
+
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                      {error}
+                    </div>
+                  )}
+
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    required
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-200 focus:border-yellow-400 outline-none"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={isSendingReset}
+                    className={`w-full py-3 rounded-lg font-semibold transition ${
+                      isSendingReset
+                        ? "bg-gray-400 cursor-not-allowed text-white"
+                        : "bg-yellow-500 text-white hover:bg-yellow-600"
+                    }`}
+                  >
+                    {isSendingReset ? "Sending..." : "Send Reset Code"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setIsOpen(true);
+                    }}
+                    className="w-full text-sm text-gray-600 hover:text-sky-600"
+                  >
+                    Back to Login
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* 🔹 RESET PASSWORD MODAL */}
+          {showResetPassword && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 relative">
+                <button
+                  onClick={() => {
+                    setShowResetPassword(false);
+                    setForgotEmail("");
+                    setResetCode("");
+                    setNewPassword("");
+                    setConfirmPassword("");
+                    setError("");
+                  }}
+                  className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ×
+                </button>
+
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-3xl">✅</span>
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                    Reset Password
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Code sent to{" "}
+                    <span className="font-semibold text-sky-600">
+                      {forgotEmail}
+                    </span>
+                  </p>
+                </div>
+
+                <form onSubmit={handleResetPassword} className="space-y-4">
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                      {error}
+                    </div>
+                  )}
+
+                  <input
+                    type="text"
+                    value={resetCode}
+                    onChange={(e) =>
+                      setResetCode(
+                        e.target.value.replace(/\D/g, "").slice(0, 6)
+                      )
+                    }
+                    placeholder="Enter 6-digit code"
+                    maxLength={6}
+                    required
+                    className="w-full px-4 py-4 text-center text-2xl font-mono tracking-[0.5em] border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-400 outline-none"
+                  />
+
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="New Password"
+                    required
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-400 outline-none"
+                  />
+
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm New Password"
+                    required
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-400 outline-none"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={resetCode.length !== 6}
+                    className={`w-full py-3 rounded-lg font-semibold transition ${
+                      resetCode.length !== 6
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : "bg-green-500 text-white hover:bg-green-600"
+                    }`}
+                  >
+                    Reset Password
+                  </button>
+
+                  <div className="text-center text-sm text-gray-600">
+                    Didn't receive the code?{" "}
+                    {resetTimer > 0 ? (
+                      <span className="text-gray-400">
+                        Resend in {resetTimer}s
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleResendResetCode}
+                        className="text-sky-600 hover:underline font-medium"
+                      >
+                        Resend Code
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
+      <Footer />
     </div>
   );
 }
