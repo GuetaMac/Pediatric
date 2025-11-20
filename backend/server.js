@@ -1397,10 +1397,9 @@ app.get("/vitals", async (req, res) => {
   }
 });
 
-// 🩺 Save or update medical record
 app.post("/medical-records", auth, async (req, res) => {
   try {
-    let {
+    const {
       appointment_id,
       weight,
       height,
@@ -1410,12 +1409,6 @@ app.post("/medical-records", auth, async (req, res) => {
       pulse_rate,
     } = req.body;
 
-    // ✅ Convert empty strings to null (for numeric columns)
-    weight = weight === "" ? null : weight;
-    height = height === "" ? null : height;
-    temperature = temperature === "" ? null : temperature;
-    pulse_rate = pulse_rate === "" ? null : pulse_rate;
-
     const check = await pool.query(
       "SELECT * FROM medical_records WHERE appointment_id = $1",
       [appointment_id]
@@ -1423,71 +1416,67 @@ app.post("/medical-records", auth, async (req, res) => {
 
     let result;
     if (check.rows.length > 0) {
-      // Update existing record but preserve fields not provided in the request
-      const cur = check.rows[0];
-      const has = (k) => Object.prototype.hasOwnProperty.call(req.body, k);
+      // ✅ Build dynamic update query based on provided fields
+      const updates = [];
+      const values = [];
+      let paramIndex = 1;
 
-      const weightToSet = has("weight")
-        ? weight === ""
-          ? null
-          : weight
-        : cur.weight;
-      const heightToSet = has("height")
-        ? height === ""
-          ? null
-          : height
-        : cur.height;
-      const temperatureToSet = has("temperature")
-        ? temperature === ""
-          ? null
-          : temperature
-        : cur.temperature;
-      const pulseRateToSet = has("pulse_rate")
-        ? pulse_rate === ""
-          ? null
-          : pulse_rate
-        : cur.pulse_rate;
-      const diagnosisToSet = has("diagnosis")
-        ? diagnosis === ""
-          ? null
-          : diagnosis
-        : cur.diagnosis;
-      const remarksToSet = has("remarks")
-        ? remarks === ""
-          ? null
-          : remarks
-        : cur.remarks;
+      if (weight !== undefined && weight !== "") {
+        updates.push(`weight = $${paramIndex++}`);
+        values.push(weight);
+      }
+      if (height !== undefined && height !== "") {
+        updates.push(`height = $${paramIndex++}`);
+        values.push(height);
+      }
+      if (diagnosis !== undefined && diagnosis !== "") {
+        updates.push(`diagnosis = $${paramIndex++}`);
+        values.push(diagnosis);
+      }
+      if (remarks !== undefined && remarks !== "") {
+        updates.push(`remarks = $${paramIndex++}`);
+        values.push(remarks);
+      }
+      if (temperature !== undefined && temperature !== "") {
+        updates.push(`temperature = $${paramIndex++}`);
+        values.push(temperature);
+      }
+      if (pulse_rate !== undefined && pulse_rate !== "") {
+        updates.push(`pulse_rate = $${paramIndex++}`);
+        values.push(pulse_rate);
+      }
 
-      // ✅ Update existing record
-      result = await pool.query(
-        `UPDATE medical_records
-         SET weight=$1, height=$2, diagnosis=$3, remarks=$4,
-             temperature=$5, pulse_rate=$6, updated_at=NOW()
-         WHERE appointment_id=$7 RETURNING *`,
-        [
-          weightToSet,
-          heightToSet,
-          diagnosisToSet,
-          remarksToSet,
-          temperatureToSet,
-          pulseRateToSet,
-          appointment_id,
-        ]
-      );
+      // Always update timestamp
+      updates.push(`updated_at = NOW()`);
+      values.push(appointment_id);
+
+      const query = `
+        UPDATE medical_records
+        SET ${updates.join(", ")}
+        WHERE appointment_id = $${paramIndex}
+        RETURNING *
+      `;
+
+      result = await pool.query(query, values);
     } else {
       // ✅ Insert new record
+      const weightVal = weight === "" ? null : weight;
+      const heightVal = height === "" ? null : height;
+      const tempVal = temperature === "" ? null : temperature;
+      const pulseVal = pulse_rate === "" ? null : pulse_rate;
+
       result = await pool.query(
         `INSERT INTO medical_records 
          (appointment_id, weight, height, diagnosis, remarks, temperature, pulse_rate)
          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
         [
           appointment_id,
-          weight,
-          height,
-          diagnosis,
-          remarks,
-          temperature,
-          pulse_rate,
+          weightVal,
+          heightVal,
+          diagnosis || null,
+          remarks || null,
+          tempVal,
+          pulseVal,
         ]
       );
     }

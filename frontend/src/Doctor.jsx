@@ -3058,9 +3058,6 @@ function Doctor() {
     );
   };
 
-  // SETTINGS PAGE
-  // SETTINGS PAGE (new design)
-
   // RENDER CURRENT PAGE
   const renderContent = () => {
     if (activePage === "home") return <HomePage />;
