@@ -1914,16 +1914,41 @@ app.get("/analytics", auth, async (req, res) => {
     `);
 
     // Total Appointment Trend (always by month for selected year)
-    const appointmentTrend = await pool.query(`
-      SELECT EXTRACT(MONTH FROM appointment_date) AS month, COUNT(*) AS total
+    // Total Appointment Trend
+    const appointmentTrend = selectedMonth
+      ? await pool.query(`
+      SELECT EXTRACT(DAY FROM appointment_date) AS period, COUNT(*) AS total
+      FROM appointments
+      WHERE ${dateFilter}
+      GROUP BY period
+      ORDER BY period;
+    `)
+      : await pool.query(`
+      SELECT EXTRACT(MONTH FROM appointment_date) AS period, COUNT(*) AS total
       FROM appointments
       WHERE EXTRACT(YEAR FROM appointment_date) = ${selectedYear}
-      GROUP BY month
-      ORDER BY month;
+      GROUP BY period
+      ORDER BY period;
     `);
 
     // Top Diagnosis Per Month (always by month for selected year)
-    const diagnosisTrend = await pool.query(`
+    // Top Diagnosis Per Month
+    const diagnosisTrend = selectedMonth
+      ? await pool.query(`
+      SELECT 
+        ${selectedMonth} AS month,
+        mr.diagnosis,
+        COUNT(*) AS count
+      FROM medical_records mr
+      JOIN appointments a ON mr.appointment_id = a.appointment_id
+      WHERE ${medicalRecordDateFilter}
+        AND mr.diagnosis IS NOT NULL 
+        AND mr.diagnosis != ''
+      GROUP BY mr.diagnosis
+      ORDER BY count DESC
+      LIMIT 1
+    `)
+      : await pool.query(`
       WITH ranked_diagnoses AS (
         SELECT 
           EXTRACT(MONTH FROM a.appointment_date) AS month,
@@ -1940,11 +1965,24 @@ app.get("/analytics", auth, async (req, res) => {
       SELECT month, diagnosis, count
       FROM ranked_diagnoses
       WHERE rank = 1
-      ORDER BY month;
+      ORDER BY month
     `);
 
     // Top Appointment Type Per Month (always by month for selected year)
-    const appointmentTypeTrend = await pool.query(`
+    // Top Appointment Type Per Month
+    const appointmentTypeTrend = selectedMonth
+      ? await pool.query(`
+      SELECT 
+        ${selectedMonth} AS month,
+        appointment_type,
+        COUNT(*) AS count
+      FROM appointments
+      WHERE ${dateFilter}
+      GROUP BY appointment_type
+      ORDER BY count DESC
+      LIMIT 1
+    `)
+      : await pool.query(`
       WITH ranked_types AS (
         SELECT 
           EXTRACT(MONTH FROM appointment_date) AS month,
@@ -1958,7 +1996,7 @@ app.get("/analytics", auth, async (req, res) => {
       SELECT month, appointment_type, count
       FROM ranked_types
       WHERE rank = 1
-      ORDER BY month;
+      ORDER BY month
     `);
 
     // Inventory Usage (filtered by year and month)
@@ -2059,10 +2097,24 @@ app.get("/analytics", auth, async (req, res) => {
       commonDiagnosis: commonDiagnosis.rows[0]?.diagnosis || "N/A",
 
       // Always by month for selected year
-      appointmentTrend: appointmentTrend.rows.map((r) => ({
-        month: parseInt(r.month),
-        total: parseInt(r.total),
-      })),
+      // Appointment trend (monthly or daily based on filter)
+      appointmentTrend: appointmentTrend.rows.map((r) => {
+        if (selectedMonth) {
+          // Daily view
+          return {
+            month: parseInt(r.period), // using 'month' key for consistency with chart
+            monthLabel: `${monthNames[selectedMonth - 1]} ${r.period}`,
+            total: parseInt(r.total),
+          };
+        } else {
+          // Monthly view
+          return {
+            month: parseInt(r.period),
+            monthLabel: monthNames[parseInt(r.period) - 1],
+            total: parseInt(r.total),
+          };
+        }
+      }),
       diagnosisTrend: diagnosisTrend.rows.map((r) => ({
         month: parseInt(r.month),
         diagnosis: r.diagnosis,

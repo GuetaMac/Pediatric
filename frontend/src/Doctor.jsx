@@ -2706,6 +2706,22 @@ function Doctor() {
                   </select>
                 </div>
 
+                <div className="flex items-center gap-2 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl px-4 py-2.5 border-2 border-purple-300 shadow-md">
+                  <Stethoscope className="w-5 h-5 text-purple-600" />
+                  <select
+                    value={selectedDiagnosis}
+                    onChange={(e) => setSelectedDiagnosis(e.target.value)}
+                    className="bg-transparent border-none outline-none font-bold text-purple-800 cursor-pointer"
+                  >
+                    <option value="all">All Diagnoses</option>
+                    {availableDiagnoses.map((diagnosis) => (
+                      <option key={diagnosis} value={diagnosis}>
+                        {diagnosis}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <button
                   onClick={fetchData}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold shadow-lg hover:shadow-xl transition-all hover:scale-105"
@@ -2934,7 +2950,13 @@ function Doctor() {
           </ChartContainer>
 
           <ChartContainer
-            title="Total Monthly Appointments Trend"
+            title={
+              selectedMonth === "all"
+                ? "Total Monthly Appointments Trend"
+                : `Daily Appointments - ${
+                    months.find((m) => m.value === selectedMonth)?.label
+                  } ${selectedYear}`
+            }
             chartId="monthly-trend"
             chartType="Monthly Appointment Trend"
             chartData={data.appointmentTrend}
@@ -2952,9 +2974,16 @@ function Doctor() {
                       opacity={0.5}
                     />
                     <XAxis
-                      dataKey="month"
-                      tickFormatter={(value) => monthNames[value - 1]}
+                      dataKey={selectedMonth !== "all" ? "monthLabel" : "month"}
+                      tickFormatter={
+                        selectedMonth === "all"
+                          ? (value) => monthNames[value - 1]
+                          : undefined
+                      }
                       tick={{ fill: "#4b5563", fontWeight: 600 }}
+                      angle={selectedMonth !== "all" ? -45 : 0}
+                      textAnchor={selectedMonth !== "all" ? "end" : "middle"}
+                      height={selectedMonth !== "all" ? 80 : 30}
                     />
                     <YAxis tick={{ fill: "#4b5563", fontWeight: 600 }} />
                     <Tooltip content={CustomTooltip} />
