@@ -332,6 +332,69 @@ function Patient() {
       const status = appt.status?.toLowerCase().trim();
       return filterStatus === "all" ? true : status === filterStatus;
     });
+    const handleCancelAppointment = async (appointmentId) => {
+      // ✅ SweetAlert confirmation
+      const result = await Swal.fire({
+        title: "Cancel Appointment?",
+        text: "Are you sure you want to cancel this appointment?",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#EF4444",
+        cancelButtonColor: "#0EA5E9",
+        confirmButtonText: "Yes, cancel it!",
+        cancelButtonText: "No, keep it",
+      });
+
+      if (!result.isConfirmed) {
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${
+            import.meta.env.VITE_API_URL
+          }/appointments/${appointmentId}/cancel`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          // ✅ Success alert
+          await Swal.fire({
+            icon: "success",
+            title: "Canceled!",
+            text: data.message,
+            confirmButtonColor: "#0EA5E9",
+          });
+
+          // Refresh appointments list
+          window.location.reload();
+        } else {
+          // ❌ Error alert
+          Swal.fire({
+            icon: "error",
+            title: "Failed",
+            text: data.error || "Failed to cancel appointment",
+            confirmButtonColor: "#0EA5E9",
+          });
+        }
+      } catch (error) {
+        console.error("Error canceling appointment:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to cancel appointment",
+          confirmButtonColor: "#0EA5E9",
+        });
+      }
+    };
 
     return (
       <div className="bg-transparent rounded-3xl p-6 md:p-10 space-y-12">
@@ -393,7 +456,7 @@ function Patient() {
               <option value="">-- Choose --</option>
               {Object.keys(appointmentTypes).map((type) => (
                 <option key={type} value={type}>
-                  {type} ({appointmentTypes[type]} mins)
+                  {type}
                 </option>
               ))}
             </select>
@@ -485,10 +548,7 @@ function Patient() {
                       className="w-5 h-5 text-yellow-400 border-sky-300 rounded focus:ring-yellow-400"
                     />
                     <span className="flex-1 font-semibold text-sky-800">
-                      {type}{" "}
-                      <span className="text-sm text-sky-600">
-                        ({appointmentTypes[type]} mins)
-                      </span>
+                      {type}
                     </span>
                   </label>
                 );
@@ -602,7 +662,7 @@ function Patient() {
                       <span
                         className={`absolute -left-3 flex items-center justify-center w-7 h-7 rounded-full ring-8 ring-white/60 ${dot}`}
                       />
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div>
                           <h4 className="text-xl font-bold text-gray-800">
                             {appt.appointment_type}
@@ -618,11 +678,24 @@ function Patient() {
                               </p>
                             )}
                         </div>
-                        <span
-                          className={`mt-3 sm:mt-0 px-4 py-1.5 text-md rounded-full font-semibold capitalize ${badge}`}
-                        >
-                          {status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-4 py-1.5 text-md rounded-full font-semibold capitalize ${badge}`}
+                          >
+                            {status}
+                          </span>
+                          {/* ✅ Cancel button - only show for pending/approved appointments */}
+                          {(status === "pending" || status === "approved") && (
+                            <button
+                              onClick={() =>
+                                handleCancelAppointment(appt.appointment_id)
+                              }
+                              className="px-4 py-1.5 bg-red-500 text-white rounded-full font-semibold hover:bg-red-600 transition-all text-sm"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </li>
                   );

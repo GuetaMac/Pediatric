@@ -758,6 +758,48 @@ app.post("/appointments", auth, async (req, res) => {
   }
 });
 
+// ✅ Cancel appointment endpoint
+// ✅ Cancel appointment endpoint
+app.patch("/appointments/:id/cancel", auth, async (req, res) => {
+  try {
+    const appointmentId = req.params.id;
+    const userId = req.user.id;
+
+    // Check if appointment exists and belongs to user
+    const checkResult = await pool.query(
+      "SELECT * FROM appointments WHERE appointment_id = $1 AND user_id = $2", // ✅ CHANGED
+      [appointmentId, userId]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    const appointment = checkResult.rows[0];
+
+    // Prevent canceling if already completed or canceled
+    if (
+      appointment.status === "completed" ||
+      appointment.status === "canceled"
+    ) {
+      return res.status(400).json({
+        error: `Cannot cancel ${appointment.status} appointment`,
+      });
+    }
+
+    // Update status to canceled
+    await pool.query(
+      "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1", // ✅ CHANGED
+      [appointmentId]
+    );
+
+    res.json({ message: "Appointment canceled successfully" });
+  } catch (error) {
+    console.error("❌ Error canceling appointment:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // GET appointments for logged-in user
 app.get("/get/appointments", auth, async (req, res) => {
   try {
