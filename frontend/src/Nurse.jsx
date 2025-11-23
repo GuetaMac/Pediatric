@@ -31,6 +31,21 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Legend,
+  Cell,
+} from "recharts";
+import { Sparkles, Activity, TrendingUp } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 
 function Nurse() {
   const [activePage, setActivePage] = useState("home");
@@ -49,6 +64,7 @@ function Nurse() {
 
   const menuItems = [
     { id: "home", label: "Dashboard", icon: Home },
+    { id: "analytics", label: "Analytics", icon: Activity },
     { id: "patients", label: "Manage Appointments", icon: CalendarDays },
     { id: "patient-accounts", label: "Patient Accounts", icon: Baby },
     { id: "medical-records", label: "Medical Records", icon: FileText },
@@ -524,6 +540,13 @@ function Nurse() {
     const [searchQuery, setSearchQuery] = useState("");
     // 🔹 NEW: Track which appointments are expanded
     const [expandedIds, setExpandedIds] = useState([]);
+    const [cancelModal, setCancelModal] = useState({
+      show: false,
+      appointmentId: null,
+    });
+    const [cancelReason, setCancelReason] = useState("");
+    const [selectedAppointments, setSelectedAppointments] = useState([]);
+    const [bulkCancelModal, setBulkCancelModal] = useState(false);
 
     // Format date as "Month Day, Year"
     const formatDate = (dateStr) => {
@@ -537,6 +560,7 @@ function Nurse() {
     };
 
     // Fetch appointments
+    // Fetch appointments
     const fetchAppointments = async () => {
       try {
         setLoading(true);
@@ -549,6 +573,11 @@ function Nurse() {
           }
         );
         const data = await res.json();
+        // ✅ ADD THIS - check raw data
+        console.log("🔍 RAW DATA from API:", data[0]);
+        console.log("💉 Vaccination Type Field:", data[0]?.vaccination_type);
+        console.log("🔑 All Keys:", Object.keys(data[0] || {}));
+
         setAppointments(data);
       } catch (err) {
         console.error(err);
@@ -563,7 +592,7 @@ function Nurse() {
     }, []);
 
     // Update status
-    const updateStatus = async (id, status) => {
+    const updateStatus = async (id, status, remarks = null) => {
       try {
         const res = await fetch(
           `${import.meta.env.VITE_API_URL}/appointments/${id}/status`,
@@ -573,7 +602,7 @@ function Nurse() {
               "Content-Type": "application/json",
               Authorization: `Bearer ${localStorage.getItem("token")}`,
             },
-            body: JSON.stringify({ status }),
+            body: JSON.stringify({ status, cancel_remarks: remarks }),
           }
         );
 
@@ -630,6 +659,76 @@ function Nurse() {
       setExpandedIds((prev) =>
         prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
       );
+    };
+
+    // Toggle single appointment selection
+    const toggleSelectAppointment = (id) => {
+      setSelectedAppointments((prev) =>
+        prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+      );
+    };
+
+    // Select all by date
+    const selectAllByDate = (date) => {
+      const apptsByDate = sortedAppointments
+        .filter(
+          (appt) =>
+            appt.appointment_date === date &&
+            appt.status?.toLowerCase() !== "canceled" &&
+            appt.status?.toLowerCase() !== "completed"
+        )
+        .map((appt) => appt.appointment_id);
+      setSelectedAppointments(apptsByDate);
+    };
+
+    // Clear selection
+    const clearSelection = () => {
+      setSelectedAppointments([]);
+    };
+
+    // Bulk cancel
+    const handleBulkCancel = async () => {
+      if (selectedAppointments.length === 0) {
+        alert("No appointments selected!");
+        return;
+      }
+
+      if (!cancelReason.trim()) {
+        alert("Please provide a cancellation reason!");
+        return;
+      }
+
+      try {
+        // Cancel all selected appointments
+        const promises = selectedAppointments.map((id) =>
+          fetch(`${import.meta.env.VITE_API_URL}/appointments/${id}/status`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+            body: JSON.stringify({
+              status: "Canceled",
+              cancel_remarks: cancelReason,
+            }),
+          })
+        );
+
+        await Promise.all(promises);
+
+        alert(
+          `${selectedAppointments.length} appointment(s) canceled successfully!`
+        );
+
+        // Refresh appointments
+        fetchAppointments();
+        clearSelection();
+        setBulkCancelModal(false);
+        setCancelReason("");
+      } catch (err) {
+        console.error(err);
+        alert("Error canceling appointments");
+      }
     };
 
     // Filter logic
@@ -732,12 +831,47 @@ function Nurse() {
                     }`}
                   />
                 </button>
+                {selectedAppointments.length > 0 && (
+                  <button
+                    onClick={() => setBulkCancelModal(true)}
+                    className="px-4 py-2 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition shadow-md"
+                  >
+                    Cancel Selected ({selectedAppointments.length})
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
 
         {/* Appointment List */}
+        {/* Bulk Actions Bar */}
+        {sortedAppointments.length > 0 && (
+          <div className="bg-white p-4 rounded-xl shadow border border-gray-200 flex flex-wrap items-center gap-3">
+            <p className="text-sm text-gray-600 font-semibold">Quick Select:</p>
+            {Array.from(
+              new Set(sortedAppointments.map((a) => a.appointment_date))
+            )
+              .slice(0, 5)
+              .map((date) => (
+                <button
+                  key={date}
+                  onClick={() => selectAllByDate(date)}
+                  className="px-3 py-1.5 bg-sky-100 text-sky-700 rounded-lg text-sm font-semibold hover:bg-sky-200 transition"
+                >
+                  {formatDate(date)}
+                </button>
+              ))}
+            {selectedAppointments.length > 0 && (
+              <button
+                onClick={clearSelection}
+                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition"
+              >
+                Clear Selection
+              </button>
+            )}
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center p-6">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -767,9 +901,25 @@ function Nurse() {
                     className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition text-left"
                   >
                     <div className="flex items-center gap-3 flex-1">
-                      {/* Queue Number */}
-                      <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold text-sm">
-                        #{index + 1}
+                      {/* Checkbox & Queue Number */}
+                      <div className="flex items-center gap-2">
+                        {appt.status?.toLowerCase() !== "canceled" &&
+                          appt.status?.toLowerCase() !== "completed" && (
+                            <input
+                              type="checkbox"
+                              checked={selectedAppointments.includes(
+                                appt.appointment_id
+                              )}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                toggleSelectAppointment(appt.appointment_id);
+                              }}
+                              className="w-5 h-5 text-orange-500 rounded focus:ring-orange-500"
+                            />
+                          )}
+                        <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center font-bold text-sm">
+                          #{index + 1}
+                        </div>
                       </div>
 
                       {/* Patient Name */}
@@ -828,14 +978,36 @@ function Nurse() {
                         <p>
                           <b>Type:</b> {appt.appointment_type}
                         </p>
+                        {appt.appointment_type === "Vaccination" && (
+                          <p>
+                            <b>Vaccine:</b>{" "}
+                            {appt.vaccination_type?.trim() || "Not specified"}
+                          </p>
+                        )}
                         <p>
                           <b>Concerns:</b> {appt.concerns || "N/A"}
                         </p>
                         <p>
-                          <b>Services:</b> {appt.additional_services || "None"}
+                          <b>Additional Services:</b>{" "}
+                          {appt.additional_services || "None"}
                         </p>
+                        {/* ✅ Cancel Remarks & Phone Number for Canceled Appointments */}
+                        {appt.status?.toLowerCase() === "canceled" && (
+                          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg space-y-1">
+                            {appt.cancel_remarks && (
+                              <p className="text-sm text-red-700">
+                                <b>Cancellation Reason:</b>{" "}
+                                {appt.cancel_remarks}
+                              </p>
+                            )}
+                            {appt.phone_number && (
+                              <p className="text-sm text-red-700">
+                                <b>Contact Number:</b> {appt.phone_number}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
-
                       {/* Action Buttons */}
                       <div className="flex flex-wrap gap-2 pt-2 border-t">
                         {appt.status?.toLowerCase() === "pending" && (
@@ -851,9 +1023,11 @@ function Nurse() {
                             </button>
                             <button
                               onClick={() => {
-                                if (confirm("Cancel this appointment?")) {
-                                  updateStatus(appt.appointment_id, "Canceled");
-                                }
+                                setCancelModal({
+                                  show: true,
+                                  appointmentId: appt.appointment_id,
+                                });
+                                setCancelReason("");
                               }}
                               className="flex items-center px-4 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
                             >
@@ -875,9 +1049,11 @@ function Nurse() {
                             </button>
                             <button
                               onClick={() => {
-                                if (confirm("Cancel this appointment?")) {
-                                  updateStatus(appt.appointment_id, "Canceled");
-                                }
+                                setCancelModal({
+                                  show: true,
+                                  appointmentId: appt.appointment_id,
+                                });
+                                setCancelReason("");
                               }}
                               className="flex items-center px-4 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
                             >
@@ -897,6 +1073,100 @@ function Nurse() {
                             Delete
                           </button>
                         )}
+                      </div>
+                    </div>
+                  )}
+                  {/* 👇 LAGAY MO DITO YUNG MODAL */}
+                  {cancelModal.show && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">
+                          Cancel Appointment
+                        </h3>
+
+                        <textarea
+                          value={cancelReason}
+                          onChange={(e) => setCancelReason(e.target.value)}
+                          placeholder="Reason for cancellation..."
+                          className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 mb-4"
+                          rows="4"
+                        />
+
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => {
+                              if (!cancelReason.trim()) {
+                                alert("Please provide a reason!");
+                                return;
+                              }
+                              updateStatus(
+                                cancelModal.appointmentId,
+                                "Canceled",
+                                cancelReason
+                              );
+                              setCancelModal({
+                                show: false,
+                                appointmentId: null,
+                              });
+                            }}
+                            className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-semibold"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            onClick={() =>
+                              setCancelModal({
+                                show: false,
+                                appointmentId: null,
+                              })
+                            }
+                            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold"
+                          >
+                            Back
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {/* Bulk Cancel Modal */}
+                  {bulkCancelModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">
+                          Cancel {selectedAppointments.length} Appointment(s)
+                        </h3>
+
+                        <p className="text-sm text-gray-600 mb-3">
+                          You are about to cancel{" "}
+                          <b>{selectedAppointments.length}</b> appointment(s).
+                          Please provide a reason:
+                        </p>
+
+                        <textarea
+                          value={cancelReason}
+                          onChange={(e) => setCancelReason(e.target.value)}
+                          placeholder="Reason for bulk cancellation..."
+                          className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 mb-4"
+                          rows="4"
+                        />
+
+                        <div className="flex gap-3">
+                          <button
+                            onClick={handleBulkCancel}
+                            className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-semibold"
+                          >
+                            Confirm Cancel All
+                          </button>
+                          <button
+                            onClick={() => {
+                              setBulkCancelModal(false);
+                              setCancelReason("");
+                            }}
+                            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold"
+                          >
+                            Back
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -2999,10 +3269,733 @@ function Nurse() {
     );
   };
   // SETTINGS PAGE
+  // ANALYTICS PAGE (same mechanics as Doctor)
+  const AnalyticsPage = () => {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // Filter states
+    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [selectedMonth, setSelectedMonth] = useState("all");
+    const [selectedDiagnosis, setSelectedDiagnosis] = useState("all");
+    // Patient scope filter: 'all' or 'overall'
+    const [patientScope, setPatientScope] = useState("all");
+    const [availableDiagnoses, setAvailableDiagnoses] = useState([]);
+    const [availableYears, setAvailableYears] = useState([]);
+    const [availableMonths, setAvailableMonths] = useState([]);
+
+    // AI Insights states
+    const [insights, setInsights] = useState({});
+    const [loadingInsights, setLoadingInsights] = useState({});
+    // Modal for AI insights popup
+    const [insightsModalOpen, setInsightsModalOpen] = useState(false);
+    const [insightsModalTitle, setInsightsModalTitle] = useState("");
+    const [insightsModalContent, setInsightsModalContent] = useState("");
+
+    const months = [
+      { value: "all", label: "All Months" },
+      { value: "1", label: "January" },
+      { value: "2", label: "February" },
+      { value: "3", label: "March" },
+      { value: "4", label: "April" },
+      { value: "5", label: "May" },
+      { value: "6", label: "June" },
+      { value: "7", label: "July" },
+      { value: "8", label: "August" },
+      { value: "9", label: "September" },
+      { value: "10", label: "October" },
+      { value: "11", label: "November" },
+      { value: "12", label: "December" },
+    ];
+
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+
+    // Generate insights function
+    const generateInsights = async (chartId, chartType, chartData, context) => {
+      setLoadingInsights((prev) => ({ ...prev, [chartId]: true }));
+
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/generate-insights`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              chartType,
+              data: chartData,
+              context,
+            }),
+          }
+        );
+
+        if (!response.ok) throw new Error("Failed to generate insights");
+
+        const result = await response.json();
+        setInsights((prev) => ({ ...prev, [chartId]: result.insights }));
+        // Open modal with insights (popup experience)
+        setInsightsModalTitle(chartType || "AI Insights");
+        setInsightsModalContent(result.insights || "No insights available.");
+        setInsightsModalOpen(true);
+      } catch (error) {
+        console.error("Error generating insights:", error);
+        setInsights((prev) => ({
+          ...prev,
+          [chartId]: "Failed to generate insights. Please try again.",
+        }));
+      } finally {
+        setLoadingInsights((prev) => ({ ...prev, [chartId]: false }));
+      }
+    };
+
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const token = localStorage.getItem("token");
+        if (!token) {
+          throw new Error("No authentication token found. Please login first.");
+        }
+
+        const url = `${
+          import.meta.env.VITE_API_URL
+        }/analytics?year=${selectedYear}&month=${selectedMonth}&diagnosis=${selectedDiagnosis}&patientScope=${patientScope}`;
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            throw new Error("Authentication failed. Please login again.");
+          }
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
+        const json = await res.json();
+        setData(json);
+
+        if (json.allDiagnoses && json.allDiagnoses.length > 0) {
+          setAvailableDiagnoses(json.allDiagnoses);
+        }
+
+        if (json.availableYears && json.availableYears.length > 0) {
+          setAvailableYears(json.availableYears);
+        }
+
+        if (json.availableMonths && json.availableMonths.length > 0) {
+          setAvailableMonths(json.availableMonths);
+        }
+
+        setLoading(false);
+      } catch (err) {
+        console.error("Failed to load analytics:", err);
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+
+    useEffect(() => {
+      fetchData();
+    }, [selectedYear, selectedMonth, selectedDiagnosis]);
+
+    const getFilterContext = () => {
+      let context = "Clinic analytics data";
+      if (selectedYear) context += ` for year ${selectedYear}`;
+      if (selectedMonth !== "all") {
+        const monthName = months.find((m) => m.value === selectedMonth)?.label;
+        context += `, ${monthName}`;
+      }
+      if (selectedDiagnosis !== "all")
+        context += `, focusing on ${selectedDiagnosis}`;
+      if (patientScope === "overall") context += `, for overall patients`;
+      return context;
+    };
+
+    // Chart container with AI insights
+    const ChartContainer = ({
+      title,
+      children,
+      chartId,
+      chartType,
+      chartData,
+      context,
+      icon: Icon,
+      gradient,
+    }) => (
+      <div
+        className={`bg-white rounded-2xl shadow-xl p-6 border-2 ${gradient} hover:shadow-2xl transition-shadow`}
+      >
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-2">
+            {Icon && <Icon className="w-7 h-7 text-blue-600" />}
+            {title}
+          </h2>
+
+          <button
+            onClick={() =>
+              generateInsights(chartId, chartType, chartData, context)
+            }
+            disabled={
+              loadingInsights[chartId] || !chartData || chartData.length === 0
+            }
+            className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold shadow-lg"
+          >
+            {loadingInsights[chartId] ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Generating...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <span>Generate AI Insights</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {children}
+      </div>
+    );
+
+    const CustomTooltip = ({ active, payload, label, type = "default" }) => {
+      if (active && payload && payload.length) {
+        return (
+          <div className="bg-white p-4 rounded-xl shadow-2xl border-2 border-blue-200">
+            <p className="font-bold text-gray-800 text-lg mb-2">{label}</p>
+            {payload.map((entry, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: entry.color }}
+                />
+                <span className="font-semibold" style={{ color: entry.color }}>
+                  {entry.name}:
+                </span>
+                <span className="text-gray-700 font-medium">{entry.value}</span>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      return null;
+    };
+
+    const filteredMonths = months.filter(
+      (m) => m.value === "all" || availableMonths.includes(parseInt(m.value))
+    );
+
+    // Copy insights to clipboard
+    const handleCopyInsights = async () => {
+      try {
+        await navigator.clipboard.writeText(insightsModalContent || "");
+        Swal.fire({
+          icon: "success",
+          title: "Copied",
+          text: "Insights copied to clipboard",
+          timer: 1400,
+          showConfirmButton: false,
+        });
+      } catch (err) {
+        console.error("Copy failed:", err);
+        Swal.fire({
+          icon: "error",
+          title: "Copy Failed",
+          text: "Could not copy insights",
+          confirmButtonColor: "#3b82f6",
+        });
+      }
+    };
+
+    if (loading) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 text-lg font-medium">
+              Loading analytics...
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+          <div className="text-center p-8 bg-white rounded-2xl border-2 border-red-200 shadow-xl max-w-md">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">⚠️</span>
+            </div>
+            <h3 className="text-xl font-bold text-red-800 mb-2">
+              Unable to Load Analytics
+            </h3>
+            <p className="text-red-600 mb-6">{error}</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => (window.location.href = "/")}
+                className="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+              >
+                Go to Login
+              </button>
+              <button
+                onClick={fetchData}
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (!data) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
+          <div className="text-center p-8">
+            <Activity className="w-20 h-20 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">
+              No Analytics Data
+            </h3>
+            <p className="text-gray-500 mb-4">Unable to load analytics data.</p>
+            <button
+              onClick={fetchData}
+              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-transparent p-3 sm:p-4 md:p-6">
+        <div className="max-w-6xl mx-auto space-y-3">
+          {/* Compact Header with Filters */}
+          <div className="bg-white rounded-lg shadow-sm p-3 flex items-center justify-between gap-3 border">
+            <div className="flex items-center gap-3">
+              <Activity className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-800">Analytics</h2>
+              <div className="text-xs text-gray-500 ml-2">
+                {selectedMonth === "all"
+                  ? `Year ${selectedYear}`
+                  : `${
+                      months.find((m) => m.value === selectedMonth)?.label
+                    } ${selectedYear}`}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="bg-transparent border px-2 py-1 rounded text-sm"
+              >
+                {availableYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="bg-transparent border px-2 py-1 rounded text-sm"
+              >
+                {filteredMonths.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={patientScope}
+                onChange={(e) => setPatientScope(e.target.value)}
+                className="bg-transparent border px-2 py-1 rounded text-sm"
+                title="Patient scope"
+              >
+                <option value="all">All patients</option>
+                <option value="overall">Overall patients</option>
+              </select>
+
+              <button
+                onClick={fetchData}
+                className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Small KPI row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
+              <div className="text-xs text-gray-500">Total Appointments</div>
+              <div className="text-2xl font-bold text-gray-800">
+                {data.totalAppointments || 0}
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
+              <div className="text-xs text-gray-500">Top Diagnosis</div>
+              <div className="text-lg font-semibold text-gray-800 truncate">
+                {data.commonDiagnosis || "N/A"}
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
+              <div className="text-xs text-gray-500">Top Visit Reason</div>
+              <div className="text-lg font-semibold text-gray-800 truncate">
+                {data.commonAppointmentType || "N/A"}
+              </div>
+            </div>
+          </div>
+
+          {/* Charts in compact cards (preserve logic) */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <ChartContainer
+                title="Monthly Appointments Trend"
+                chartId="monthly-trend"
+                chartType="Monthly Appointment Trend"
+                chartData={data.appointmentTrend}
+                context={`${getFilterContext()}. Overall monthly appointment volume.`}
+                icon={TrendingUp}
+                gradient="border-purple-100"
+              >
+                <div className="h-56">
+                  {data.appointmentTrend?.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={data.appointmentTrend}>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#edf2f7"
+                          opacity={0.6}
+                        />
+                        <XAxis
+                          dataKey={
+                            selectedMonth !== "all" ? "monthLabel" : "month"
+                          }
+                          tickFormatter={
+                            selectedMonth === "all"
+                              ? (v) => monthNames[v - 1]
+                              : undefined
+                          }
+                          tick={{ fill: "#4b5563" }}
+                        />
+                        <YAxis tick={{ fill: "#4b5563" }} />
+                        <Tooltip content={CustomTooltip} />
+                        <Line
+                          type="monotone"
+                          dataKey="total"
+                          stroke="#6366f1"
+                          strokeWidth={3}
+                          dot={false}
+                          animationDuration={800}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-sm text-gray-500">
+                      No appointment trend data
+                    </div>
+                  )}
+                </div>
+              </ChartContainer>
+
+              <ChartContainer
+                title="Diagnosis Distribution"
+                chartId="diagnosis-trend"
+                chartType="Monthly Diagnosis Distribution"
+                chartData={data.diagnosisTrend}
+                context={`${getFilterContext()}. Shows the most common diagnosis for each month.`}
+                icon={Stethoscope}
+                gradient="border-blue-100"
+              >
+                <div className="h-56">
+                  {data.diagnosisTrend?.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data.diagnosisTrend}>
+                        <defs>
+                          <linearGradient
+                            id="colorDiagnosis"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="5%"
+                              stopColor="#3b82f6"
+                              stopOpacity={0.9}
+                            />
+                            <stop
+                              offset="95%"
+                              stopColor="#3b82f6"
+                              stopOpacity={0.6}
+                            />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#eef2ff"
+                          opacity={0.5}
+                        />
+                        <XAxis
+                          dataKey="month"
+                          tickFormatter={(v) => monthNames[v - 1]}
+                          tick={{ fill: "#4b5563" }}
+                        />
+                        <YAxis tick={{ fill: "#4b5563" }} />
+                        <Tooltip content={CustomTooltip} />
+                        <Bar
+                          dataKey="count"
+                          fill="url(#colorDiagnosis)"
+                          radius={[8, 8, 0, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-sm text-gray-500">
+                      No diagnosis data
+                    </div>
+                  )}
+                </div>
+              </ChartContainer>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <ChartContainer
+                title="Appointment Type Distribution"
+                chartId="appointment-type-trend"
+                chartType="Appointment Type Distribution"
+                chartData={data.appointmentTypeTrend}
+                context={`${getFilterContext()}. Shows appointment types per month.`}
+                icon={Calendar}
+                gradient="border-green-100"
+              >
+                <div className="h-56">
+                  {data.appointmentTypeTrend?.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data.appointmentTypeTrend}>
+                        <defs>
+                          <linearGradient
+                            id="colorAppointment"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="5%"
+                              stopColor="#10b981"
+                              stopOpacity={0.9}
+                            />
+                            <stop
+                              offset="95%"
+                              stopColor="#10b981"
+                              stopOpacity={0.6}
+                            />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#eefaf0"
+                          opacity={0.5}
+                        />
+                        <XAxis
+                          dataKey="month"
+                          tickFormatter={(v) => monthNames[v - 1]}
+                          tick={{ fill: "#4b5563" }}
+                        />
+                        <YAxis tick={{ fill: "#4b5563" }} />
+                        <Tooltip content={CustomTooltip} />
+                        <Bar
+                          dataKey="count"
+                          fill="url(#colorAppointment)"
+                          radius={[8, 8, 0, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-sm text-gray-500">
+                      No appointment type data
+                    </div>
+                  )}
+                </div>
+              </ChartContainer>
+
+              <ChartContainer
+                title="Top Inventory Items Used"
+                chartId="inventory-usage"
+                chartType="Inventory Usage Analysis"
+                chartData={data.inventoryUsage}
+                context={`${getFilterContext()}. Most used inventory items.`}
+                icon={ClipboardList}
+                gradient="border-amber-100"
+              >
+                <div className="h-56">
+                  {data.inventoryUsage?.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data.inventoryUsage}>
+                        <defs>
+                          <linearGradient
+                            id="colorInventory"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="5%"
+                              stopColor="#fbbf24"
+                              stopOpacity={0.9}
+                            />
+                            <stop
+                              offset="95%"
+                              stopColor="#fbbf24"
+                              stopOpacity={0.6}
+                            />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#fff7ed"
+                          opacity={0.5}
+                        />
+                        <XAxis
+                          dataKey="name"
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                          tick={{ fontSize: 12, fill: "#4b5563" }}
+                        />
+                        <YAxis tick={{ fill: "#4b5563" }} />
+                        <Tooltip content={CustomTooltip} />
+                        <Bar
+                          dataKey="total_sold"
+                          fill="url(#colorInventory)"
+                          radius={[8, 8, 0, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-sm text-gray-500">
+                      No inventory usage data
+                    </div>
+                  )}
+                </div>
+              </ChartContainer>
+            </div>
+          </div>
+
+          {/* Insights Modal (popup) */}
+          {insightsModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div
+                className="absolute inset-0 bg-black/50"
+                onClick={() => setInsightsModalOpen(false)}
+              />
+              <div className="relative bg-white rounded-xl shadow-2xl p-6 max-w-2xl w-full mx-4 z-10">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-bold text-gray-800 truncate">
+                      {insightsModalTitle}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      AI-generated insights
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-700">
+                        Year: {selectedYear}
+                      </span>
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-700">
+                        Month:{" "}
+                        {selectedMonth === "all"
+                          ? "All"
+                          : months.find((m) => m.value === selectedMonth)
+                              ?.label}
+                      </span>
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-700">
+                        Diagnosis:{" "}
+                        {selectedDiagnosis === "all"
+                          ? "All"
+                          : selectedDiagnosis}
+                      </span>
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-700">
+                        Scope:{" "}
+                        {patientScope === "overall"
+                          ? "Overall"
+                          : "All patients"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <button
+                      onClick={handleCopyInsights}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                    >
+                      Copy
+                    </button>
+                    <button
+                      onClick={() => setInsightsModalOpen(false)}
+                      className="text-gray-500 hover:text-gray-700 ml-2"
+                      aria-label="Close insights"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-sm text-gray-700 whitespace-pre-line leading-relaxed max-h-[44vh] overflow-y-auto">
+                  {insightsModalContent}
+                </div>
+
+                <div className="mt-6 text-right">
+                  <button
+                    onClick={() => setInsightsModalOpen(false)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   // RENDER CURRENT PAGE
   const renderContent = () => {
     if (activePage === "home") return <HomePage />;
+    if (activePage === "analytics") return <AnalyticsPage />;
     if (activePage === "patients") return <ManageAppointments />;
     if (activePage === "patient-accounts") return <PatientsPage />;
     if (activePage === "medical-records") return <MedicalRecords />;

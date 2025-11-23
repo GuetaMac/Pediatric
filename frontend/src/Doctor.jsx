@@ -2359,6 +2359,8 @@ function Doctor() {
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [selectedMonth, setSelectedMonth] = useState("all");
     const [selectedDiagnosis, setSelectedDiagnosis] = useState("all");
+    // Patient scope filter: 'all' or 'overall'
+    const [patientScope, setPatientScope] = useState("all");
     const [availableDiagnoses, setAvailableDiagnoses] = useState([]);
     const [availableYears, setAvailableYears] = useState([]);
     const [availableMonths, setAvailableMonths] = useState([]);
@@ -2366,6 +2368,10 @@ function Doctor() {
     // AI Insights states
     const [insights, setInsights] = useState({});
     const [loadingInsights, setLoadingInsights] = useState({});
+    // Modal for AI insights popup
+    const [insightsModalOpen, setInsightsModalOpen] = useState(false);
+    const [insightsModalTitle, setInsightsModalTitle] = useState("");
+    const [insightsModalContent, setInsightsModalContent] = useState("");
 
     const months = [
       { value: "all", label: "All Months" },
@@ -2424,6 +2430,10 @@ function Doctor() {
 
         const result = await response.json();
         setInsights((prev) => ({ ...prev, [chartId]: result.insights }));
+        // Open modal with insights (popup experience)
+        setInsightsModalTitle(chartType || "AI Insights");
+        setInsightsModalContent(result.insights || "No insights available.");
+        setInsightsModalOpen(true);
       } catch (error) {
         console.error("Error generating insights:", error);
         setInsights((prev) => ({
@@ -2447,7 +2457,7 @@ function Doctor() {
 
         const url = `${
           import.meta.env.VITE_API_URL
-        }/analytics?year=${selectedYear}&month=${selectedMonth}&diagnosis=${selectedDiagnosis}`;
+        }/analytics?year=${selectedYear}&month=${selectedMonth}&diagnosis=${selectedDiagnosis}&patientScope=${patientScope}`;
         const res = await fetch(url, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -2498,6 +2508,7 @@ function Doctor() {
       }
       if (selectedDiagnosis !== "all")
         context += `, focusing on ${selectedDiagnosis}`;
+      if (patientScope === "overall") context += `, for overall patients`;
       return context;
     };
 
@@ -2546,21 +2557,7 @@ function Doctor() {
 
         {children}
 
-        {insights[chartId] && (
-          <div className="mt-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border-2 border-purple-200">
-            <div className="flex items-start space-x-3">
-              <Lightbulb className="w-6 h-6 text-purple-600 flex-shrink-0 mt-1" />
-              <div className="flex-1">
-                <h4 className="font-bold text-purple-900 mb-2 text-lg">
-                  AI Insights
-                </h4>
-                <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
-                  {insights[chartId]}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* insights are shown in a popup modal when generated */}
       </div>
     );
 
@@ -2590,6 +2587,28 @@ function Doctor() {
     const filteredMonths = months.filter(
       (m) => m.value === "all" || availableMonths.includes(parseInt(m.value))
     );
+
+    // Copy insights to clipboard
+    const handleCopyInsights = async () => {
+      try {
+        await navigator.clipboard.writeText(insightsModalContent || "");
+        Swal.fire({
+          icon: "success",
+          title: "Copied",
+          text: "Insights copied to clipboard",
+          timer: 1400,
+          showConfirmButton: false,
+        });
+      } catch (err) {
+        console.error("Copy failed:", err);
+        Swal.fire({
+          icon: "error",
+          title: "Copy Failed",
+          text: "Could not copy insights",
+          confirmButtonColor: "#3b82f6",
+        });
+      }
+    };
 
     if (loading) {
       return (
@@ -2655,85 +2674,14 @@ function Doctor() {
     }
 
     return (
-      <div className="min-h-screen bg-transparent p-4 sm:p-6 md:p-8">
-        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 md:space-y-8">
-          {/* Header with Filters */}
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-6 border-2 border-blue-100">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-2 sm:gap-3">
-                <Activity className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 text-blue-600" />
-                Clinic Analytics Dashboard
-              </h1>
-
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <div className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl px-4 py-2.5 border-2 border-blue-300 shadow-md">
-                  <Calendar className="w-5 h-5 text-blue-600" />
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                    className="bg-transparent border-none outline-none font-bold text-blue-800 cursor-pointer"
-                  >
-                    {availableYears.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2 bg-gradient-to-r from-indigo-50 to-indigo-100 rounded-xl px-4 py-2.5 border-2 border-indigo-300 shadow-md">
-                  <Filter className="w-5 h-5 text-indigo-600" />
-                  <select
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="bg-transparent border-none outline-none font-bold text-indigo-800 cursor-pointer"
-                  >
-                    {filteredMonths.map((month) => (
-                      <option key={month.value} value={month.value}>
-                        {month.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl px-4 py-2.5 border-2 border-purple-300 shadow-md">
-                  <Stethoscope className="w-5 h-5 text-purple-600" />
-                  <select
-                    value={selectedDiagnosis}
-                    onChange={(e) => setSelectedDiagnosis(e.target.value)}
-                    className="bg-transparent border-none outline-none font-bold text-purple-800 cursor-pointer"
-                  >
-                    <option value="all">All Diagnoses</option>
-                    {availableDiagnoses.map((diagnosis) => (
-                      <option key={diagnosis} value={diagnosis}>
-                        {diagnosis}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  onClick={fetchData}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold shadow-lg hover:shadow-xl transition-all hover:scale-105"
-                >
-                  <RefreshCw className="w-5 h-5" />
-                  Refresh
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            <div className="relative rounded-xl sm:rounded-2xl bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 text-white p-4 sm:p-6 shadow-xl hover:shadow-2xl transition-all hover:scale-105">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-12 -mt-12"></div>
-              <p className="text-xs sm:text-sm opacity-90 font-semibold mb-2 uppercase tracking-wide">
-                Total Appointments
-              </p>
-              <p className="text-3xl sm:text-4xl md:text-5xl font-black mb-2">
-                {data.totalAppointments || 0}
-              </p>
-              <div className="text-xs sm:text-sm opacity-80 font-medium">
+      <div className="min-h-screen bg-transparent p-3 sm:p-4 md:p-6">
+        <div className="max-w-6xl mx-auto space-y-3">
+          {/* Compact Header with Filters */}
+          <div className="bg-white rounded-lg shadow-sm p-3 flex items-center justify-between gap-3 border">
+            <div className="flex items-center gap-3">
+              <Activity className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-800">Analytics</h2>
+              <div className="text-xs text-gray-500 ml-2">
                 {selectedMonth === "all"
                   ? `Year ${selectedYear}`
                   : `${
@@ -2742,336 +2690,385 @@ function Doctor() {
               </div>
             </div>
 
-            <div className="relative rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 text-white p-6 shadow-xl hover:shadow-2xl transition-all hover:scale-105">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-12 -mt-12"></div>
-              <p className="text-sm font-semibold mb-2 uppercase tracking-wide opacity-90">
-                Most Common Diagnosis
-              </p>
-              <p className="text-2xl font-bold truncate mb-2">
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="bg-transparent border px-2 py-1 rounded text-sm"
+              >
+                {availableYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="bg-transparent border px-2 py-1 rounded text-sm"
+              >
+                {filteredMonths.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={patientScope}
+                onChange={(e) => setPatientScope(e.target.value)}
+                className="bg-transparent border px-2 py-1 rounded text-sm"
+                title="Patient scope"
+              >
+                <option value="all">All patients</option>
+                <option value="overall">Overall patients</option>
+              </select>
+
+              <button
+                onClick={fetchData}
+                className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Small KPI row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
+              <div className="text-xs text-gray-500">Total Appointments</div>
+              <div className="text-2xl font-bold text-gray-800">
+                {data.totalAppointments || 0}
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
+              <div className="text-xs text-gray-500">Top Diagnosis</div>
+              <div className="text-lg font-semibold text-gray-800 truncate">
                 {data.commonDiagnosis || "N/A"}
-              </p>
-              <div className="text-sm opacity-80 font-medium">
-                Top condition
               </div>
             </div>
-
-            <div className="relative rounded-2xl bg-gradient-to-br from-emerald-500 via-green-600 to-teal-600 text-white p-6 shadow-xl hover:shadow-2xl transition-all hover:scale-105">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-12 -mt-12"></div>
-              <p className="text-sm font-semibold mb-2 uppercase tracking-wide opacity-90">
-                Top Visit Reason
-              </p>
-              <p className="text-2xl font-bold truncate mb-2">
+            <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
+              <div className="text-xs text-gray-500">Top Visit Reason</div>
+              <div className="text-lg font-semibold text-gray-800 truncate">
                 {data.commonAppointmentType || "N/A"}
-              </p>
-              <div className="text-sm opacity-80 font-medium">
-                Most frequent type
-              </div>
-            </div>
-
-            <div className="relative rounded-2xl bg-gradient-to-br from-purple-500 via-purple-600 to-indigo-600 text-white p-6 shadow-xl hover:shadow-2xl transition-all hover:scale-105">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-12 -mt-12"></div>
-              <p className="text-sm font-semibold mb-2 uppercase tracking-wide opacity-90">
-                Unique Diagnoses
-              </p>
-              <p className="text-5xl font-black mb-2">
-                {data.diagnosisTrend?.length || 0}
-              </p>
-              <div className="text-sm opacity-80 font-medium">
-                Different conditions
               </div>
             </div>
           </div>
 
-          {/* Charts with AI Insights */}
-          <ChartContainer
-            title="Most Common Diagnosis Per Month"
-            chartId="diagnosis-trend"
-            chartType="Monthly Diagnosis Distribution"
-            chartData={data.diagnosisTrend}
-            context={`${getFilterContext()}. Shows the most common diagnosis for each month.`}
-            icon={Stethoscope}
-            gradient="border-blue-100"
-          >
-            <div className="h-96">
-              {data.diagnosisTrend?.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.diagnosisTrend}>
-                    <defs>
-                      <linearGradient
-                        id="colorDiagnosis"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#3b82f6"
-                          stopOpacity={0.9}
+          {/* Charts in compact cards (preserve logic) */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <ChartContainer
+                title="Monthly Appointments Trend"
+                chartId="monthly-trend"
+                chartType="Monthly Appointment Trend"
+                chartData={data.appointmentTrend}
+                context={`${getFilterContext()}. Overall monthly appointment volume.`}
+                icon={TrendingUp}
+                gradient="border-purple-100"
+              >
+                <div className="h-56">
+                  {data.appointmentTrend?.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={data.appointmentTrend}>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#edf2f7"
+                          opacity={0.6}
                         />
-                        <stop
-                          offset="95%"
-                          stopColor="#3b82f6"
-                          stopOpacity={0.6}
+                        <XAxis
+                          dataKey={
+                            selectedMonth !== "all" ? "monthLabel" : "month"
+                          }
+                          tickFormatter={
+                            selectedMonth === "all"
+                              ? (v) => monthNames[v - 1]
+                              : undefined
+                          }
+                          tick={{ fill: "#4b5563" }}
                         />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#e5e7eb"
-                      opacity={0.5}
-                    />
-                    <XAxis
-                      dataKey="month"
-                      tickFormatter={(value) => monthNames[value - 1]}
-                      tick={{ fill: "#4b5563", fontWeight: 600 }}
-                    />
-                    <YAxis tick={{ fill: "#4b5563", fontWeight: 600 }} />
-                    <Tooltip
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          return (
-                            <div className="bg-white p-4 rounded-xl shadow-2xl border-2 border-blue-200">
-                              <p className="font-bold text-gray-800 text-lg mb-2">
-                                {monthNames[payload[0].payload.month - 1]}{" "}
-                                {selectedYear}
-                              </p>
-                              <p className="text-blue-600 font-medium mb-1">
-                                {payload[0].payload.diagnosis}
-                              </p>
-                              <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full bg-blue-600" />
-                                <span className="font-semibold text-blue-600">
-                                  Cases:
-                                </span>
-                                <span className="text-gray-700 font-medium">
-                                  {payload[0].value}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Bar
-                      dataKey="count"
-                      fill="url(#colorDiagnosis)"
-                      name="Cases"
-                      radius={[12, 12, 0, 0]}
-                      animationDuration={1000}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <Stethoscope className="w-20 h-20 text-gray-300 mb-4" />
-                  <p className="text-gray-500 text-xl font-semibold">
-                    No diagnosis data available
-                  </p>
+                        <YAxis tick={{ fill: "#4b5563" }} />
+                        <Tooltip content={CustomTooltip} />
+                        <Line
+                          type="monotone"
+                          dataKey="total"
+                          stroke="#6366f1"
+                          strokeWidth={3}
+                          dot={false}
+                          animationDuration={800}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-sm text-gray-500">
+                      No appointment trend data
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </ChartContainer>
+              </ChartContainer>
 
-          <ChartContainer
-            title="Most Common Appointment Type Per Month"
-            chartId="appointment-type-trend"
-            chartType="Appointment Type Distribution"
-            chartData={data.appointmentTypeTrend}
-            context={`${getFilterContext()}. Shows appointment types per month.`}
-            icon={Calendar}
-            gradient="border-green-100"
-          >
-            <div className="h-96">
-              {data.appointmentTypeTrend?.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.appointmentTypeTrend}>
-                    <defs>
-                      <linearGradient
-                        id="colorAppointment"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#10b981"
-                          stopOpacity={0.9}
+              <ChartContainer
+                title="Diagnosis Distribution"
+                chartId="diagnosis-trend"
+                chartType="Monthly Diagnosis Distribution"
+                chartData={data.diagnosisTrend}
+                context={`${getFilterContext()}. Shows the most common diagnosis for each month.`}
+                icon={Stethoscope}
+                gradient="border-blue-100"
+              >
+                <div className="h-56">
+                  {data.diagnosisTrend?.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data.diagnosisTrend}>
+                        <defs>
+                          <linearGradient
+                            id="colorDiagnosis"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="5%"
+                              stopColor="#3b82f6"
+                              stopOpacity={0.9}
+                            />
+                            <stop
+                              offset="95%"
+                              stopColor="#3b82f6"
+                              stopOpacity={0.6}
+                            />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#eef2ff"
+                          opacity={0.5}
                         />
-                        <stop
-                          offset="95%"
-                          stopColor="#10b981"
-                          stopOpacity={0.6}
+                        <XAxis
+                          dataKey="month"
+                          tickFormatter={(v) => monthNames[v - 1]}
+                          tick={{ fill: "#4b5563" }}
                         />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#e5e7eb"
-                      opacity={0.5}
-                    />
-                    <XAxis
-                      dataKey="month"
-                      tickFormatter={(value) => monthNames[value - 1]}
-                      tick={{ fill: "#4b5563", fontWeight: 600 }}
-                    />
-                    <YAxis tick={{ fill: "#4b5563", fontWeight: 600 }} />
-                    <Tooltip content={CustomTooltip} />
-                    <Bar
-                      dataKey="count"
-                      fill="url(#colorAppointment)"
-                      name="Appointments"
-                      radius={[12, 12, 0, 0]}
-                      animationDuration={1000}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <Calendar className="w-20 h-20 text-gray-300 mb-4" />
-                  <p className="text-gray-500 text-xl font-semibold">
-                    No appointment type data available
-                  </p>
+                        <YAxis tick={{ fill: "#4b5563" }} />
+                        <Tooltip content={CustomTooltip} />
+                        <Bar
+                          dataKey="count"
+                          fill="url(#colorDiagnosis)"
+                          radius={[8, 8, 0, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-sm text-gray-500">
+                      No diagnosis data
+                    </div>
+                  )}
                 </div>
-              )}
+              </ChartContainer>
             </div>
-          </ChartContainer>
 
-          <ChartContainer
-            title={
-              selectedMonth === "all"
-                ? "Total Monthly Appointments Trend"
-                : `Daily Appointments - ${
-                    months.find((m) => m.value === selectedMonth)?.label
-                  } ${selectedYear}`
-            }
-            chartId="monthly-trend"
-            chartType="Monthly Appointment Trend"
-            chartData={data.appointmentTrend}
-            context={`${getFilterContext()}. Overall monthly appointment volume.`}
-            icon={TrendingUp}
-            gradient="border-purple-100"
-          >
-            <div className="h-80">
-              {data.appointmentTrend?.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={data.appointmentTrend}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#e5e7eb"
-                      opacity={0.5}
-                    />
-                    <XAxis
-                      dataKey={selectedMonth !== "all" ? "monthLabel" : "month"}
-                      tickFormatter={
-                        selectedMonth === "all"
-                          ? (value) => monthNames[value - 1]
-                          : undefined
-                      }
-                      tick={{ fill: "#4b5563", fontWeight: 600 }}
-                      angle={selectedMonth !== "all" ? -45 : 0}
-                      textAnchor={selectedMonth !== "all" ? "end" : "middle"}
-                      height={selectedMonth !== "all" ? 80 : 30}
-                    />
-                    <YAxis tick={{ fill: "#4b5563", fontWeight: 600 }} />
-                    <Tooltip content={CustomTooltip} />
-                    <Line
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#8b5cf6"
-                      strokeWidth={4}
-                      dot={{
-                        fill: "#fbbf24",
-                        strokeWidth: 3,
-                        r: 6,
-                        stroke: "#8b5cf6",
-                      }}
-                      name="Total Appointments"
-                      activeDot={{ r: 10, stroke: "#fbbf24", strokeWidth: 3 }}
-                      animationDuration={1500}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <BarChart3 className="w-20 h-20 text-gray-300 mb-4" />
-                  <p className="text-gray-500 text-xl font-semibold">
-                    No appointment trend data available
-                  </p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <ChartContainer
+                title="Appointment Type Distribution"
+                chartId="appointment-type-trend"
+                chartType="Appointment Type Distribution"
+                chartData={data.appointmentTypeTrend}
+                context={`${getFilterContext()}. Shows appointment types per month.`}
+                icon={Calendar}
+                gradient="border-green-100"
+              >
+                <div className="h-56">
+                  {data.appointmentTypeTrend?.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data.appointmentTypeTrend}>
+                        <defs>
+                          <linearGradient
+                            id="colorAppointment"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="5%"
+                              stopColor="#10b981"
+                              stopOpacity={0.9}
+                            />
+                            <stop
+                              offset="95%"
+                              stopColor="#10b981"
+                              stopOpacity={0.6}
+                            />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#eefaf0"
+                          opacity={0.5}
+                        />
+                        <XAxis
+                          dataKey="month"
+                          tickFormatter={(v) => monthNames[v - 1]}
+                          tick={{ fill: "#4b5563" }}
+                        />
+                        <YAxis tick={{ fill: "#4b5563" }} />
+                        <Tooltip content={CustomTooltip} />
+                        <Bar
+                          dataKey="count"
+                          fill="url(#colorAppointment)"
+                          radius={[8, 8, 0, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-sm text-gray-500">
+                      No appointment type data
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </ChartContainer>
+              </ChartContainer>
 
-          <ChartContainer
-            title="Top Inventory Items Used"
-            chartId="inventory-usage"
-            chartType="Inventory Usage Analysis"
-            chartData={data.inventoryUsage}
-            context={`${getFilterContext()}. Most used inventory items.`}
-            icon={ClipboardList}
-            gradient="border-amber-100"
-          >
-            <div className="h-80">
-              {data.inventoryUsage?.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.inventoryUsage}>
-                    <defs>
-                      <linearGradient
-                        id="colorInventory"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#fbbf24"
-                          stopOpacity={0.9}
+              <ChartContainer
+                title="Top Inventory Items Used"
+                chartId="inventory-usage"
+                chartType="Inventory Usage Analysis"
+                chartData={data.inventoryUsage}
+                context={`${getFilterContext()}. Most used inventory items.`}
+                icon={ClipboardList}
+                gradient="border-amber-100"
+              >
+                <div className="h-56">
+                  {data.inventoryUsage?.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data.inventoryUsage}>
+                        <defs>
+                          <linearGradient
+                            id="colorInventory"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="5%"
+                              stopColor="#fbbf24"
+                              stopOpacity={0.9}
+                            />
+                            <stop
+                              offset="95%"
+                              stopColor="#fbbf24"
+                              stopOpacity={0.6}
+                            />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="#fff7ed"
+                          opacity={0.5}
                         />
-                        <stop
-                          offset="95%"
-                          stopColor="#fbbf24"
-                          stopOpacity={0.6}
+                        <XAxis
+                          dataKey="name"
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                          tick={{ fontSize: 12, fill: "#4b5563" }}
                         />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#e5e7eb"
-                      opacity={0.5}
-                    />
-                    <XAxis
-                      dataKey="name"
-                      angle={-45}
-                      textAnchor="end"
-                      height={120}
-                      interval={0}
-                      tick={{ fontSize: 12, fill: "#4b5563", fontWeight: 600 }}
-                    />
-                    <YAxis tick={{ fill: "#4b5563", fontWeight: 600 }} />
-                    <Tooltip content={CustomTooltip} />
-                    <Bar
-                      dataKey="total_sold"
-                      fill="url(#colorInventory)"
-                      name="Total Sold"
-                      radius={[12, 12, 0, 0]}
-                      animationDuration={1000}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <ClipboardList className="w-20 h-20 text-gray-300 mb-4" />
-                  <p className="text-gray-500 text-xl font-semibold">
-                    No inventory usage data available
-                  </p>
+                        <YAxis tick={{ fill: "#4b5563" }} />
+                        <Tooltip content={CustomTooltip} />
+                        <Bar
+                          dataKey="total_sold"
+                          fill="url(#colorInventory)"
+                          radius={[8, 8, 0, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-sm text-gray-500">
+                      No inventory usage data
+                    </div>
+                  )}
                 </div>
-              )}
+              </ChartContainer>
             </div>
-          </ChartContainer>
+          </div>
+
+          {/* Insights Modal (popup) */}
+          {insightsModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div
+                className="absolute inset-0 bg-black/50"
+                onClick={() => setInsightsModalOpen(false)}
+              />
+              <div className="relative bg-white rounded-xl shadow-2xl p-6 max-w-2xl w-full mx-4 z-10">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-bold text-gray-800 truncate">
+                      {insightsModalTitle}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      AI-generated insights
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-700">
+                        Year: {selectedYear}
+                      </span>
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-700">
+                        Month:{" "}
+                        {selectedMonth === "all"
+                          ? "All"
+                          : months.find((m) => m.value === selectedMonth)
+                              ?.label}
+                      </span>
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-700">
+                        Diagnosis:{" "}
+                        {selectedDiagnosis === "all"
+                          ? "All"
+                          : selectedDiagnosis}
+                      </span>
+                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-700">
+                        Scope:{" "}
+                        {patientScope === "overall"
+                          ? "Overall"
+                          : "All patients"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <button
+                      onClick={handleCopyInsights}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                    >
+                      Copy
+                    </button>
+                    <button
+                      onClick={() => setInsightsModalOpen(false)}
+                      className="text-gray-500 hover:text-gray-700 ml-2"
+                      aria-label="Close insights"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-sm text-gray-700 whitespace-pre-line leading-relaxed max-h-[44vh] overflow-y-auto">
+                  {insightsModalContent}
+                </div>
+
+                <div className="mt-6 text-right">
+                  <button
+                    onClick={() => setInsightsModalOpen(false)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

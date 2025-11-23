@@ -731,7 +731,14 @@ app.put("/users/:user_id", async (req, res) => {
 // ✅ POST /appointments
 app.post("/appointments", auth, async (req, res) => {
   try {
-    const { date, time, type, concerns, additional_services } = req.body;
+    const {
+      date,
+      time,
+      type,
+      concerns,
+      additional_services,
+      vaccination_type,
+    } = req.body; // ✅ ADD vaccination_type
     const userId = req.user.id;
 
     if (!date || !time || !type) {
@@ -740,15 +747,28 @@ app.post("/appointments", auth, async (req, res) => {
       });
     }
 
-    // ✅ Default additional_services to "None" if not provided
+    // ✅ Validate vaccination_type if type is Vaccination
+    if (type === "Vaccination" && !vaccination_type) {
+      return res.status(400).json({
+        error: "Please specify the vaccination type.",
+      });
+    }
+
     const additionalServicesValue = additional_services || "None";
 
-    // ✅ Match the exact column order: status before concerns
     await pool.query(
       `INSERT INTO appointments 
-       (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services)
-       VALUES ($1, $2, $3, $4, 'pending', $5, $6)`,
-      [userId, date, time, type, concerns || "", additionalServicesValue]
+       (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, vaccination_type)
+       VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)`,
+      [
+        userId,
+        date,
+        time,
+        type,
+        concerns || "",
+        additionalServicesValue,
+        vaccination_type || null,
+      ] // ✅ ADD vaccination_type
     );
 
     res.json({ message: "Appointment booked successfully!" });
@@ -815,20 +835,41 @@ app.get("/get/appointments", auth, async (req, res) => {
   }
 });
 
-// GET all appointments with patient info
-app.get("/appointments/nurse", auth, async (req, res) => {
+app.get("/appointments/nurse", async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT a.appointment_id, a.appointment_date, a.appointment_time, a.appointment_type, a.concerns,
-          a.status, a.additional_services, u.full_name, u.email
-   FROM appointments a
-   JOIN users u ON a.user_id = u.user_id
-   ORDER BY a.appointment_date, a.appointment_time`
+    const query = `
+  SELECT 
+    a.appointment_id,
+    a.user_id,
+    u.full_name,
+    u.email,
+    a.appointment_date,
+    a.appointment_time,
+    a.appointment_type,
+    a.status,
+    a.concerns,
+    a.additional_services,
+    a.vaccination_type,
+    a.cancel_remarks,
+    a.created_at,
+    pp.phone_number
+  FROM appointments a
+  JOIN users u ON a.user_id = u.user_id
+  LEFT JOIN patient_profiles pp ON u.user_id = pp.user_id
+  ORDER BY a.appointment_date, a.appointment_time;
+`;
+    const result = await pool.query(query);
+
+    // ✅ Check Vaccination appointments specifically
+    const vaccinationAppts = result.rows.filter(
+      (r) => r.appointment_type === "Vaccination"
     );
+    console.log("💉 Vaccination appointments:", vaccinationAppts);
+
     res.json(result.rows);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: "Server error" });
+  } catch (error) {
+    console.error("Error fetching appointments for nurse:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -1058,7 +1099,7 @@ app.get("/appointments/doctor", auth, async (req, res) => {
 app.put("/appointments/:id/status", auth, async (req, res) => {
   try {
     const { id } = req.params;
-    let { status } = req.body;
+    let { status, cancel_remarks } = req.body; // 👈 ADD cancel_remarks
 
     // Normalize status to capitalize first letter
     if (status) {
@@ -1074,16 +1115,17 @@ app.put("/appointments/:id/status", auth, async (req, res) => {
       });
     }
 
+    // 👇 UPDATE: Save cancel_remarks if status is Canceled
     const result = await pool.query(
-      "UPDATE appointments SET status = $1 WHERE appointment_id = $2 RETURNING appointment_id, status",
-      [status, id]
+      "UPDATE appointments SET status = $1, cancel_remarks = $2 WHERE appointment_id = $3 RETURNING appointment_id, status, cancel_remarks",
+      [status, status === "Canceled" ? cancel_remarks : null, id]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
-    res.json(result.rows[0]); // return only id and status
+    res.json(result.rows[0]); // return id, status, and cancel_remarks
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: "Server error" });
@@ -1224,33 +1266,6 @@ app.get("/patients", auth, async (req, res) => {
   } catch (err) {
     console.error("Database error:", err.message);
     res.status(500).json({ error: "Server error" });
-  }
-});
-
-// ✅ Route: Get all appointments with patient full_name
-// GET route for nurse dashboard
-app.get("/appointments/nurse", async (req, res) => {
-  try {
-    const query = `
-      SELECT 
-        a.appointment_id,
-        a.user_id,
-        u.full_name,
-        a.appointment_date AS date,
-        a.appointment_time AS time,
-        a.appointment_type,
-        a.status,
-        a.concerns,
-        a.created_at
-      FROM appointments a
-      JOIN users u ON a.user_id = u.user_id
-      ORDER BY a.created_at ASC;
-    `;
-    const result = await pool.query(query);
-    res.json(result.rows);
-  } catch (error) {
-    console.error("Error fetching appointments for nurse:", error);
-    res.status(500).json({ message: "Server error" });
   }
 });
 

@@ -3,3 +3,12 @@
 .react-datepicker-popper {
   z-index: 9999 !important;
 }
+
+/* Hide Sunday column in DatePicker */
+.react-datepicker__day--sunday {
+  display: none !important;
+}
+
+.react-datepicker__day-name:first-child {
+  display: none !important;
+}

@@ -233,74 +233,82 @@ function Patient() {
   }, []);
 
   // ✅ Book appointment
-  const handleBookAppointment = async (patientConcerns) => {
+  const handleBookAppointment = async (patientConcerns, vaccinationType) => {
+    // Validation
     if (!selectedDate || !appointmentType || !selectedTime) {
       Swal.fire({
-        icon: "warning",
-        title: "Incomplete Information",
-        text: "Please complete all fields to book your appointment",
-        confirmButtonColor: "#0ea5e9",
+        icon: "error",
+        title: "Missing Information",
+        text: "Please fill in date, type, and time slot.",
+        confirmButtonColor: "#0EA5E9",
       });
       return;
+    }
+
+    // Vaccination type validation
+    if (appointmentType === "Vaccination" && !vaccinationType.trim()) {
+      Swal.fire({
+        icon: "error",
+        title: "Missing Information",
+        text: "Please specify the vaccination type.",
+        confirmButtonColor: "#0EA5E9",
+      });
       return;
     }
 
     try {
-      // Format additional services: "None" if empty, or comma-separated string
-      const additionalServicesStr =
-        additionalServices.length === 0
-          ? "None"
-          : additionalServices.join(", ");
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/appointments`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            date: selectedDate.toISOString().split("T")[0], // ✅ AYOS NA TO
+            time: selectedTime,
+            type: appointmentType,
+            concerns: patientConcerns,
+            additional_services:
+              additionalServices.length > 0
+                ? additionalServices.join(", ")
+                : "None",
+            vaccination_type:
+              appointmentType === "Vaccination" ? vaccinationType : null,
+          }),
+        }
+      );
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/appointments`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({
-          date: selectedDate.toLocaleDateString("en-CA"),
-          time: selectedTime,
-          type: appointmentType,
-          concerns: patientConcerns,
-          additional_services: additionalServicesStr,
-        }),
-      });
+      const data = await response.json();
 
-      const data = await res.json();
-      if (res.ok) {
-        Swal.fire({
+      if (response.ok) {
+        await Swal.fire({
           icon: "success",
-          title: "Appointment Booked!",
-          text: "Your appointment has been booked successfully",
-          confirmButtonColor: "#0ea5e9",
-          timer: 2000,
-          showConfirmButton: false,
+          title: "Success!",
+          text: data.message,
+          confirmButtonColor: "#0EA5E9",
         });
-        setSelectedDate(null);
-        setAppointmentType("");
-        setSelectedTime("");
-        setAdditionalServices([]);
-        fetchAppointments();
+        window.location.reload();
       } else {
         Swal.fire({
           icon: "error",
-          title: "Booking Failed",
+          title: "Failed",
           text: data.error || "Failed to book appointment",
-          confirmButtonColor: "#0ea5e9",
+          confirmButtonColor: "#0EA5E9",
         });
       }
-      // eslint-disable-next-line no-unused-vars
-    } catch (err) {
+    } catch (error) {
+      console.error("Error booking appointment:", error);
       Swal.fire({
         icon: "error",
-        title: "Server Error",
-        text: "Unable to connect to server. Please try again later.",
-        confirmButtonColor: "#0ea5e9",
+        title: "Error",
+        text: "Failed to book appointment",
+        confirmButtonColor: "#0EA5E9",
       });
     }
   };
-
   // ✅ Toggle additional service
   const toggleAdditionalService = (type) => {
     if (additionalServices.includes(type)) {
@@ -315,13 +323,11 @@ function Patient() {
     setAdditionalServices([]);
   };
 
-  // ✅ Appointment Page
-  // ✅ Appointment Page – Vertical Timeline Design
-  // ✅ Appointment Page – Vertical Timeline with Status Filter
   const AppointmentsPage = () => {
     const availableSlots = generateTimeSlots();
     const [filterStatus, setFilterStatus] = useState("all");
     const [patientConcerns, setPatientConcerns] = useState(""); //new state para maayos typings
+    const [vaccinationType, setVaccinationType] = useState(""); // for vaccine type
 
     // Get available additional services (exclude the primary appointment type)
     const availableAdditionalServices = Object.keys(appointmentTypes).filter(
@@ -414,6 +420,15 @@ function Patient() {
         <div className="grid gap-6 md:grid-cols-3">
           {/* Date Picker */}
           <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all relative z-20">
+            <style>{`
+  .react-datepicker__day--sunday {
+    display: none !important;
+  }
+  .react-datepicker__day-name:last-child {
+    display: none !important;
+  }
+`}</style>
+
             <div className="flex items-center gap-2 mb-2">
               <Calendar className="text-sky-600" />
               <h3 className="text-xl font-bold text-sky-800">1. Pick a Date</h3>
@@ -429,8 +444,9 @@ function Patient() {
                 filterDate={(date) => date.getDay() !== 0}
                 minDate={new Date()}
                 dateFormat="MMMM d, yyyy"
+                calendarStartDay={1}
                 className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
-            focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+        focus:ring-2 focus:ring-yellow-400 focus:outline-none"
                 placeholderText="Select a date"
                 popperClassName="z-50"
               />
@@ -448,7 +464,7 @@ function Patient() {
               onChange={(e) => {
                 setAppointmentType(e.target.value);
                 setSelectedTime("");
-                setAdditionalServices([]); // Clear additional services when primary type changes
+                setAdditionalServices([]);
               }}
               className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
             focus:ring-2 focus:ring-yellow-400 focus:outline-none"
@@ -496,6 +512,25 @@ function Patient() {
               )}
           </div>
         </div>
+        {/* Vaccination Type - Only show if Vaccination is selected */}
+        {appointmentType === "Vaccination" && (
+          <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
+            <div className="flex items-center gap-2 mb-2">
+              <ClipboardList className="text-sky-600" />
+              <h3 className="text-xl font-bold text-sky-800">
+                Specify Vaccination Type
+              </h3>
+            </div>
+            <input
+              type="text"
+              value={vaccinationType}
+              onChange={(e) => setVaccinationType(e.target.value)}
+              placeholder="e.g., COVID-19, Flu, Hepatitis B"
+              className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
+        focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+            />
+          </div>
+        )}
 
         {/* Additional Services Section */}
         {selectedDate && appointmentType && selectedTime && (
@@ -593,9 +628,11 @@ function Patient() {
         {/* Book Button */}
         <div className="text-center">
           <button
-            onClick={() => handleBookAppointment(patientConcerns)}
+            onClick={() =>
+              handleBookAppointment(patientConcerns, vaccinationType)
+            } // ✅ ADD vaccinationType
             className="inline-block bg-yellow-400 text-sky-900 px-10 py-4 rounded-full text-lg
-        font-bold shadow-md hover:bg-yellow-500 hover:scale-105 hover:shadow-lg transition-all"
+    font-bold shadow-md hover:bg-yellow-500 hover:scale-105 hover:shadow-lg transition-all"
           >
             Book Appointment
           </button>
@@ -670,6 +707,17 @@ function Patient() {
                           <p className="text-gray-600 text-lg">
                             {date} • {appt.appointment_time}
                           </p>
+
+                          {/* ✅ Vaccination Type Display */}
+                          {appt.appointment_type === "Vaccination" &&
+                            appt.vaccination_type && (
+                              <p className="text-sm text-sky-600 mt-1">
+                                <strong>Vaccine:</strong>{" "}
+                                {appt.vaccination_type}
+                              </p>
+                            )}
+
+                          {/* Additional Services */}
                           {appt.additional_services &&
                             appt.additional_services !== "None" && (
                               <p className="text-sm text-sky-600 mt-1">
@@ -677,6 +725,13 @@ function Patient() {
                                 {appt.additional_services}
                               </p>
                             )}
+                          {/* ✅ Cancel Remarks Display */}
+                          {status === "canceled" && appt.cancel_remarks && (
+                            <p className="text-sm text-red-600 mt-2 bg-red-50 p-2 rounded-lg border border-red-200">
+                              <strong>Cancellation Reason:</strong>{" "}
+                              {appt.cancel_remarks}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <span
@@ -684,7 +739,6 @@ function Patient() {
                           >
                             {status}
                           </span>
-                          {/* ✅ Cancel button - only show for pending/approved appointments */}
                           {(status === "pending" || status === "approved") && (
                             <button
                               onClick={() =>
