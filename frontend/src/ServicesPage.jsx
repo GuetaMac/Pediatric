@@ -109,7 +109,15 @@ function ServicesPage() {
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(pwd);
 
     // Validate all fields first
-    if (!fullName || !email || !password || !birthDate || !gender) {
+    if (
+      !fullName ||
+      !email ||
+      !password ||
+      !birthDate ||
+      !gender ||
+      !chronicConditions ||
+      !allergies
+    ) {
       setError("Please fill in all required fields");
       return;
     }
@@ -118,6 +126,16 @@ function ServicesPage() {
       setError(
         "Password must be at least 8 characters and include uppercase, lowercase, number, and special character."
       );
+      return;
+    }
+    if (!chronicConditions) {
+      setError(
+        "Please enter chronic illness (required). If none, type 'None'."
+      );
+      return;
+    }
+    if (!allergies) {
+      setError("Please enter allergies (required). If none, type 'None'.");
       return;
     }
 
@@ -446,49 +464,49 @@ function ServicesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
             {[
               {
-                icon: <Stethoscope className="w-10 h-10 text-sky-500 mb-3" />,
+                icon: <Stethoscope className="w-7 h-7 text-sky-500 mb-2" />,
                 title: "General Check-ups",
                 desc: "Routine health check-ups to monitor growth and overall well-being.",
               },
               {
-                icon: <Syringe className="w-10 h-10 text-green-500 mb-3" />,
+                icon: <Syringe className="w-7 h-7 text-green-500 mb-2" />,
                 title: "Vaccinations",
                 desc: "Safe immunizations to protect children from preventable diseases.",
               },
               {
-                icon: <Activity className="w-10 h-10 text-pink-500 mb-3" />,
+                icon: <Activity className="w-7 h-7 text-pink-500 mb-2" />,
                 title: "Sick Visits",
                 desc: "Evaluation and treatment for common illnesses like flu and infections.",
               },
               {
-                icon: <Apple className="w-10 h-10 text-yellow-500 mb-3" />,
+                icon: <Apple className="w-7 h-7 text-yellow-500 mb-2" />,
                 title: "Nutrition & Wellness",
                 desc: "Guidance on healthy eating, growth monitoring, and wellness programs.",
               },
               {
-                icon: <Baby className="w-10 h-10 text-purple-500 mb-3" />,
+                icon: <Baby className="w-7 h-7 text-purple-500 mb-2" />,
                 title: "Newborn Care",
                 desc: "Specialized care for newborns including early development screening.",
               },
               {
-                icon: <AlertTriangle className="w-10 h-10 text-red-500 mb-3" />,
+                icon: <AlertTriangle className="w-7 h-7 text-red-500 mb-2" />,
                 title: "Emergency Care",
                 desc: "Immediate and reliable pediatric care for urgent concerns.",
               },
             ].map((service, idx) => (
               <div
                 key={idx}
-                className="bg-white/95 backdrop-blur-sm rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-5 md:p-6 hover:shadow-2xl hover:bg-white transition-all duration-300"
+                className="bg-white/95 backdrop-blur-sm rounded-lg sm:rounded-xl shadow p-2 sm:p-3 md:p-4 hover:shadow-xl hover:bg-white transition-all duration-300"
               >
                 <div className="flex items-center sm:block">
-                  <div className="flex-shrink-0 sm:mb-3 mr-3 sm:mr-0">
+                  <div className="flex-shrink-0 sm:mb-2 mr-2 sm:mr-0">
                     {service.icon}
                   </div>
                   <div className="flex-1">
-                    <h2 className="text-lg sm:text-xl font-semibold text-sky-600 mb-2">
+                    <h2 className="text-sm sm:text-base font-semibold text-sky-600 mb-1">
                       {service.title}
                     </h2>
-                    <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">
+                    <p className="text-gray-600 text-xs leading-tight">
                       {service.desc}
                     </p>
                   </div>
@@ -552,12 +570,13 @@ function ServicesPage() {
 
                 {/* Right Signup Form */}
                 <div className="w-full lg:w-1/2 p-4 sm:p-5 md:p-6 lg:p-8 overflow-y-auto max-h-[calc(100vh-2rem)] sm:max-h-[95vh] md:max-h-[90vh] transition-all duration-500">
-                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-5 md:mb-6 lg:hidden">
+                  <h2 className="text-base sm:text-lg md:text-xl font-bold text-center mb-2 sm:mb-3 md:mb-4 lg:hidden">
                     Create Account
                   </h2>
                   <form
                     onSubmit={handleCreateAccount}
-                    className="space-y-3 sm:space-y-4"
+                    className="space-y-2 sm:space-y-2"
+                    style={{ fontSize: "0.95rem" }}
                   >
                     <input
                       type="text"
@@ -565,7 +584,7 @@ function ServicesPage() {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                     />
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -575,7 +594,7 @@ function ServicesPage() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                       />
                       <input
                         type="password"
@@ -583,10 +602,10 @@ function ServicesPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                       />
                       <div className="flex flex-col">
-                        <label className="text-sm font-medium text-gray-700 mb-1">
+                        <label className="text-xs font-medium text-gray-700 mb-1">
                           Birthdate
                         </label>
                         <input
@@ -594,14 +613,14 @@ function ServicesPage() {
                           value={birthDate}
                           onChange={(e) => setBirthDate(e.target.value)}
                           required
-                          className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                          className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                         />
                       </div>
                       <select
                         value={gender}
                         onChange={(e) => setGender(e.target.value)}
                         required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation bg-white"
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation bg-white"
                       >
                         <option value="">Select Gender</option>
                         <option>Male</option>
@@ -615,7 +634,7 @@ function ServicesPage() {
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
                       required
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                     />
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -625,7 +644,7 @@ function ServicesPage() {
                         value={fatherName}
                         onChange={(e) => setFatherName(e.target.value)}
                         required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                       />
                       <input
                         type="text"
@@ -633,7 +652,7 @@ function ServicesPage() {
                         value={motherName}
                         onChange={(e) => setMotherName(e.target.value)}
                         required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                       />
                     </div>
 
@@ -643,7 +662,7 @@ function ServicesPage() {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       required
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                     />
 
                     <input
@@ -651,7 +670,7 @@ function ServicesPage() {
                       placeholder="Guardian (Optional)"
                       value={guardian}
                       onChange={(e) => setGuardian(e.target.value)}
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                     />
 
                     <input
@@ -659,14 +678,14 @@ function ServicesPage() {
                       placeholder="Guardian Number (Optional)"
                       value={guardianNumber}
                       onChange={(e) => setGuardianNumber(e.target.value)}
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                     />
 
                     <select
                       value={bloodType}
                       onChange={(e) => setBloodType(e.target.value)}
                       required
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation bg-white"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation bg-white"
                     >
                       <option value="">Select Blood Type</option>
                       <option value="A+">A+</option>
@@ -681,25 +700,29 @@ function ServicesPage() {
                     </select>
 
                     <textarea
-                      placeholder="Chronic Conditions (Optional)"
+                      placeholder="Chronic Conditions (required, if none type 'None')"
                       value={chronicConditions}
                       onChange={(e) => setChronicConditions(e.target.value)}
-                      rows={3}
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base resize-y min-h-[100px] sm:min-h-[80px] outline-none transition touch-manipulation"
+                      rows={1}
+                      required
+                      className="w-full px-1 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-xs resize-none min-h-[24px] outline-none transition touch-manipulation"
+                      maxLength={40}
                     />
 
                     <textarea
-                      placeholder="Allergies (Optional)"
+                      placeholder="Allergies (required, if none type 'None')"
                       value={allergies}
                       onChange={(e) => setAllergies(e.target.value)}
-                      rows={3}
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base resize-y min-h-[100px] sm:min-h-[80px] outline-none transition touch-manipulation"
+                      rows={1}
+                      required
+                      className="w-full px-1 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-xs resize-none min-h-[24px] outline-none transition touch-manipulation"
+                      maxLength={40}
                     />
 
                     <button
                       type="submit"
                       disabled={isSendingCode}
-                      className={`w-full py-3 sm:py-2.5 md:py-3 rounded-lg transition font-semibold text-base sm:text-base mt-2 min-h-[48px] touch-manipulation shadow-md flex items-center justify-center ${
+                      className={`w-full py-2 rounded transition font-semibold text-sm mt-2 min-h-[32px] touch-manipulation shadow flex items-center justify-center ${
                         isSendingCode
                           ? "bg-gray-400 cursor-not-allowed text-white"
                           : "bg-green-500 text-white hover:bg-green-600 active:bg-green-700"

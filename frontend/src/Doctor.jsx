@@ -2689,7 +2689,6 @@ function Doctor() {
                     } ${selectedYear}`}
               </div>
             </div>
-
             <div className="flex items-center gap-2">
               <select
                 value={selectedYear}
@@ -2702,7 +2701,6 @@ function Doctor() {
                   </option>
                 ))}
               </select>
-
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
@@ -2714,17 +2712,6 @@ function Doctor() {
                   </option>
                 ))}
               </select>
-
-              <select
-                value={patientScope}
-                onChange={(e) => setPatientScope(e.target.value)}
-                className="bg-transparent border px-2 py-1 rounded text-sm"
-                title="Patient scope"
-              >
-                <option value="all">All patients</option>
-                <option value="overall">Overall patients</option>
-              </select>
-
               <button
                 onClick={fetchData}
                 className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
@@ -2733,13 +2720,18 @@ function Doctor() {
               </button>
             </div>
           </div>
-
-          {/* Small KPI row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* KPI row with overall patients card */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
               <div className="text-xs text-gray-500">Total Appointments</div>
               <div className="text-2xl font-bold text-gray-800">
                 {data.totalAppointments || 0}
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
+              <div className="text-xs text-gray-500">Overall Patients</div>
+              <div className="text-2xl font-bold text-green-700">
+                {data.overallPatients || 0}
               </div>
             </div>
             <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">

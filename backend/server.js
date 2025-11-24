@@ -1991,6 +1991,47 @@ app.get("/sales/summary", async (req, res) => {
   }
 });
 
+// Provide aggregated sales per inventory item for inventory UI
+app.get("/sales", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        i.inventory_id,
+        i.name,
+        COALESCE(SUM(s.quantity), 0) AS total_sold,
+        MAX(s.sale_date) AS last_sold,
+        COALESCE(
+          (
+            SELECT json_agg(t) FROM (
+                SELECT date_trunc('month', s2.sale_date)::date AS date, SUM(s2.quantity) AS quantity
+                FROM sales s2
+                WHERE s2.inventory_id = i.inventory_id
+                GROUP BY date_trunc('month', s2.sale_date)::date
+                ORDER BY date DESC
+            ) t
+          ), '[]'
+        ) AS history
+      FROM inventory i
+      LEFT JOIN sales s ON s.inventory_id = i.inventory_id
+      GROUP BY i.inventory_id, i.name
+      ORDER BY total_sold DESC, i.name ASC
+    `);
+
+    const rows = result.rows.map((r) => ({
+      inventory_id: r.inventory_id,
+      name: r.name,
+      total_sold: parseInt(r.total_sold, 10) || 0,
+      date: r.last_sold || null,
+      history: r.history || [],
+    }));
+
+    res.json(rows);
+  } catch (err) {
+    console.error("Error fetching /sales:", err);
+    res.status(500).json({ error: "Failed to fetch sales" });
+  }
+});
+
 app.get("/analytics", auth, async (req, res) => {
   try {
     const { year, month } = req.query;
@@ -2049,13 +2090,19 @@ app.get("/analytics", auth, async (req, res) => {
     `);
 
     // Most Common Diagnosis (filtered)
+    // Most Common Diagnosis (filtered) - WITH SPLITTING
     const commonDiagnosis = await pool.query(`
-      SELECT diagnosis, COUNT(*) AS count
+      SELECT 
+        TRIM(diagnosis_item) AS diagnosis, 
+        COUNT(*) AS count
       FROM medical_records mr
       JOIN appointments a ON mr.appointment_id = a.appointment_id
+      CROSS JOIN LATERAL regexp_split_to_table(mr.diagnosis, ',') AS diagnosis_item
       WHERE ${medicalRecordDateFilter}
-        AND diagnosis IS NOT NULL AND diagnosis != ''
-      GROUP BY diagnosis
+        AND mr.diagnosis IS NOT NULL 
+        AND mr.diagnosis != ''
+        AND TRIM(diagnosis_item) != ''
+      GROUP BY TRIM(diagnosis_item)
       ORDER BY count DESC
       LIMIT 1;
     `);
@@ -2084,30 +2131,40 @@ app.get("/analytics", auth, async (req, res) => {
       ? await pool.query(`
       SELECT 
         ${selectedMonth} AS month,
-        mr.diagnosis,
+        TRIM(diagnosis_item) AS diagnosis,
         COUNT(*) AS count
       FROM medical_records mr
       JOIN appointments a ON mr.appointment_id = a.appointment_id
+      CROSS JOIN LATERAL regexp_split_to_table(mr.diagnosis, ',') AS diagnosis_item
       WHERE ${medicalRecordDateFilter}
         AND mr.diagnosis IS NOT NULL 
         AND mr.diagnosis != ''
-      GROUP BY mr.diagnosis
+        AND TRIM(diagnosis_item) != ''
+      GROUP BY TRIM(diagnosis_item)
       ORDER BY count DESC
       LIMIT 1
     `)
       : await pool.query(`
-      WITH ranked_diagnoses AS (
+      WITH split_diagnoses AS (
         SELECT 
           EXTRACT(MONTH FROM a.appointment_date) AS month,
-          mr.diagnosis,
-          COUNT(*) AS count,
-          ROW_NUMBER() OVER (PARTITION BY EXTRACT(MONTH FROM a.appointment_date) ORDER BY COUNT(*) DESC) AS rank
+          TRIM(diagnosis_item) AS diagnosis
         FROM medical_records mr
         JOIN appointments a ON mr.appointment_id = a.appointment_id
+        CROSS JOIN LATERAL regexp_split_to_table(mr.diagnosis, ',') AS diagnosis_item
         WHERE EXTRACT(YEAR FROM a.appointment_date) = ${selectedYear}
           AND mr.diagnosis IS NOT NULL 
           AND mr.diagnosis != ''
-        GROUP BY month, mr.diagnosis
+          AND TRIM(diagnosis_item) != ''
+      ),
+      ranked_diagnoses AS (
+        SELECT 
+          month,
+          diagnosis,
+          COUNT(*) AS count,
+          ROW_NUMBER() OVER (PARTITION BY month ORDER BY COUNT(*) DESC) AS rank
+        FROM split_diagnoses
+        GROUP BY month, diagnosis
       )
       SELECT month, diagnosis, count
       FROM ranked_diagnoses
@@ -2168,54 +2225,67 @@ app.get("/analytics", auth, async (req, res) => {
 
     // Get all available diagnoses for filter dropdown
     const allDiagnoses = await pool.query(`
-      SELECT DISTINCT diagnosis
-      FROM medical_records mr
-      JOIN appointments a ON mr.appointment_id = a.appointment_id
-      WHERE diagnosis IS NOT NULL AND diagnosis != ''
-      ORDER BY diagnosis
-    `);
+    SELECT DISTINCT TRIM(diagnosis_item) AS diagnosis
+    FROM medical_records mr
+    JOIN appointments a ON mr.appointment_id = a.appointment_id
+    CROSS JOIN LATERAL regexp_split_to_table(mr.diagnosis, ',') AS diagnosis_item
+    WHERE mr.diagnosis IS NOT NULL 
+      AND mr.diagnosis != ''
+      AND TRIM(diagnosis_item) != ''
+    ORDER BY diagnosis
+`);
 
     // Diagnosis Time Trend (filtered by specific diagnosis or all)
     let diagnosisTimeTrend = { rows: [] };
 
+    // For daily trend (when month is selected)
     if (selectedMonth) {
-      // Show daily trend when a specific month is selected
       const diagnosisFilter = selectedDiagnosis
-        ? `AND mr.diagnosis = '${selectedDiagnosis.replace(/'/g, "''")}'`
+        ? `AND TRIM(diagnosis_item) = '${selectedDiagnosis.replace(
+            /'/g,
+            "''"
+          )}'`
         : "";
 
       diagnosisTimeTrend = await pool.query(`
-        SELECT 
-          EXTRACT(DAY FROM a.appointment_date) AS day,
-          COUNT(*) AS count
-        FROM medical_records mr
-        JOIN appointments a ON mr.appointment_id = a.appointment_id
-        WHERE ${medicalRecordDateFilter}
-          AND mr.diagnosis IS NOT NULL 
-          AND mr.diagnosis != ''
-          ${diagnosisFilter}
-        GROUP BY day
-        ORDER BY day
-      `);
+    SELECT 
+      EXTRACT(DAY FROM a.appointment_date) AS day,
+      COUNT(*) AS count
+      FROM medical_records mr
+      JOIN appointments a ON mr.appointment_id = a.appointment_id
+      CROSS JOIN LATERAL regexp_split_to_table(mr.diagnosis, ',') AS diagnosis_item
+      WHERE ${medicalRecordDateFilter}
+        AND mr.diagnosis IS NOT NULL 
+        AND mr.diagnosis != ''
+        AND TRIM(diagnosis_item) != ''
+        ${diagnosisFilter}
+      GROUP BY day
+      ORDER BY day
+  `);
     } else {
-      // Show monthly trend when viewing full year
+      // For monthly trend
       const diagnosisFilter = selectedDiagnosis
-        ? `AND mr.diagnosis = '${selectedDiagnosis.replace(/'/g, "''")}'`
+        ? `AND TRIM(diagnosis_item) = '${selectedDiagnosis.replace(
+            /'/g,
+            "''"
+          )}'`
         : "";
 
       diagnosisTimeTrend = await pool.query(`
-        SELECT 
-          EXTRACT(MONTH FROM a.appointment_date) AS month,
-          COUNT(*) AS count
-        FROM medical_records mr
-        JOIN appointments a ON mr.appointment_id = a.appointment_id
-        WHERE EXTRACT(YEAR FROM a.appointment_date) = ${selectedYear}
-          AND mr.diagnosis IS NOT NULL 
-          AND mr.diagnosis != ''
-          ${diagnosisFilter}
-        GROUP BY month
-        ORDER BY month
-      `);
+    SELECT 
+      EXTRACT(MONTH FROM a.appointment_date) AS month,
+      COUNT(*) AS count
+      FROM medical_records mr
+      JOIN appointments a ON mr.appointment_id = a.appointment_id
+      CROSS JOIN LATERAL regexp_split_to_table(mr.diagnosis, ',') AS diagnosis_item
+      WHERE EXTRACT(YEAR FROM a.appointment_date) = ${selectedYear}
+        AND mr.diagnosis IS NOT NULL 
+        AND mr.diagnosis != ''
+        AND TRIM(diagnosis_item) != ''
+        ${diagnosisFilter}
+      GROUP BY month
+      ORDER BY month
+  `);
     }
 
     const monthNames = [

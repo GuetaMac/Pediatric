@@ -88,6 +88,105 @@ function Nurse() {
     const [loading, setLoading] = useState(false);
     const [lastUpdated, setLastUpdated] = useState(null);
     const [queue, setQueue] = useState([]);
+    const [salesSummary, setSalesSummary] = useState([]);
+    const [selectedMonth, setSelectedMonth] = useState("all");
+    const [insightsOpen, setInsightsOpen] = useState(false);
+    const [insightsLoading, setInsightsLoading] = useState(false);
+    const [insightsResult, setInsightsResult] = useState(null);
+
+    const formatMonth = (d) => {
+      if (!d) return "-";
+      try {
+        const dt = new Date(d);
+        return dt.toLocaleString(undefined, { month: "long", year: "numeric" });
+      } catch (e) {
+        return d;
+      }
+    };
+    const monthKey = (d) => {
+      if (!d) return null;
+      try {
+        const dt = new Date(d);
+        const yyyy = dt.getFullYear();
+        const mm = String(dt.getMonth() + 1).padStart(2, "0");
+        return `${yyyy}-${mm}`;
+      } catch (e) {
+        return null;
+      }
+    };
+    const copyInsightsText = (ins) => {
+      if (!ins) return;
+      let txt = `Supply Forecast Insights - Generated: ${new Date(
+        ins.generatedAt
+      ).toLocaleString()}\n`;
+      txt += `Total forecast (next month): ${ins.totalForecast}\n\nTop restock needs:\n`;
+      if (ins.topNeeds.length === 0) txt += "None\n";
+      else
+        ins.topNeeds.forEach((it) => {
+          txt += `- ${it.name}: forecast ${it.forecast}, stock ${it.stock}, need ${it.need}\n`;
+        });
+      navigator.clipboard
+        ?.writeText(txt)
+        .then(() => {
+          Swal.fire({
+            icon: "success",
+            title: "Copied",
+            text: "Insights copied to clipboard",
+            timer: 1400,
+            showConfirmButton: false,
+          });
+        })
+        .catch(() => {
+          alert(txt);
+        });
+    };
+    const generateSalesInsights = async () => {
+      try {
+        const result = {
+          generatedAt: new Date().toISOString(),
+          totalForecast: 0,
+          topNeeds: [],
+        };
+        // You may need to fetch inventory items here if needed for forecast
+        // For now, just use salesSummary
+        const perItem = salesSummary.map((s) => {
+          const history = (s.history || [])
+            .slice()
+            .sort((a, b) => new Date(b.date) - new Date(a.date));
+          const lastMonths = history.slice(0, 3);
+          const sum = lastMonths.reduce((acc, h) => acc + (h.quantity || 0), 0);
+          const denom = lastMonths.length || 1;
+          const avg = Math.round(sum / denom);
+          const forecast = Math.max(0, Math.ceil(avg));
+          const stock = s.stock || 0;
+          const need = Math.max(0, forecast - stock);
+          return {
+            inventory_id: s.inventory_id,
+            name: s.name,
+            forecast,
+            stock,
+            need,
+          };
+        });
+        result.totalForecast = perItem.reduce(
+          (acc, it) => acc + it.forecast,
+          0
+        );
+        result.topNeeds = perItem
+          .filter((it) => it.need > 0)
+          .sort((a, b) => b.need - a.need)
+          .slice(0, 10);
+        setInsightsResult(result);
+        setInsightsOpen(true);
+      } catch (err) {
+        console.error("Error generating insights", err);
+        Swal.fire({
+          icon: "error",
+          title: "Insights Error",
+          text: "Failed to generate insights",
+        });
+      }
+    };
 
     const fetchSummaries = async () => {
       try {
@@ -212,6 +311,16 @@ function Nurse() {
           low: invData.filter((i) => i.stock < 10 && i.stock > 0).length,
           out: invData.filter((i) => i.stock === 0).length,
         });
+
+        // Fetch sales summary
+        const salesRes = await fetch(`${import.meta.env.VITE_API_URL}/sales`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+        if (!salesRes.ok) throw new Error("Failed to fetch sales data");
+        const salesData = await salesRes.json();
+        setSalesSummary(salesData);
 
         setLastUpdated(new Date().toLocaleString());
       } catch (err) {
@@ -520,6 +629,293 @@ function Nurse() {
               <p className="text-3xl sm:text-4xl font-bold text-red-700 mt-2">
                 {invSummary.out}
               </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Sales Summary - advanced version from Inventory */}
+        <section>
+          <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center">
+            <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6 mr-2 text-purple-600" />
+            Sales Summary
+          </h2>
+          <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 md:p-8">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setInsightsLoading(true);
+                    try {
+                      await generateSalesInsights();
+                    } catch (err) {
+                      console.error(err);
+                    } finally {
+                      setInsightsLoading(false);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition disabled:opacity-60"
+                  disabled={insightsLoading}
+                  title="Generate supply forecast insights"
+                >
+                  {insightsLoading ? "Generating..." : "Generate Insights"}
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[40vh] sm:max-h-[48vh] overflow-auto">
+              {salesSummary.length === 0 ? (
+                <p className="text-center text-blue-600 bg-yellow-50 border border-yellow-200 rounded-xl py-6 sm:py-8 font-medium text-sm sm:text-base">
+                  No sales recorded.
+                </p>
+              ) : (
+                (() => {
+                  const monthSet = new Set();
+                  salesSummary.forEach((s) => {
+                    (s.history || []).forEach((h) => {
+                      const k = monthKey(h.date);
+                      if (k) monthSet.add(k);
+                    });
+                  });
+                  const availableMonths = Array.from(monthSet)
+                    .sort((a, b) => b.localeCompare(a))
+                    .map((k) => ({
+                      key: k,
+                      label: formatMonth(new Date(k + "-01")),
+                    }));
+                  return (
+                    <div>
+                      <div className="mb-4 flex items-center gap-3">
+                        <label className="text-sm text-gray-700">
+                          Filter month:
+                        </label>
+                        <select
+                          value={selectedMonth}
+                          onChange={(e) => setSelectedMonth(e.target.value)}
+                          className="border rounded px-3 py-1 text-sm bg-white"
+                        >
+                          <option value="all">All Months</option>
+                          {availableMonths.map((m) => (
+                            <option key={m.key} value={m.key}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="ml-auto text-xs text-gray-500">
+                          Showing{" "}
+                          {selectedMonth === "all"
+                            ? "all-time totals"
+                            : formatMonth(new Date(selectedMonth + "-01"))}
+                        </div>
+                      </div>
+                      <div className="divide-y border rounded-lg overflow-hidden">
+                        {salesSummary.map((s) => {
+                          const displayedHistory = (s.history || []).filter(
+                            (h) =>
+                              selectedMonth === "all" ||
+                              monthKey(h.date) === selectedMonth
+                          );
+                          const monthTotal = displayedHistory.reduce(
+                            (acc, cur) => acc + (cur.quantity || 0),
+                            0
+                          );
+                          const shownTotal =
+                            selectedMonth === "all" ? s.total_sold : monthTotal;
+                          return (
+                            <div
+                              key={s.inventory_id || s.name}
+                              className="group flex items-center justify-between p-4 sm:p-5 bg-gradient-to-r from-purple-50 via-white to-blue-50 border-b last:border-b-0 hover:shadow-lg rounded-xl transition"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 flex items-center justify-center rounded-full bg-purple-100 group-hover:bg-purple-200 transition">
+                                  <ClipboardList className="w-5 h-5 text-purple-600" />
+                                </div>
+                                <div>
+                                  <div className="font-bold text-gray-900 text-base sm:text-lg truncate">
+                                    {s.name}
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Recent:{" "}
+                                    {s.history && s.history.length > 0 ? (
+                                      <span>
+                                        {(s.history || [])
+                                          .slice(0, 2)
+                                          .map((h, i) => (
+                                            <span
+                                              key={i}
+                                              className="inline-block px-2 py-0.5 bg-gray-100 rounded shadow-sm mr-1"
+                                            >
+                                              {formatMonth(h.date)}:{" "}
+                                              <span className="font-semibold">
+                                                {h.quantity}
+                                              </span>
+                                            </span>
+                                          ))}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-400">
+                                        No history
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="text-2xl font-extrabold text-green-600">
+                                  {shownTotal}
+                                </span>
+                                <span className="text-xs text-gray-500 font-medium">
+                                  {selectedMonth === "all"
+                                    ? "Total"
+                                    : "This month"}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-3 text-sm text-gray-600">
+                        <div className="font-medium text-gray-700 mb-1">
+                          Recent months (per item):
+                        </div>
+                        <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
+                          {salesSummary.map((s) => (
+                            <div
+                              key={s.inventory_id || s.name}
+                              className="text-xs text-gray-600 p-2 border rounded bg-gray-50"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="truncate max-w-[60%]">
+                                  {s.name}
+                                </div>
+                                <div className="text-right">
+                                  {s.history && s.history.length > 0 ? (
+                                    <div className="flex items-center gap-2">
+                                      {(s.history || [])
+                                        .slice(0, 3)
+                                        .map((h, i) => (
+                                          <div
+                                            key={i}
+                                            className="px-2 py-0.5 bg-white rounded shadow-sm text-[11px]"
+                                          >
+                                            {formatMonth(h.date)}:{" "}
+                                            <span className="font-semibold">
+                                              {h.quantity}
+                                            </span>
+                                          </div>
+                                        ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400">
+                                      No history
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      {insightsOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-4 sm:p-6 overflow-auto max-h-[80vh]">
+                            <div className="flex items-start justify-between mb-3">
+                              <h3 className="text-lg font-bold">
+                                Supply Forecast Insights
+                              </h3>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    if (insightsResult)
+                                      copyInsightsText(insightsResult);
+                                  }}
+                                  className="px-3 py-1.5 bg-gray-100 rounded text-sm hover:bg-gray-200"
+                                >
+                                  Copy
+                                </button>
+                                <button
+                                  onClick={() => setInsightsOpen(false)}
+                                  className="px-3 py-1.5 bg-red-500 text-white rounded text-sm hover:bg-red-600"
+                                >
+                                  Close
+                                </button>
+                              </div>
+                            </div>
+                            {!insightsResult ? (
+                              <div className="text-center py-6">
+                                No insights available.
+                              </div>
+                            ) : (
+                              <div className="space-y-3 text-sm text-gray-700">
+                                <div>
+                                  <div className="text-xs text-gray-500">
+                                    Generated:
+                                  </div>
+                                  <div className="font-semibold">
+                                    {new Date(
+                                      insightsResult.generatedAt
+                                    ).toLocaleString()}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-500">
+                                    Total forecasted demand (next month):
+                                  </div>
+                                  <div className="text-2xl font-bold text-green-600">
+                                    {insightsResult.totalForecast}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="font-semibold">
+                                    Top items to restock
+                                  </div>
+                                  {insightsResult.topNeeds.length === 0 ? (
+                                    <div className="text-gray-500">
+                                      No immediate restock needs based on
+                                      forecast and current stock.
+                                    </div>
+                                  ) : (
+                                    <div className="mt-2 grid gap-2">
+                                      {insightsResult.topNeeds.map(
+                                        (it, idx) => (
+                                          <div
+                                            key={idx}
+                                            className="flex items-center justify-between p-2 border rounded"
+                                          >
+                                            <div>
+                                              <div className="font-semibold">
+                                                {it.name}
+                                              </div>
+                                              <div className="text-xs text-gray-500">
+                                                Forecast: {it.forecast} • Stock:{" "}
+                                                {it.stock}
+                                              </div>
+                                            </div>
+                                            <div className="text-sm font-bold text-rose-600">
+                                              Need: {it.need}
+                                            </div>
+                                          </div>
+                                        )
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="font-semibold">Notes</div>
+                                  <div className="text-xs text-gray-500">
+                                    Forecasts are a simple projection based on
+                                    recent months' average. Use as a guide —
+                                    consider seasonality and upcoming events.
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
             </div>
           </div>
         </section>
@@ -1463,7 +1859,7 @@ function Nurse() {
         <div className="p-3 sm:p-4 md:p-6 bg-white/95 border-b border-gray-200 rounded-xl shadow-lg overflow-hidden">
           <div className="flex flex-col gap-3 sm:gap-4 w-full">
             {/* Title */}
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 flex items-center flex-wrap gap-2">
+            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 flex items-center">
               <Users className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 text-blue-500 flex-shrink-0" />
               <span className="break-words">Patient Management</span>
             </h1>
@@ -2385,7 +2781,7 @@ function Nurse() {
       return (
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading patients...</p>
           </div>
         </div>
@@ -2781,9 +3177,52 @@ function Nurse() {
     const [stock, setStock] = useState("");
     const [editingItem, setEditingItem] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [sales, setSales] = useState([]);
+    // salesSummary holds aggregated sales returned from GET /sales
     const [sellItem, setSellItem] = useState(null);
     const [sellQty, setSellQty] = useState("");
+    // Hover / details state for inventory items
+    const [hoverProduct, setHoverProduct] = useState(null);
+    const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
+    const [detailsModalProduct, setDetailsModalProduct] = useState(null);
+
+    const [salesSummary, setSalesSummary] = useState([]);
+
+    const formatDateShort = (d) => {
+      if (!d) return "-";
+      try {
+        const dt = new Date(d);
+        return dt.toLocaleString();
+      } catch (e) {
+        return d;
+      }
+    };
+
+    const formatMonth = (d) => {
+      if (!d) return "-";
+      try {
+        const dt = new Date(d);
+        return dt.toLocaleString(undefined, { month: "long", year: "numeric" });
+      } catch (e) {
+        return d;
+      }
+    };
+
+    const monthKey = (d) => {
+      if (!d) return null;
+      try {
+        const dt = new Date(d);
+        const yyyy = dt.getFullYear();
+        const mm = String(dt.getMonth() + 1).padStart(2, "0");
+        return `${yyyy}-${mm}`; // e.g. 2025-11
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const [selectedMonth, setSelectedMonth] = useState("all");
+    const [insightsOpen, setInsightsOpen] = useState(false);
+    const [insightsLoading, setInsightsLoading] = useState(false);
+    const [insightsResult, setInsightsResult] = useState(null);
 
     // Fetch inventory
     const fetchInventory = async () => {
@@ -2811,19 +3250,102 @@ function Nurse() {
     // Fetch sales summary
     const fetchSalesSummary = async () => {
       try {
-        const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/sales/summary`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }
-        );
-        const data = await res.json();
-        setSales(data);
+        const salesRes = await fetch(`${import.meta.env.VITE_API_URL}/sales`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        });
+        if (!salesRes.ok) throw new Error("Failed to fetch sales data");
+        const salesData = await salesRes.json();
+        setSalesSummary(salesData);
       } catch (err) {
-        alert("Error fetching sales summary: " + err.message);
+        console.error("Error loading sales summary:", err);
+        Swal.fire({
+          icon: "error",
+          title: "Failed to Load Sales Data",
+          text: "Unable to load sales data. Please try again later.",
+          confirmButtonColor: "#3b82f6",
+        });
       }
+    };
+
+    const generateSalesInsights = async () => {
+      // Build simple forecast per item using recent months average (last up to 3 months)
+      try {
+        const result = {
+          generatedAt: new Date().toISOString(),
+          totalForecast: 0,
+          topNeeds: [],
+        };
+        const itemsById = {};
+        items.forEach((it) => (itemsById[it.inventory_id] = it));
+
+        const perItem = salesSummary.map((s) => {
+          const history = (s.history || [])
+            .slice()
+            .sort((a, b) => new Date(b.date) - new Date(a.date)); // desc by date
+          const lastMonths = history.slice(0, 3);
+          const sum = lastMonths.reduce((acc, h) => acc + (h.quantity || 0), 0);
+          const denom = lastMonths.length || 1;
+          const avg = Math.round(sum / denom);
+          const forecast = Math.max(0, Math.ceil(avg));
+          const stock = itemsById[s.inventory_id]?.stock || 0;
+          const need = Math.max(0, forecast - stock);
+          return {
+            inventory_id: s.inventory_id,
+            name: s.name,
+            forecast,
+            stock,
+            need,
+          };
+        });
+
+        result.totalForecast = perItem.reduce(
+          (acc, it) => acc + it.forecast,
+          0
+        );
+        result.topNeeds = perItem
+          .filter((it) => it.need > 0)
+          .sort((a, b) => b.need - a.need)
+          .slice(0, 10);
+
+        setInsightsResult(result);
+        setInsightsOpen(true);
+      } catch (err) {
+        console.error("Error generating insights", err);
+        Swal.fire({
+          icon: "error",
+          title: "Insights Error",
+          text: "Failed to generate insights",
+        });
+      }
+    };
+
+    const copyInsightsText = (ins) => {
+      if (!ins) return;
+      let txt = `Supply Forecast Insights - Generated: ${new Date(
+        ins.generatedAt
+      ).toLocaleString()}\n`;
+      txt += `Total forecast (next month): ${ins.totalForecast}\n\nTop restock needs:\n`;
+      if (ins.topNeeds.length === 0) txt += "None\n";
+      else
+        ins.topNeeds.forEach((it) => {
+          txt += `- ${it.name}: forecast ${it.forecast}, stock ${it.stock}, need ${it.need}\n`;
+        });
+      navigator.clipboard
+        ?.writeText(txt)
+        .then(() => {
+          Swal.fire({
+            icon: "success",
+            title: "Copied",
+            text: "Insights copied to clipboard",
+            timer: 1400,
+            showConfirmButton: false,
+          });
+        })
+        .catch(() => {
+          alert(txt);
+        });
     };
 
     useEffect(() => {
@@ -3000,52 +3522,89 @@ function Nurse() {
     };
 
     const [searchTerm, setSearchTerm] = useState("");
+    const [stockFilter, setStockFilter] = useState("all");
 
-    // Filter items by search term
-    const filteredItems = items.filter((item) =>
-      item.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Filter items by search term and stock status
+    const filteredItems = items.filter((item) => {
+      const matchesSearch = item.name
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
+      let matchesStock = true;
+      if (stockFilter === "in") matchesStock = item.stock >= 10;
+      else if (stockFilter === "low")
+        matchesStock = item.stock > 0 && item.stock < 10;
+      else if (stockFilter === "out") matchesStock = item.stock === 0;
+      return matchesSearch && matchesStock;
+    });
 
     return (
       <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
-        {/* Header with search */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center">
-            <Package className="w-6 h-6 sm:w-8 sm:h-8 mr-2 sm:mr-3 text-green-500" />
-            Manage Inventory
-          </h1>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* 🔍 Search box */}
-            <input
-              type="text"
-              placeholder="Search product..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="border rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-sm focus:ring-2 focus:ring-green-500 w-full sm:w-auto"
-            />
-
-            {/* Refresh button */}
-            <button
-              onClick={() => {
-                fetchInventory();
-                fetchSalesSummary();
-              }}
-              disabled={loading}
-              className="p-2 rounded-full bg-gray-100 hover:bg-green-100 text-green-600 hover:text-green-800 transition disabled:opacity-50"
-              title="Refresh Inventory"
-            >
-              <RefreshCw
-                className={`w-5 h-5 ${loading ? "animate-spin" : ""}`}
+        {/* Inventory Navbar Header */}
+        <div className="w-full bg-white rounded-lg shadow border p-4 sm:p-6 mb-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Package className="w-6 h-6 sm:w-8 sm:h-8 text-green-500" />
+              <h1 className="text-lg sm:text-2xl font-bold text-gray-800">
+                Manage Inventory
+              </h1>
+            </div>
+            <div className="flex flex-1 items-center gap-2 sm:gap-4 justify-center sm:justify-end">
+              <input
+                type="text"
+                placeholder="Search product..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="border rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-sm focus:ring-2 focus:ring-green-500 w-full max-w-xs"
               />
-            </button>
+              <select
+                value={stockFilter}
+                onChange={(e) => setStockFilter(e.target.value)}
+                className="border rounded-lg px-2 py-1 text-sm bg-white"
+                title="Filter by stock status"
+              >
+                <option value="all">All</option>
+                <option value="in">In Stock (10+)</option>
+                <option value="low">Low Stock (&lt;10)</option>
+                <option value="out">Out of Stock</option>
+              </select>
+              <button
+                onClick={() => {
+                  fetchInventory();
+                  fetchSalesSummary();
+                }}
+                disabled={loading}
+                className="p-2 rounded-full bg-gray-100 hover:bg-green-100 text-green-600 hover:text-green-800 transition disabled:opacity-50"
+                title="Refresh Inventory"
+              >
+                <RefreshCw
+                  className={`w-5 h-5 ${loading ? "animate-spin" : ""}`}
+                />
+              </button>
+            </div>
           </div>
         </div>
-
+        {/* Inventory Table - Desktop */}
+        <div className="hidden md:block bg-white rounded-lg shadow border overflow-hidden">
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="w-full border-collapse">
+              {/* ...existing code... */}
+            </table>
+          </div>
+        </div>
+        {/* Inventory Cards - Mobile */}
+        <div className="md:hidden space-y-3 max-h-[50vh] overflow-auto">
+          {/* ...existing code... */}
+        </div>
         {/* Add / Edit Form */}
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow border">
-          <h2 className="text-base sm:text-lg font-semibold mb-4">
+        <div
+          id="inventory-form"
+          className="bg-white p-4 sm:p-6 rounded-lg shadow border-t-4 border-green-400"
+        >
+          <h2 className="text-base sm:text-lg font-extrabold mb-3 flex items-center gap-2 text-green-700">
             {editingItem ? "✏️ Update Product" : "➕ Add New Product"}
+            <span className="ml-auto text-xs font-medium text-gray-500">
+              Quick entry
+            </span>
           </h2>
           <form
             onSubmit={handleSubmit}
@@ -3071,7 +3630,7 @@ function Nurse() {
             <div className="col-span-1 md:col-span-2 flex flex-col sm:flex-row gap-2 sm:gap-3">
               <button
                 type="submit"
-                className="bg-green-500 text-white px-4 sm:px-6 py-2 rounded hover:bg-green-600 text-sm sm:text-base"
+                className="bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-green-700 text-sm sm:text-base shadow"
               >
                 {editingItem ? "Update Product" : "Add Product"}
               </button>
@@ -3089,71 +3648,84 @@ function Nurse() {
         </div>
 
         {/* Inventory Table - Desktop */}
-        <div className="hidden md:block bg-white rounded-lg shadow border overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-3 text-left text-sm font-semibold text-gray-600">
-                  Product
-                </th>
-                <th className="p-3 text-left text-sm font-semibold text-gray-600">
-                  Stock
-                </th>
-                <th className="p-3 text-left text-sm font-semibold text-gray-600">
-                  Status
-                </th>
-                <th className="p-3 text-left text-sm font-semibold text-gray-600">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.length === 0 ? (
+        <div className="hidden md:block bg-white rounded-lg shadow border overflow-hidden">
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="w-full border-collapse">
+              <thead>
                 <tr>
-                  <td colSpan="4" className="text-center py-6 text-gray-500">
-                    No products found.
-                  </td>
+                  <th className="sticky top-0 z-20 bg-gray-50 p-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Product
+                  </th>
+                  <th className="sticky top-0 z-20 bg-gray-50 p-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Stock
+                  </th>
+                  <th className="sticky top-0 z-20 bg-gray-50 p-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Status
+                  </th>
+                  <th className="sticky top-0 z-20 bg-gray-50 p-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Actions
+                  </th>
                 </tr>
-              ) : (
-                filteredItems.map((item) => (
-                  <tr
-                    key={item.inventory_id}
-                    className="border-t hover:bg-gray-50"
-                  >
-                    <td className="p-3 font-medium text-gray-800">
-                      {item.name}
-                    </td>
-                    <td className="p-3">{item.stock}</td>
-                    <td className="p-3">{getStockBadge(item.stock)}</td>
-                    <td className="p-3 flex space-x-2">
-                      <button
-                        onClick={() => handleEdit(item)}
-                        className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-100 rounded"
-                      >
-                        <Edit className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.inventory_id)}
-                        className="text-red-600 hover:text-red-800 p-2 hover:bg-red-100 rounded"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => handleSell(item)}
-                        className="text-green-600 hover:text-green-800 p-2 hover:bg-green-100 rounded"
-                      >
-                        <ShoppingCart className="w-5 h-5" />
-                      </button>
+              </thead>
+              <tbody>
+                {filteredItems.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" className="text-center py-6 text-gray-500">
+                      No products found.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  filteredItems.map((item) => (
+                    <tr
+                      key={item.inventory_id}
+                      className="border-b hover:bg-gray-50"
+                      onMouseEnter={(e) => {
+                        setHoverProduct(item);
+                        setHoverPos({ x: e.clientX, y: e.clientY });
+                      }}
+                      onMouseMove={(e) =>
+                        setHoverPos({ x: e.clientX, y: e.clientY })
+                      }
+                      onMouseLeave={() => setHoverProduct(null)}
+                      onClick={() => setDetailsModalProduct(item)}
+                    >
+                      <td className="p-2 font-medium text-gray-800 text-sm">
+                        {item.name}
+                      </td>
+                      <td className="p-2 text-sm">{item.stock}</td>
+                      <td className="p-2 text-sm">
+                        {getStockBadge(item.stock)}
+                      </td>
+                      <td className="p-2 flex items-center gap-2">
+                        <button
+                          onClick={() => handleEdit(item)}
+                          className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-lg"
+                        >
+                          <Edit className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(item.inventory_id)}
+                          className="text-red-600 hover:text-red-800 p-2 hover:bg-red-50 rounded-lg"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleSell(item)}
+                          className="text-green-600 hover:text-green-800 p-2 hover:bg-green-50 rounded-lg"
+                        >
+                          <ShoppingCart className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Inventory Cards - Mobile */}
-        <div className="md:hidden space-y-3">
+        <div className="md:hidden space-y-3 max-h-[50vh] overflow-auto">
           {filteredItems.length === 0 ? (
             <div className="bg-white p-6 rounded-lg shadow border text-center text-gray-500">
               No products found.
@@ -3162,35 +3734,36 @@ function Nurse() {
             filteredItems.map((item) => (
               <div
                 key={item.inventory_id}
-                className="bg-white p-4 rounded-lg shadow border"
+                className="bg-white p-3 rounded-lg shadow border flex items-start justify-between"
+                onMouseEnter={(e) => {
+                  setHoverProduct(item);
+                  setHoverPos({ x: e.clientX, y: e.clientY });
+                }}
+                onMouseMove={(e) => setHoverPos({ x: e.clientX, y: e.clientY })}
+                onMouseLeave={() => setHoverProduct(null)}
+                onClick={() => setDetailsModalProduct(item)}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="font-medium text-gray-800 text-base">
+                <div className="flex-1 mr-3">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium text-gray-800 text-sm">
                       {item.name}
                     </p>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Stock: {item.stock}
-                    </p>
+                    {getStockBadge(item.stock)}
                   </div>
-                  {getStockBadge(item.stock)}
+                  <p className="text-xs text-gray-500 mt-1">
+                    Stock: {item.stock}
+                  </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 w-28">
                   <button
                     onClick={() => handleEdit(item)}
-                    className="flex-1 flex items-center justify-center gap-1 text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-100 rounded text-sm"
+                    className="w-full flex items-center justify-center gap-2 text-blue-600 hover:text-blue-800 p-2 bg-blue-50 rounded text-xs font-semibold"
                   >
                     <Edit className="w-4 h-4" /> Edit
                   </button>
                   <button
-                    onClick={() => handleDelete(item.inventory_id)}
-                    className="flex-1 flex items-center justify-center gap-1 text-red-600 hover:text-red-800 p-2 hover:bg-red-100 rounded text-sm"
-                  >
-                    <Trash2 className="w-4 h-4" /> Delete
-                  </button>
-                  <button
                     onClick={() => handleSell(item)}
-                    className="flex-1 flex items-center justify-center gap-1 text-green-600 hover:text-green-800 p-2 hover:bg-green-100 rounded text-sm"
+                    className="w-full flex items-center justify-center gap-2 text-green-700 hover:text-green-900 p-2 bg-green-50 rounded text-xs font-semibold"
                   >
                     <ShoppingCart className="w-4 h-4" /> Sell
                   </button>
@@ -3198,6 +3771,49 @@ function Nurse() {
               </div>
             ))
           )}
+        </div>
+
+        {/* Floating Add Product button */}
+        {/* Hover Tooltip (shows name, stock, date added) */}
+        {hoverProduct && (
+          <div
+            className="pointer-events-none z-50"
+            style={{
+              left: hoverPos.x + 12,
+              top: hoverPos.y + 12,
+              position: "fixed",
+            }}
+          >
+            <div className="bg-white p-2 rounded-lg shadow border text-xs max-w-xs">
+              <div className="font-semibold text-gray-800 truncate">
+                {hoverProduct.name}
+              </div>
+              <div className="text-gray-600">Stock: {hoverProduct.stock}</div>
+              <div className="text-gray-500">
+                Date added:{" "}
+                {formatDateShort(
+                  hoverProduct.created_at ||
+                    hoverProduct.createdAt ||
+                    hoverProduct.date_added ||
+                    hoverProduct.dateAdded
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="fixed bottom-6 right-6 z-50">
+          <button
+            onClick={() => {
+              const el = document.getElementById("inventory-form");
+              if (el)
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+            className="bg-gradient-to-br from-green-500 to-emerald-600 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-2xl hover:scale-105 transition-transform"
+            title="Add Product"
+          >
+            +
+          </button>
         </div>
 
         {/* Sell Modal */}
@@ -3232,39 +3848,6 @@ function Nurse() {
             </div>
           </div>
         )}
-
-        {/* Sales Summary */}
-        <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 md:p-8">
-          <h2 className="text-xl sm:text-2xl font-extrabold mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3 text-blue-700">
-            💹 Sales Summary
-          </h2>
-
-          {sales.length === 0 ? (
-            <p className="text-center text-blue-600 bg-yellow-50 border border-yellow-200 rounded-xl py-6 sm:py-8 font-medium text-sm sm:text-base">
-              No sales recorded.
-            </p>
-          ) : (
-            <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-              {sales.map((s, idx) => (
-                <div
-                  key={idx}
-                  className="relative rounded-xl border border-yellow-200 bg-gradient-to-br from-blue-50 to-yellow-50 shadow-md hover:shadow-lg transition-transform hover:-translate-y-1 p-4 sm:p-6"
-                >
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-yellow-400 rounded-t-xl"></div>
-                  <h3 className="text-base sm:text-lg font-semibold text-blue-800 mb-2">
-                    {s.name}
-                  </h3>
-                  <p className="text-3xl sm:text-4xl font-bold text-yellow-600">
-                    {s.total_sold}
-                  </p>
-                  <p className="text-xs sm:text-sm text-blue-600 mt-1">
-                    Total Sold
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
     );
   };
@@ -3551,7 +4134,7 @@ function Nurse() {
             <h3 className="text-xl font-bold text-red-800 mb-2">
               Unable to Load Analytics
             </h3>
-            <p className="text-red-600 mb-6">{error}</p>
+            <p className="text-red-600 mb-4">{error}</p>
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => (window.location.href = "/")}
@@ -3607,7 +4190,6 @@ function Nurse() {
                     } ${selectedYear}`}
               </div>
             </div>
-
             <div className="flex items-center gap-2">
               <select
                 value={selectedYear}
@@ -3620,7 +4202,6 @@ function Nurse() {
                   </option>
                 ))}
               </select>
-
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
@@ -3632,17 +4213,6 @@ function Nurse() {
                   </option>
                 ))}
               </select>
-
-              <select
-                value={patientScope}
-                onChange={(e) => setPatientScope(e.target.value)}
-                className="bg-transparent border px-2 py-1 rounded text-sm"
-                title="Patient scope"
-              >
-                <option value="all">All patients</option>
-                <option value="overall">Overall patients</option>
-              </select>
-
               <button
                 onClick={fetchData}
                 className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
@@ -3651,13 +4221,18 @@ function Nurse() {
               </button>
             </div>
           </div>
-
-          {/* Small KPI row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* KPI row with overall patients card */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
               <div className="text-xs text-gray-500">Total Appointments</div>
               <div className="text-2xl font-bold text-gray-800">
                 {data.totalAppointments || 0}
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
+              <div className="text-xs text-gray-500">Overall Patients</div>
+              <div className="text-2xl font-bold text-green-700">
+                {data.overallPatients || 0}
               </div>
             </div>
             <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">

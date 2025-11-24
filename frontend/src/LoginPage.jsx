@@ -678,12 +678,13 @@ function LoginPage() {
 
                 {/* Right Signup Form */}
                 <div className="w-full lg:w-1/2 p-4 sm:p-5 md:p-6 lg:p-8 overflow-y-auto max-h-[calc(100vh-2rem)] sm:max-h-[95vh] md:max-h-[90vh] transition-all duration-500">
-                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-4 sm:mb-5 md:mb-6 lg:hidden">
+                  <h2 className="text-base sm:text-lg md:text-xl font-bold text-center mb-2 sm:mb-3 md:mb-4 lg:hidden">
                     Create Account
                   </h2>
                   <form
                     onSubmit={handleCreateAccount}
-                    className="space-y-3 sm:space-y-4"
+                    className="space-y-2 sm:space-y-2"
+                    style={{ fontSize: "0.95rem" }}
                   >
                     <input
                       type="text"
@@ -691,7 +692,7 @@ function LoginPage() {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       required
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                     />
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -701,7 +702,7 @@ function LoginPage() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                       />
                       <input
                         type="password"
@@ -709,10 +710,10 @@ function LoginPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                       />
                       <div className="flex flex-col col-span-1 sm:col-span-2">
-                        <label className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                        <label className="text-xs font-semibold text-gray-700 mb-1 flex items-center gap-2">
                           <span className="text-sky-600"></span>
                           Patient's Date of Birth
                           <span className="text-red-500">*</span>
@@ -723,17 +724,19 @@ function LoginPage() {
                           onChange={(e) => setBirthDate(e.target.value)}
                           max={new Date().toISOString().split("T")[0]}
                           required
-                          className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation bg-white hover:border-sky-300"
+                          className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation bg-white hover:border-sky-300"
                         />
                         <p className="text-xs text-gray-500 mt-1 ml-1">
-                          Select the patient's birth month, day, and year
+                          <span style={{ fontSize: "0.8em" }}>
+                            Select the patient's birth month, day, and year
+                          </span>
                         </p>
                       </div>
                       <select
                         value={gender}
                         onChange={(e) => setGender(e.target.value)}
                         required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation bg-white"
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation bg-white"
                       >
                         <option value="">Select Gender</option>
                         <option>Male</option>
@@ -747,7 +750,7 @@ function LoginPage() {
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
                       required
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                     />
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -757,7 +760,7 @@ function LoginPage() {
                         value={fatherName}
                         onChange={(e) => setFatherName(e.target.value)}
                         required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                       />
                       <input
                         type="text"
@@ -765,7 +768,7 @@ function LoginPage() {
                         value={motherName}
                         onChange={(e) => setMotherName(e.target.value)}
                         required
-                        className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                       />
                     </div>
 
@@ -775,7 +778,7 @@ function LoginPage() {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       required
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                     />
 
                     <input
@@ -783,7 +786,7 @@ function LoginPage() {
                       placeholder="Guardian (Optional)"
                       value={guardian}
                       onChange={(e) => setGuardian(e.target.value)}
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                     />
 
                     <input
@@ -791,14 +794,14 @@ function LoginPage() {
                       placeholder="Guardian Number (Optional)"
                       value={guardianNumber}
                       onChange={(e) => setGuardianNumber(e.target.value)}
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation"
                     />
 
                     <select
                       value={bloodType}
                       onChange={(e) => setBloodType(e.target.value)}
                       required
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base outline-none transition min-h-[44px] touch-manipulation bg-white"
+                      className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-sm outline-none transition min-h-[32px] touch-manipulation bg-white"
                     >
                       <option value="">Select Blood Type</option>
                       <option value="A+">A+</option>
@@ -813,19 +816,23 @@ function LoginPage() {
                     </select>
 
                     <textarea
-                      placeholder="Chronic Conditions (Optional)"
+                      placeholder="Chronic Conditions (required, if none type 'None')"
                       value={chronicConditions}
                       onChange={(e) => setChronicConditions(e.target.value)}
-                      rows={3}
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base resize-y min-h-[100px] sm:min-h-[80px] outline-none transition touch-manipulation"
+                      rows={1}
+                      required
+                      className="w-full px-1 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-xs resize-none min-h-[24px] outline-none transition touch-manipulation"
+                      maxLength={40}
                     />
 
                     <textarea
-                      placeholder="Allergies (Optional)"
+                      placeholder="Allergies (required, if none type 'None')"
                       value={allergies}
                       onChange={(e) => setAllergies(e.target.value)}
-                      rows={3}
-                      className="w-full px-3 sm:px-4 py-3 sm:py-2.5 md:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-200 focus:border-sky-400 text-base sm:text-base resize-y min-h-[100px] sm:min-h-[80px] outline-none transition touch-manipulation"
+                      rows={1}
+                      required
+                      className="w-full px-1 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-sky-200 focus:border-sky-400 text-xs resize-none min-h-[24px] outline-none transition touch-manipulation"
+                      maxLength={40}
                     />
 
                     {error && (
@@ -837,7 +844,7 @@ function LoginPage() {
                     <button
                       type="submit"
                       //disabled={isSendingCode}
-                      className={`w-full py-3 sm:py-2.5 md:py-3 rounded-lg transition font-semibold text-base sm:text-base mt-2 min-h-[48px] touch-manipulation shadow-md flex items-center justify-center ${
+                      className={`w-full py-2 rounded transition font-semibold text-sm mt-2 min-h-[32px] touch-manipulation shadow flex items-center justify-center ${
                         isSendingCode
                           ? "bg-gray-400 cursor-not-allowed text-white"
                           : "bg-green-500 text-white hover:bg-green-600 active:bg-green-700"
