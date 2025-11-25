@@ -838,26 +838,26 @@ app.get("/get/appointments", auth, async (req, res) => {
 app.get("/appointments/nurse", async (req, res) => {
   try {
     const query = `
-  SELECT 
-    a.appointment_id,
-    a.user_id,
-    u.full_name,
-    u.email,
-    a.appointment_date,
-    a.appointment_time,
-    a.appointment_type,
-    a.status,
-    a.concerns,
-    a.additional_services,
-    a.vaccination_type,
-    a.cancel_remarks,
-    a.created_at,
-    pp.phone_number
-  FROM appointments a
-  JOIN users u ON a.user_id = u.user_id
-  LEFT JOIN patient_profiles pp ON u.user_id = pp.user_id
-  ORDER BY a.appointment_date, a.appointment_time;
-`;
+SELECT 
+        a.appointment_id,
+        a.user_id,
+        u.full_name,
+        u.email,
+        a.appointment_date,
+        a.appointment_time,
+        a.appointment_type,
+        a.status,
+        a.concerns,
+        a.additional_services,
+        a.vaccination_type,
+        a.cancel_remarks,
+        a.created_at,
+        COALESCE(pp.phone_number, '') as phone_number
+      FROM appointments a
+      JOIN users u ON a.user_id = u.user_id
+      LEFT JOIN patient_profiles pp ON u.user_id = pp.user_id
+      ORDER BY a.appointment_date, a.appointment_time;
+    `;
     const result = await pool.query(query);
 
     // ✅ Check Vaccination appointments specifically
