@@ -637,7 +637,7 @@ function LoginPage() {
           }}
         >
           <div
-            className={`w-full h-full sm:h-auto sm:max-h-[95vh] md:max-h-[90vh] max-w-full sm:max-w-5xl bg-white rounded-none sm:rounded-xl md:rounded-2xl shadow-2xl flex flex-col lg:flex-row overflow-hidden relative border-0 sm:border border-yellow-400 transition-all duration-500 transform ${
+            className={`w-11/12 max-w-md sm:w-full sm:max-w-5xl bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-2xl flex flex-col lg:flex-row overflow-hidden relative border-0 sm:border border-yellow-400 transition-all duration-500 transform max-h-[90vh] ${
               transition ? "opacity-0 scale-95" : "opacity-100 scale-100"
             }`}
           >

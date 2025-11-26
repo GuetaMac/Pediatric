@@ -232,6 +232,13 @@ function Patient() {
     fetchAppointments();
   }, []);
 
+  const formatDateForBackend = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
   // ✅ Book appointment
   const handleBookAppointment = async (patientConcerns, vaccinationType) => {
     // Validation
@@ -267,7 +274,7 @@ function Patient() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            date: selectedDate.toISOString().split("T")[0], // ✅ AYOS NA TO
+            date: formatDateForBackend(selectedDate), // ✅ AYOS NA TO
             time: selectedTime,
             type: appointmentType,
             concerns: patientConcerns,
@@ -309,6 +316,7 @@ function Patient() {
       });
     }
   };
+
   // ✅ Toggle additional service
   const toggleAdditionalService = (type) => {
     if (additionalServices.includes(type)) {
@@ -882,7 +890,6 @@ function Patient() {
 
         {/* Timeline Section */}
         <div className="bg-white rounded-2xl shadow-lg border border-sky-100 overflow-hidden">
-          {/* Folder Header - Clickable */}
           <div
             onClick={() => setAppointmentsOpen(!appointmentsOpen)}
             className="flex items-center justify-between p-4 bg-sky-100 cursor-pointer hover:bg-sky-200 transition-all"
@@ -1044,7 +1051,7 @@ function Patient() {
                   setShowImportModal(true);
                   setImportError(null);
                 }}
-                className="hidden sm:block px-4 py-2 border-2 border-sky-300 text-sky-900 font-semibold rounded-lg shadow-sm bg-white hover:bg-sky-50 transition-colors text-sm"
+                className="w-full sm:w-auto px-4 py-2 border-2 border-sky-300 text-sky-900 font-semibold rounded-lg shadow-sm bg-white hover:bg-sky-50 transition-colors text-sm"
               >
                 Import Records
               </button>
@@ -1176,7 +1183,7 @@ function Patient() {
         </div>
         {showModal && selectedRecord && (
           <div className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/30">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-screen overflow-y-auto">
+            <div className="bg-white rounded-3xl shadow-2xl w-11/12 max-w-2xl md:max-w-3xl max-h-[85vh] overflow-y-auto mx-auto">
               {/* Modern Header with Gradient */}
               <div className="bg-gradient-to-r from-blue-600 to-sky-500 px-6 md:px-8 py-8 text-white rounded-t-3xl">
                 <div className="flex items-center justify-between mb-4">

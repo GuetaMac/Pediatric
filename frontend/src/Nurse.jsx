@@ -27,7 +27,9 @@ import {
   ChevronUp,
   Filter,
   Calendar,
+  AlertCircle,
   ChevronRight,
+  Syringe,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
@@ -93,6 +95,14 @@ function Nurse() {
     const [insightsOpen, setInsightsOpen] = useState(false);
     const [insightsLoading, setInsightsLoading] = useState(false);
     const [insightsResult, setInsightsResult] = useState(null);
+
+    const [showWalkInModal, setShowWalkInModal] = useState(false);
+    const [walkInForm, setWalkInForm] = useState({
+      fullName: "",
+      appointmentType: "",
+      vaccinationType: "",
+      concerns: "",
+    });
 
     const formatMonth = (d) => {
       if (!d) return "-";
@@ -335,10 +345,113 @@ function Nurse() {
         setLoading(false);
       }
     };
+    const handleAddWalkIn = async () => {
+      // Validation
+      if (!walkInForm.fullName.trim() || !walkInForm.appointmentType) {
+        Swal.fire({
+          icon: "warning",
+          title: "Missing Information",
+          text: "Please fill in patient name and visit type",
+          confirmButtonColor: "#3b82f6",
+        });
+        return;
+      }
+
+      if (
+        walkInForm.appointmentType === "Vaccination" &&
+        !walkInForm.vaccinationType.trim()
+      ) {
+        Swal.fire({
+          icon: "warning",
+          title: "Missing Information",
+          text: "Please specify vaccination type",
+          confirmButtonColor: "#3b82f6",
+        });
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/appointments/walkin`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              full_name: walkInForm.fullName,
+              appointment_type: walkInForm.appointmentType,
+              vaccination_type:
+                walkInForm.appointmentType === "Vaccination"
+                  ? walkInForm.vaccinationType
+                  : null,
+              concerns: walkInForm.concerns,
+              additional_services: "None",
+            }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          await Swal.fire({
+            icon: "success",
+            title: "Success!",
+            text: "Walk-in patient added to queue successfully!",
+            confirmButtonColor: "#3b82f6",
+            timer: 2000,
+            showConfirmButton: false,
+          });
+
+          setShowWalkInModal(false);
+          setWalkInForm({
+            fullName: "",
+            appointmentType: "",
+            vaccinationType: "",
+            concerns: "",
+          });
+
+          // Refresh dashboard
+          fetchSummaries();
+        } else {
+          Swal.fire({
+            icon: "error",
+            title: "Failed",
+            text: data.error || "Failed to add walk-in patient",
+            confirmButtonColor: "#3b82f6",
+          });
+        }
+      } catch (error) {
+        console.error("Error adding walk-in:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to add walk-in patient",
+          confirmButtonColor: "#3b82f6",
+        });
+      }
+    };
 
     useEffect(() => {
       fetchSummaries();
     }, []);
+    // ✅ Prevent body scroll when modal is open
+    useEffect(() => {
+      if (showWalkInModal) {
+        document.body.style.overflow = "hidden";
+        document.body.style.paddingRight = "0px"; // Prevent layout shift
+      } else {
+        document.body.style.overflow = "";
+        document.body.style.paddingRight = "";
+      }
+
+      return () => {
+        document.body.style.overflow = "";
+        document.body.style.paddingRight = "";
+      };
+    }, [showWalkInModal]);
 
     return (
       <div className="space-y-4 sm:space-y-6 md:space-y-10 bg-white/30 backdrop-blur-md min-h-screen p-4 sm:p-6 md:p-8 rounded-xl">
@@ -385,19 +498,26 @@ function Nurse() {
 
             // Split into scheduled and walk-in appointments
             const scheduledAppts = approvedToday.filter((p) => {
-              const isWalkIn =
-                /walk[- ]?in/i.test(p.appointment_type) ||
-                p.appointment_type.toLowerCase().includes("walkin");
+              // Multiple ways to detect walk-in
+              const hasWalkInFlag = p.is_walkin === true;
+              const hasNoUser = !p.user_id;
+              const hasWalkInName = p.walk_in_name != null;
+
+              const isWalkIn = hasWalkInFlag || hasNoUser || hasWalkInName;
+
+              // ✅ ONLY show scheduled appointments (NOT walk-ins)
               return !isWalkIn;
             });
-
             const walkInAppts = approvedToday.filter((p) => {
-              const isWalkIn =
-                /walk[- ]?in/i.test(p.appointment_type) ||
-                p.appointment_type.toLowerCase().includes("walkin");
+              // Multiple ways to detect walk-in
+              const hasWalkInFlag = p.is_walkin === true;
+              const hasNoUser = !p.user_id;
+              const hasWalkInName = p.walk_in_name != null;
+
+              const isWalkIn = hasWalkInFlag || hasNoUser || hasWalkInName;
+
               return isWalkIn;
             });
-
             if (approvedToday.length === 0) {
               return (
                 <div className="bg-white p-4 sm:p-6 rounded-2xl shadow text-gray-500 text-center text-sm sm:text-base">
@@ -471,11 +591,23 @@ function Nurse() {
 
                   {/* RIGHT COLUMN: Walk-in Patients */}
                   <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 sm:p-6 rounded-2xl shadow border-l-4 border-orange-600">
-                    <h3 className="text-lg sm:text-xl font-semibold text-orange-700 mb-4 flex items-center">
-                      <Users className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
-                      Walk-in Patients ({walkInAppts.length})
-                    </h3>
+                    {/* ✅ REPLACE H3 WITH THIS */}
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg sm:text-xl font-semibold text-orange-700 flex items-center">
+                        <Users className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
+                        Walk-in Patients ({walkInAppts.length})
+                      </h3>
 
+                      <button
+                        onClick={() => setShowWalkInModal(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition shadow-md text-xs sm:text-sm"
+                        title="Add new walk-in patient"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        <span className="hidden sm:inline">Add Walk-in</span>
+                        <span className="sm:hidden">Add</span>
+                      </button>
+                    </div>
                     {walkInAppts.length === 0 ? (
                       <div className="text-gray-500 text-center text-sm sm:text-base py-4">
                         No walk-in patients for today.
@@ -499,7 +631,7 @@ function Nurse() {
                                 </span>
                               </div>
                               <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700 whitespace-nowrap">
-                                Just Arrived
+                                Walk-in
                               </span>
                             </div>
                             <div className="space-y-1 text-xs sm:text-sm">
@@ -511,9 +643,9 @@ function Nurse() {
                               </p>
                               <p>
                                 <span className="font-semibold text-gray-700">
-                                  Status:
+                                  Type:
                                 </span>{" "}
-                                Walk-in
+                                {patient.appointment_type}
                               </p>
                               <p>
                                 <span className="font-semibold text-gray-700">
@@ -925,6 +1057,177 @@ function Nurse() {
           <CalendarDays className="inline w-4 h-4 mr-1" />
           Updated daily — Health Center System © {new Date().getFullYear()}
         </div>
+
+        {/* ✅ WALK-IN MODAL - FINAL FIXED VERSION */}
+        {showWalkInModal && (
+          <div
+            className="fixed inset-0 z-[9999] overflow-y-auto bg-black/60"
+            onClick={() => setShowWalkInModal(false)}
+          >
+            <div className="min-h-screen px-4 flex items-center justify-center py-8">
+              <div
+                className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-8"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header - Fixed */}
+                <div className="bg-gradient-to-r from-green-600 to-emerald-500 px-6 py-5 text-white rounded-t-2xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-white/20 p-2 rounded-full">
+                        <UserPlus className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl sm:text-2xl font-bold">
+                          Add Walk-in Patient
+                        </h2>
+                        <p className="text-green-100 text-xs sm:text-sm">
+                          Register patient to queue
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowWalkInModal(false)}
+                      className="p-2 hover:bg-white/20 rounded-full transition flex-shrink-0"
+                      type="button"
+                    >
+                      <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Body - Scrollable */}
+                <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 max-h-[60vh] overflow-y-auto">
+                  {/* Patient Name */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Patient Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={walkInForm.fullName}
+                      onChange={(e) =>
+                        setWalkInForm({
+                          ...walkInForm,
+                          fullName: e.target.value,
+                        })
+                      }
+                      placeholder="e.g., Juan Dela Cruz"
+                      className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  {/* Visit Type */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Visit Type *
+                    </label>
+                    <select
+                      value={walkInForm.appointmentType}
+                      onChange={(e) => {
+                        setWalkInForm({
+                          ...walkInForm,
+                          appointmentType: e.target.value,
+                          vaccinationType: "",
+                        });
+                      }}
+                      className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="">-- Choose Visit Type --</option>
+                      <option value="Consultation">Consultation</option>
+                      <option value="Vaccination">Vaccination</option>
+                      <option value="Check-up">Check-up</option>
+                      <option value="Ear Piercing">Ear Piercing</option>
+                      <option value="Follow-up Check-up">
+                        Follow-up Check-up
+                      </option>
+                    </select>
+                  </div>
+
+                  {/* Vaccination Type (conditional) */}
+                  {walkInForm.appointmentType === "Vaccination" && (
+                    <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                      <label className="block text-sm font-bold text-blue-900 mb-2 flex items-center gap-2">
+                        <Syringe className="w-4 h-4" />
+                        Vaccination Type *
+                      </label>
+                      <input
+                        type="text"
+                        value={walkInForm.vaccinationType}
+                        onChange={(e) =>
+                          setWalkInForm({
+                            ...walkInForm,
+                            vaccinationType: e.target.value,
+                          })
+                        }
+                        placeholder="e.g., COVID-19, Flu, Hepatitis B"
+                        className="w-full border-2 border-blue-300 rounded-lg px-4 py-2 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  )}
+
+                  {/* Patient Concerns */}
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Patient Concerns / Symptoms
+                    </label>
+                    <textarea
+                      value={walkInForm.concerns}
+                      onChange={(e) =>
+                        setWalkInForm({
+                          ...walkInForm,
+                          concerns: e.target.value,
+                        })
+                      }
+                      placeholder="Describe symptoms or reason for visit..."
+                      className="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                      rows={3}
+                    />
+                    {walkInForm.concerns.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {walkInForm.concerns.length} characters
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Info Note */}
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 sm:p-4 rounded">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                      <div className="text-xs sm:text-sm text-yellow-800">
+                        <p className="font-semibold">
+                          Walk-in patients will be added to the queue
+                          immediately
+                        </p>
+                        <p className="mt-1">
+                          The time will be recorded as the current time when
+                          submitted.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer - Fixed */}
+                <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 flex justify-end gap-3 border-t rounded-b-2xl">
+                  <button
+                    onClick={() => setShowWalkInModal(false)}
+                    type="button"
+                    className="px-4 sm:px-5 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition text-sm sm:text-base"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAddWalkIn}
+                    type="button"
+                    className="px-4 sm:px-5 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition shadow-md text-sm sm:text-base"
+                  >
+                    Add to Queue
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };

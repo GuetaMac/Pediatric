@@ -838,10 +838,12 @@ app.get("/get/appointments", auth, async (req, res) => {
 app.get("/appointments/nurse", async (req, res) => {
   try {
     const query = `
-SELECT 
+      SELECT 
         a.appointment_id,
         a.user_id,
-        u.full_name,
+        a.full_name as walk_in_name,
+        u.full_name as user_full_name,
+        COALESCE(a.full_name, u.full_name) as full_name,
         u.email,
         a.appointment_date,
         a.appointment_time,
@@ -851,20 +853,21 @@ SELECT
         a.additional_services,
         a.vaccination_type,
         a.cancel_remarks,
+        a.is_walkin,
         a.created_at,
         COALESCE(pp.phone_number, '') as phone_number
       FROM appointments a
-      JOIN users u ON a.user_id = u.user_id
+      LEFT JOIN users u ON a.user_id = u.user_id
       LEFT JOIN patient_profiles pp ON u.user_id = pp.user_id
       ORDER BY a.appointment_date, a.appointment_time;
     `;
     const result = await pool.query(query);
 
-    // ✅ Check Vaccination appointments specifically
-    const vaccinationAppts = result.rows.filter(
-      (r) => r.appointment_type === "Vaccination"
+    console.log("📋 Total appointments:", result.rows.length);
+    console.log(
+      "🚶 Walk-ins:",
+      result.rows.filter((r) => r.is_walkin || !r.user_id).length
     );
-    console.log("💉 Vaccination appointments:", vaccinationAppts);
 
     res.json(result.rows);
   } catch (error) {
@@ -2962,6 +2965,66 @@ app.post("/patients/:patient_id/vitals", async (req, res) => {
     client.release();
     console.error("Error saving vitals endpoint:", err);
     return res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.post("/appointments/walkin", auth, async (req, res) => {
+  try {
+    const {
+      full_name,
+      appointment_type,
+      vaccination_type,
+      concerns,
+      additional_services,
+    } = req.body;
+
+    if (!full_name || !appointment_type) {
+      return res
+        .status(400)
+        .json({ error: "Patient name and appointment type are required" });
+    }
+
+    // Get current date and time in Philippine timezone
+    const now = new Date();
+    const phTime = new Date(
+      now.toLocaleString("en-US", { timeZone: "Asia/Manila" })
+    );
+    const date = phTime.toISOString().split("T")[0]; // YYYY-MM-DD
+    const time = phTime.toTimeString().split(" ")[0].substring(0, 5); // HH:MM
+
+    console.log("🚶 Adding walk-in:", {
+      full_name,
+      date,
+      time,
+      appointment_type,
+    });
+
+    const result = await pool.query(
+      `INSERT INTO appointments 
+       (user_id, full_name, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, vaccination_type, is_walkin, created_at)
+       VALUES ($1, $2, $3, $4, $5, 'Approved', $6, $7, $8, true, NOW())
+       RETURNING *`,
+      [
+        null,
+        full_name,
+        date,
+        time,
+        appointment_type,
+        concerns || "",
+        additional_services || "None",
+        vaccination_type || null,
+      ]
+    );
+
+    console.log("✅ Walk-in added:", result.rows[0]);
+
+    res.json({
+      message: "Walk-in patient added to queue successfully!",
+      appointment: result.rows[0],
+    });
+  } catch (error) {
+    console.error("❌ Error adding walk-in:", error);
+    res.status(500).json({ error: "Server error: " + error.message });
   }
 });
 
