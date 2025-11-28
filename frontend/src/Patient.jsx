@@ -29,6 +29,7 @@ import {
   LogOut,
   X,
   CheckCircle,
+  Bell,
 } from "lucide-react";
 import Swal from "sweetalert2";
 
@@ -50,6 +51,37 @@ function Patient() {
   const [loading, setLoading] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [patientName, setPatientName] = useState("Patient");
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  useEffect(() => {
+    const fetchNotificationCount = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/notifications/patient`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await response.json();
+
+        // ✅ FILTER - Only count UNREAD notifications
+        const lastViewedTime = localStorage.getItem("lastNotificationView");
+        const unreadCount = lastViewedTime
+          ? data.filter(
+              (n) => new Date(n.created_at) > new Date(lastViewedTime)
+            ).length
+          : data.length;
+
+        setNotificationCount(unreadCount);
+      } catch (error) {
+        console.error("Error fetching notification count:", error);
+      }
+    };
+
+    fetchNotificationCount();
+    const interval = setInterval(fetchNotificationCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
+  // Add badge sa navigation button (sa Notifications link)
 
   // Close mobile menu on window resize to desktop
   useEffect(() => {
@@ -542,6 +574,13 @@ function Patient() {
         <p class="field"><span class="label">Appointment Type:</span> ${appointmentType}</p>
         <p class="field"><span class="label">Date:</span> ${appointmentDate}</p>
         <p class="field"><span class="label">Time:</span> ${appointmentTime}</p>
+        ${
+          patient.status === "canceled" && patient.cancel_remarks
+            ? `
+        <p class="field"><span class="label">Cancellation Reason:</span> ${patient.cancel_remarks}</p>
+        `
+            : ""
+        }
         </div>
 
         <h2>Medical Record</h2>
@@ -582,28 +621,54 @@ function Patient() {
       (type) => type !== appointmentType
     );
 
-    const filteredAppointments = appointments
-      .filter((appt) => {
-        const status = appt.status?.toLowerCase().trim();
-        return filterStatus === "all" ? true : status === filterStatus;
-      })
-      .slice(0, 5); // Only show 5 most recent
+    const filteredAppointments = appointments.filter((appt) => {
+      const status = appt.status?.toLowerCase().trim();
+      return filterStatus === "all" ? true : status === filterStatus;
+    });
+
+    // Show all canceled appointments so their cancellation reasons are visible,
+    // but limit non-canceled items to the 5 most recent to keep the list compact.
+    const sorted = filteredAppointments.sort(
+      (a, b) => new Date(a.appointment_date) - new Date(b.appointment_date)
+    );
+    const canceledAppointments = sorted.filter(
+      (a) =>
+        String(a.status || "")
+          .toLowerCase()
+          .trim() === "canceled"
+    );
+    const nonCanceled = sorted.filter(
+      (a) =>
+        String(a.status || "")
+          .toLowerCase()
+          .trim() !== "canceled"
+    );
+    const displayAppointments = [
+      ...canceledAppointments,
+      ...nonCanceled.slice(0, 5),
+    ];
     const handleCancelAppointment = async (appointmentId) => {
-      // ✅ SweetAlert confirmation
-      const result = await Swal.fire({
-        title: "Cancel Appointment?",
-        text: "Are you sure you want to cancel this appointment?",
-        icon: "warning",
+      // Prompt for cancellation reason and require non-empty input
+      const reasonResult = await Swal.fire({
+        title: "Reason for cancellation",
+        input: "text",
+        inputPlaceholder: "Please enter a reason (required)",
         showCancelButton: true,
         confirmButtonColor: "#EF4444",
         cancelButtonColor: "#0EA5E9",
-        confirmButtonText: "Yes, cancel it!",
-        cancelButtonText: "No, keep it",
+        confirmButtonText: "Submit",
+        cancelButtonText: "Keep appointment",
+        inputValidator: (value) => {
+          if (!value || !value.trim()) {
+            return "Please provide a reason for cancelling";
+          }
+          return null;
+        },
       });
 
-      if (!result.isConfirmed) {
-        return;
-      }
+      if (!reasonResult.isConfirmed) return;
+
+      const cancelReason = reasonResult.value;
 
       try {
         const token = localStorage.getItem("token");
@@ -614,15 +679,16 @@ function Patient() {
           {
             method: "PATCH",
             headers: {
+              "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
+            body: JSON.stringify({ cancel_remarks: cancelReason }),
           }
         );
 
         const data = await response.json();
 
         if (response.ok) {
-          // ✅ Success alert
           await Swal.fire({
             icon: "success",
             title: "Canceled!",
@@ -633,7 +699,6 @@ function Patient() {
           // Refresh appointments list
           window.location.reload();
         } else {
-          // ❌ Error alert
           Swal.fire({
             icon: "error",
             title: "Failed",
@@ -934,7 +999,7 @@ function Patient() {
 
           {/* Folder Content - Expandable */}
           {appointmentsOpen && (
-            <div className="p-4 bg-sky-50 transition-all duration-300">
+            <div className="p-4 bg-sky-50 transition-all duration-300 max-h-[40vh] overflow-auto">
               {loading ? (
                 <p className="text-center text-sky-600 py-4">
                   Loading appointments…
@@ -1001,14 +1066,27 @@ function Patient() {
                                   <p className="text-xs text-sky-600 mt-1">
                                     <strong>Additional:</strong>{" "}
                                     {appt.additional_services}
+                                    {String(appt.status || "")
+                                      .toLowerCase()
+                                      .trim() === "canceled" &&
+                                      appt.cancel_remarks && (
+                                        <span className="ml-2 text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded">
+                                          <strong>Reason:</strong>{" "}
+                                          {appt.cancel_remarks}
+                                        </span>
+                                      )}
                                   </p>
                                 )}
 
-                              {status === "canceled" && appt.cancel_remarks && (
-                                <p className="text-xs text-red-600 mt-2 bg-red-50 p-2 rounded-lg border border-red-200">
-                                  <strong>Reason:</strong> {appt.cancel_remarks}
-                                </p>
-                              )}
+                              {status === "canceled" &&
+                                appt.cancel_remarks &&
+                                (!appt.additional_services ||
+                                  appt.additional_services === "None") && (
+                                  <p className="text-xs text-red-600 mt-2 bg-red-50 p-2 rounded-lg border border-red-200">
+                                    <strong>Reason:</strong>{" "}
+                                    {appt.cancel_remarks}
+                                  </p>
+                                )}
                             </div>
                             <div className="flex items-center gap-2">
                               <span
@@ -1095,7 +1173,7 @@ function Patient() {
               </p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-6 max-h-[60vh] overflow-auto pr-2">
               {Object.keys(groupedRecords).map((type) => (
                 <div
                   key={type}
@@ -1119,61 +1197,39 @@ function Patient() {
                   </div>
 
                   {openFolder === type && (
-                    <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 bg-yellow-50 transition-all duration-300">
-                      {groupedRecords[type].map((record) => (
-                        <div
-                          key={record.record_id || record.appointment_id}
-                          className="bg-white rounded-xl shadow-md p-4 hover:shadow-xl transition-all duration-200 cursor-pointer border-t-4 border-yellow-400 group"
-                          onClick={() => openRecordDetail(record)}
-                        >
-                          <p className="text-sm font-bold text-yellow-600 uppercase mb-2">
-                            {record.appointment_type}
-                          </p>
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center">
-                              <Calendar className="w-5 h-5 text-sky-500 mr-2" />
-                              <span className="text-sm font-medium text-sky-700">
-                                {record.appointment_date}
-                              </span>
+                    <div className="p-2 bg-yellow-50 transition-all duration-300">
+                      <ul className="divide-y divide-yellow-100">
+                        {groupedRecords[type].map((record) => (
+                          <li
+                            key={record.record_id || record.appointment_id}
+                            className="py-2 px-2 flex items-center justify-between cursor-pointer hover:bg-yellow-100 rounded"
+                            onClick={() => openRecordDetail(record)}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-8 h-8 bg-yellow-200 rounded flex items-center justify-center text-yellow-700 text-sm font-semibold flex-shrink-0">
+                                {record.appointment_type
+                                  ? record.appointment_type.charAt(0)
+                                  : "R"}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-sky-900 truncate">
+                                  {record.diagnosis || "General Checkup"}
+                                </div>
+                              </div>
                             </div>
-                            <Eye className="w-4 h-4 text-sky-400 group-hover:text-yellow-500 transition" />
-                          </div>
-                          <h3 className="text-lg font-semibold text-sky-900 mb-2">
-                            {record.diagnosis || "General Checkup"}
-                          </h3>
-                          <div className="space-y-2 text-sm text-sky-700">
-                            {record.temperature && (
-                              <div className="flex items-center">
-                                <Activity className="w-4 h-4 mr-2 text-yellow-500" />
-                                <span>Temperature: {record.temperature}°C</span>
+
+                            <div className="flex items-center gap-3 ml-4">
+                              <div className="text-xs text-sky-600 text-right whitespace-nowrap">
+                                {record.appointment_date}
+                                {record.appointment_time
+                                  ? ` • ${record.appointment_time}`
+                                  : ""}
                               </div>
-                            )}
-                            {record.pulse_rate && (
-                              <div className="flex items-center">
-                                <Activity className="w-4 h-4 mr-2 text-yellow-500" />
-                                <span>Pulse: {record.pulse_rate} bpm</span>
-                              </div>
-                            )}
-                            {record.weight && (
-                              <div className="flex items-center">
-                                <Activity className="w-4 h-4 mr-2 text-yellow-500" />
-                                <span>Weight: {record.weight} kg</span>
-                              </div>
-                            )}
-                            {record.height && (
-                              <div className="flex items-center">
-                                <Activity className="w-4 h-4 mr-2 text-yellow-500" />
-                                <span>Height: {record.height} cm</span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="mt-4 pt-3 border-t border-sky-100">
-                            <span className="text-xs text-sky-500">
-                              Click to view full details
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                              <Eye className="w-4 h-4 text-sky-400" />
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
                 </div>
@@ -1503,6 +1559,15 @@ function Patient() {
                       </div>
                     )}
                   </div>
+                  {selectedRecord.status === "canceled" &&
+                    selectedRecord.cancel_remarks && (
+                      <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                        <p className="text-sm text-red-700">
+                          <strong>Cancellation Reason:</strong>{" "}
+                          {selectedRecord.cancel_remarks}
+                        </p>
+                      </div>
+                    )}
                 </div>
               </div>
 
@@ -1866,10 +1931,294 @@ function Patient() {
     );
   };
 
+  const Notifications = () => {
+    const [notifications, setNotifications] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // Fetch notifications
+    const fetchNotifications = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/notifications/patient`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) throw new Error("Failed to fetch notifications");
+
+        const data = await response.json();
+        setNotifications(data);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+    // Inside Notifications component
+    useEffect(() => {
+      fetchNotifications();
+
+      setNotificationCount(0);
+
+      // Auto-refresh every 10 seconds (faster for testing)
+      const interval = setInterval(fetchNotifications, 10000);
+
+      // 🔔 Listen for status changes
+      const handleRefresh = () => {
+        console.log("🔔 Notification refresh triggered!");
+        fetchNotifications();
+      };
+      window.addEventListener("refreshNotifications", handleRefresh);
+
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener("refreshNotifications", handleRefresh);
+      };
+    }, []);
+
+    // Format date nicely
+    const formatDate = (dateString) => {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+
+      if (diffMins < 1) return "Just now";
+      if (diffMins < 60)
+        return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
+
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24)
+        return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    };
+
+    // Get icon and color based on status
+    const getStatusConfig = (status) => {
+      const statusLower = status?.toLowerCase();
+      if (statusLower === "approved") {
+        return {
+          icon: <CheckCircle className="w-6 h-6 text-green-600" />,
+          bgColor: "bg-green-50",
+          borderColor: "border-green-400",
+          badgeColor: "bg-green-100 text-green-700",
+          title: "Appointment Approved! ✅",
+        };
+      } else if (statusLower === "completed") {
+        return {
+          icon: <CheckCircle className="w-6 h-6 text-blue-600" />,
+          bgColor: "bg-blue-50",
+          borderColor: "border-blue-400",
+          badgeColor: "bg-blue-100 text-blue-700",
+          title: "Appointment Completed 🎉",
+        };
+      } else if (statusLower === "canceled") {
+        return {
+          icon: <AlertCircle className="w-6 h-6 text-red-600" />,
+          bgColor: "bg-red-50",
+          borderColor: "border-red-400",
+          badgeColor: "bg-red-100 text-red-700",
+          title: "Appointment Canceled ❌",
+        };
+      }
+      return {
+        icon: <Bell className="w-6 h-6 text-gray-600" />,
+        bgColor: "bg-gray-50",
+        borderColor: "border-gray-400",
+        badgeColor: "bg-gray-100 text-gray-700",
+        title: "Notification",
+      };
+    };
+
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-sky-50 to-blue-100">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-sky-500 mx-auto mb-4"></div>
+            <p className="text-sky-700 font-semibold">
+              Loading notifications...
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-sky-50 to-blue-100 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full border-t-4 border-red-500">
+            <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-800 text-center mb-2">
+              Error Loading Notifications
+            </h2>
+            <p className="text-gray-600 text-center mb-4">{error}</p>
+            <button
+              onClick={fetchNotifications}
+              className="w-full bg-sky-500 text-white py-2 rounded-lg font-semibold hover:bg-sky-600 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-100 p-4 md:p-8">
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border-t-4 border-yellow-400">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-yellow-100 p-3 rounded-full">
+                  <Bell className="w-8 h-8 text-yellow-600" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-sky-900">
+                    My Notifications
+                  </h1>
+                  <p className="text-sky-600">
+                    {notifications.length} notification
+                    {notifications.length !== 1 ? "s" : ""} (last 7 days)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={fetchNotifications}
+                className="px-4 py-2 bg-sky-500 text-white rounded-lg font-semibold hover:bg-sky-600 transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Notifications List */}
+          {notifications.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-xl p-12 text-center border-l-4 border-green-500">
+              <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                All Caught Up! 🎉
+              </h2>
+              <p className="text-gray-600">
+                No new notifications at the moment.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {notifications.map((notif) => {
+                const config = getStatusConfig(notif.status);
+
+                return (
+                  <div
+                    key={notif.appointment_id}
+                    className={`bg-white rounded-xl shadow-lg p-5 border-l-4 ${config.borderColor} hover:shadow-xl transition-all`}
+                  >
+                    <div className="flex items-start gap-4">
+                      {/* Left Side - Icon */}
+                      <div
+                        className={`${config.bgColor} p-3 rounded-full flex-shrink-0`}
+                      >
+                        {config.icon}
+                      </div>
+
+                      {/* Middle - Details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-lg font-bold text-gray-900">
+                            {config.title}
+                          </h3>
+                          <span
+                            className={`px-2 py-1 text-xs font-semibold rounded-full ${config.badgeColor} capitalize`}
+                          >
+                            {notif.status}
+                          </span>
+                        </div>
+
+                        <p className="text-sky-600 font-semibold mb-2">
+                          {notif.appointment_type}
+                          {notif.vaccination_type && (
+                            <span className="text-sm text-gray-600 ml-2">
+                              ({notif.vaccination_type})
+                            </span>
+                          )}
+                        </p>
+
+                        <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-2">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-sky-500" />
+                            <span>
+                              {new Date(
+                                notif.appointment_date
+                              ).toLocaleDateString("en-US", {
+                                month: "long",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-sky-500" />
+                            <span>{notif.appointment_time}</span>
+                          </div>
+                        </div>
+
+                        {/* Show cancellation reason if canceled */}
+                        {notif.status?.toLowerCase() === "canceled" &&
+                          notif.cancel_remarks && (
+                            <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                              <p className="text-sm text-red-700">
+                                <strong>Reason for cancellation:</strong>{" "}
+                                {notif.cancel_remarks}
+                              </p>
+                            </div>
+                          )}
+
+                        {/* Show additional services */}
+                        {notif.additional_services &&
+                          notif.additional_services !== "None" && (
+                            <p className="text-xs text-gray-600 mt-2">
+                              <strong>Additional services:</strong>{" "}
+                              {notif.additional_services}
+                            </p>
+                          )}
+                      </div>
+
+                      {/* Right Side - Time Ago */}
+                      <div className="text-right flex-shrink-0">
+                        <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                          {formatDate(notif.updated_at || notif.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const menuItems = [
     { id: "home", label: "Home", icon: Home },
     { id: "appointments", label: "Appointments", icon: Calendar },
-
+    { id: "notifications", label: "Notifications", icon: Bell },
     { id: "profile", label: "Profile", icon: User },
   ];
 
@@ -1890,6 +2239,9 @@ function Patient() {
 
       case "profile":
         return <PatientProfile />;
+
+      case "notifications":
+        return <Notifications />;
 
       default:
         return null;
@@ -1972,15 +2324,30 @@ function Patient() {
                   onClick={() => {
                     setActivePage(item.id);
                     setIsMobileMenuOpen(false);
+
+                    // ✅ MARK AS READ - Save timestamp
+                    if (item.id === "notifications") {
+                      localStorage.setItem(
+                        "lastNotificationView",
+                        new Date().toISOString()
+                      );
+                      setNotificationCount(0);
+                    }
                   }}
-                  className={`w-full flex items-center p-2.5 sm:p-3 rounded-lg sm:rounded-xl transition-all duration-200 text-sm sm:text-base ${
+                  className={`w-full flex items-center p-2.5 sm:p-3 rounded-lg transition-all ${
                     activePage === item.id
-                      ? "bg-yellow-400 text-blue-600 shadow-lg"
-                      : "hover:bg-yellow-400 hover:text-blue-600 text-blue-100"
+                      ? "bg-yellow-400 text-sky-600 shadow-lg"
+                      : "hover:bg-yellow-400 hover:text-sky-600 text-sky-100"
                   }`}
                 >
                   <Icon className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                   <span className="font-semibold">{item.label}</span>
+
+                  {item.id === "notifications" && notificationCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+                      {notificationCount}
+                    </span>
+                  )}
                 </button>
               );
             })}

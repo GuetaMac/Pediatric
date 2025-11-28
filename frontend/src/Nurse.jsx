@@ -30,6 +30,7 @@ import {
   AlertCircle,
   ChevronRight,
   Syringe,
+  Bell,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
@@ -52,6 +53,38 @@ import { ClipboardList } from "lucide-react";
 function Nurse() {
   const [activePage, setActivePage] = useState("home");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  // 🔔 PALITAN MO YUNG EXISTING useEffect NG GANITO
+  useEffect(() => {
+    const fetchNotificationCount = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/notifications/nurse`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await response.json();
+        setNotificationCount(data.length);
+      } catch (error) {
+        console.error("Error fetching notification count:", error);
+      }
+    };
+
+    fetchNotificationCount();
+
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(fetchNotificationCount, 30000);
+
+    // 🔔 DAGDAG MO ITO - Listen for manual refresh events
+    const handleRefresh = () => fetchNotificationCount();
+    window.addEventListener("refreshNotifications", handleRefresh);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("refreshNotifications", handleRefresh);
+    };
+  }, []);
 
   // Close mobile menu on window resize to desktop
   useEffect(() => {
@@ -71,6 +104,7 @@ function Nurse() {
     { id: "patient-accounts", label: "Patient Accounts", icon: Baby },
     { id: "medical-records", label: "Medical Records", icon: FileText },
     { id: "Inventory", label: "Inventory", icon: Package },
+    { id: "Notifications", label: "Notifications", icon: Bell },
   ];
 
   // HOME PAGE
@@ -518,13 +552,8 @@ function Nurse() {
 
               return isWalkIn;
             });
-            if (approvedToday.length === 0) {
-              return (
-                <div className="bg-white p-4 sm:p-6 rounded-2xl shadow text-gray-500 text-center text-sm sm:text-base">
-                  No approved patients in queue for today.
-                </div>
-              );
-            }
+            // Always render both columns (Scheduled / Walk-in).
+            // Each column will show its own empty state when there are no items.
 
             return (
               <>
@@ -1061,7 +1090,7 @@ function Nurse() {
         {/* ✅ WALK-IN MODAL - FINAL FIXED VERSION */}
         {showWalkInModal && (
           <div
-            className="fixed inset-0 z-[9999] overflow-y-auto bg-black/60"
+            className="fixed inset-0 z-[9999] overflow-y-auto bg-transparent"
             onClick={() => setShowWalkInModal(false)}
           >
             <div className="min-h-screen px-4 flex items-center justify-center py-8">
@@ -1315,6 +1344,9 @@ function Nurse() {
                 : appt
             )
           );
+
+          // 🔔 DAGDAG MO ITO - Refresh notification count
+          window.dispatchEvent(new Event("refreshNotifications"));
         } else {
           alert(data.error || "Failed to update appointment status");
         }
@@ -1777,7 +1809,7 @@ function Nurse() {
                   )}
                   {/* 👇 LAGAY MO DITO YUNG MODAL */}
                   {cancelModal.show && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50 p-4">
                       <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
                         <h3 className="text-xl font-bold text-gray-800 mb-4">
                           Cancel Appointment
@@ -4154,7 +4186,209 @@ function Nurse() {
       </div>
     );
   };
-  // SETTINGS PAGE
+
+  const NotificationPage = () => {
+    const [notifications, setNotifications] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // Fetch notifications
+    const fetchNotifications = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/notifications/nurse`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) throw new Error("Failed to fetch notifications");
+
+        const data = await response.json();
+        setNotifications(data);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 30000);
+      return () => clearInterval(interval);
+    }, []);
+
+    // Format date nicely
+    const formatDate = (dateString) => {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+
+      if (diffMins < 1) return "Just now";
+      if (diffMins < 60)
+        return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
+
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24)
+        return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    };
+
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-sky-50 to-blue-100">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-sky-500 mx-auto mb-4"></div>
+            <p className="text-sky-700 font-semibold">
+              Loading notifications...
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-sky-50 to-blue-100 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full border-t-4 border-red-500">
+            <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-800 text-center mb-2">
+              Error Loading Notifications
+            </h2>
+            <p className="text-gray-600 text-center mb-4">{error}</p>
+            <button
+              onClick={fetchNotifications}
+              className="w-full bg-sky-500 text-white py-2 rounded-lg font-semibold hover:bg-sky-600 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-100 p-4 md:p-8">
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border-t-4 border-yellow-400">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-yellow-100 p-3 rounded-full">
+                  <Bell className="w-8 h-8 text-yellow-600" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-sky-900">
+                    Notifications
+                  </h1>
+                  <p className="text-sky-600">
+                    {notifications.length} pending appointment
+                    {notifications.length !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={fetchNotifications}
+                className="px-4 py-2 bg-sky-500 text-white rounded-lg font-semibold hover:bg-sky-600 transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Notifications List */}
+          {notifications.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-xl p-12 text-center border-l-4 border-green-500">
+              <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                All Caught Up! 🎉
+              </h2>
+              <p className="text-gray-600">
+                No pending appointments at the moment.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {notifications.map((notif) => (
+                <div
+                  key={notif.appointment_id}
+                  className="bg-white rounded-xl shadow-lg p-5 border-l-4 border-yellow-400 hover:shadow-xl transition-all hover:scale-[1.02]"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    {/* Left Side - Icon & Details */}
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className="bg-yellow-100 p-3 rounded-full flex-shrink-0">
+                        <User className="w-6 h-6 text-yellow-600" />
+                      </div>
+
+                      <div className="flex-1">
+                        {/* Patient Name & Type */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-lg font-bold text-gray-900">
+                            {notif.patient_name}
+                          </h3>
+                          {notif.is_walkin && (
+                            <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">
+                              Walk-in
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Appointment Type */}
+                        <p className="text-sky-600 font-semibold mb-3">
+                          {notif.appointment_type}
+                        </p>
+
+                        {/* Date & Time */}
+                        <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-sky-500" />
+                            <span>
+                              {new Date(
+                                notif.appointment_date
+                              ).toLocaleDateString("en-US", {
+                                month: "long",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-sky-500" />
+                            <span>{notif.appointment_time}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Side - Time Ago */}
+                    <div className="text-right flex-shrink-0">
+                      <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                        {formatDate(notif.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
   // ANALYTICS PAGE (same mechanics as Doctor)
   const AnalyticsPage = () => {
     const [data, setData] = useState(null);
@@ -4162,7 +4396,7 @@ function Nurse() {
     const [error, setError] = useState(null);
 
     // Filter states
-    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [selectedYear, setSelectedYear] = useState("all");
     const [selectedMonth, setSelectedMonth] = useState("all");
     const [selectedDiagnosis, setSelectedDiagnosis] = useState("all");
     // Patient scope filter: 'all' or 'overall'
@@ -4307,7 +4541,11 @@ function Nurse() {
 
     const getFilterContext = () => {
       let context = "Clinic analytics data";
-      if (selectedYear) context += ` for year ${selectedYear}`;
+      if (selectedYear)
+        context +=
+          selectedYear === "all"
+            ? " for all years"
+            : ` for year ${selectedYear}`;
       if (selectedMonth !== "all") {
         const monthName = months.find((m) => m.value === selectedMonth)?.label;
         context += `, ${monthName}`;
@@ -4391,6 +4629,22 @@ function Nurse() {
     const filteredMonths = months.filter(
       (m) => m.value === "all" || availableMonths.includes(parseInt(m.value))
     );
+
+    // Derived chart data: when All Years is selected, prefer per-year aggregates
+    const appointmentChartData =
+      selectedYear === "all"
+        ? data?.appointmentTrendByYear || data?.appointmentTrend || []
+        : data?.appointmentTrend || [];
+
+    const diagnosisChartData =
+      selectedYear === "all"
+        ? data?.diagnosisTrendByYear || data?.diagnosisTrend || []
+        : data?.diagnosisTrend || [];
+
+    const appointmentTypeChartData =
+      selectedYear === "all"
+        ? data?.appointmentTypeTrendByYear || data?.appointmentTypeTrend || []
+        : data?.appointmentTypeTrend || [];
 
     // Copy insights to clipboard
     const handleCopyInsights = async () => {
@@ -4486,7 +4740,13 @@ function Nurse() {
               <Activity className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-800">Analytics</h2>
               <div className="text-xs text-gray-500 ml-2">
-                {selectedMonth === "all"
+                {selectedYear === "all"
+                  ? selectedMonth === "all"
+                    ? "All Years"
+                    : `${
+                        months.find((m) => m.value === selectedMonth)?.label
+                      } All Years`
+                  : selectedMonth === "all"
                   ? `Year ${selectedYear}`
                   : `${
                       months.find((m) => m.value === selectedMonth)?.label
@@ -4496,9 +4756,14 @@ function Nurse() {
             <div className="flex items-center gap-2">
               <select
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                onChange={(e) =>
+                  setSelectedYear(
+                    e.target.value === "all" ? "all" : parseInt(e.target.value)
+                  )
+                }
                 className="bg-transparent border px-2 py-1 rounded text-sm"
               >
+                <option value="all">All Years</option>
                 {availableYears.map((year) => (
                   <option key={year} value={year}>
                     {year}
@@ -4559,15 +4824,15 @@ function Nurse() {
                 title="Monthly Appointments Trend"
                 chartId="monthly-trend"
                 chartType="Monthly Appointment Trend"
-                chartData={data.appointmentTrend}
+                chartData={appointmentChartData}
                 context={`${getFilterContext()}. Overall monthly appointment volume.`}
                 icon={TrendingUp}
                 gradient="border-purple-100"
               >
                 <div className="h-56">
-                  {data.appointmentTrend?.length ? (
+                  {appointmentChartData?.length ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={data.appointmentTrend}>
+                      <LineChart data={appointmentChartData}>
                         <CartesianGrid
                           strokeDasharray="3 3"
                           stroke="#edf2f7"
@@ -4575,10 +4840,16 @@ function Nurse() {
                         />
                         <XAxis
                           dataKey={
-                            selectedMonth !== "all" ? "monthLabel" : "month"
+                            selectedYear === "all"
+                              ? "year"
+                              : selectedMonth !== "all"
+                              ? "monthLabel"
+                              : "month"
                           }
                           tickFormatter={
-                            selectedMonth === "all"
+                            selectedYear === "all"
+                              ? undefined
+                              : selectedMonth === "all"
                               ? (v) => monthNames[v - 1]
                               : undefined
                           }
@@ -4608,15 +4879,15 @@ function Nurse() {
                 title="Diagnosis Distribution"
                 chartId="diagnosis-trend"
                 chartType="Monthly Diagnosis Distribution"
-                chartData={data.diagnosisTrend}
+                chartData={diagnosisChartData}
                 context={`${getFilterContext()}. Shows the most common diagnosis for each month.`}
                 icon={Stethoscope}
                 gradient="border-blue-100"
               >
                 <div className="h-56">
-                  {data.diagnosisTrend?.length ? (
+                  {diagnosisChartData?.length ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={data.diagnosisTrend}>
+                      <BarChart data={diagnosisChartData}>
                         <defs>
                           <linearGradient
                             id="colorDiagnosis"
@@ -4643,8 +4914,12 @@ function Nurse() {
                           opacity={0.5}
                         />
                         <XAxis
-                          dataKey="month"
-                          tickFormatter={(v) => monthNames[v - 1]}
+                          dataKey={selectedYear === "all" ? "year" : "month"}
+                          tickFormatter={
+                            selectedYear === "all"
+                              ? undefined
+                              : (v) => monthNames[v - 1]
+                          }
                           tick={{ fill: "#4b5563" }}
                         />
                         <YAxis tick={{ fill: "#4b5563" }} />
@@ -4670,15 +4945,15 @@ function Nurse() {
                 title="Appointment Type Distribution"
                 chartId="appointment-type-trend"
                 chartType="Appointment Type Distribution"
-                chartData={data.appointmentTypeTrend}
+                chartData={appointmentTypeChartData}
                 context={`${getFilterContext()}. Shows appointment types per month.`}
                 icon={Calendar}
                 gradient="border-green-100"
               >
                 <div className="h-56">
-                  {data.appointmentTypeTrend?.length ? (
+                  {appointmentTypeChartData?.length ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={data.appointmentTypeTrend}>
+                      <BarChart data={appointmentTypeChartData}>
                         <defs>
                           <linearGradient
                             id="colorAppointment"
@@ -4705,8 +4980,12 @@ function Nurse() {
                           opacity={0.5}
                         />
                         <XAxis
-                          dataKey="month"
-                          tickFormatter={(v) => monthNames[v - 1]}
+                          dataKey={selectedYear === "all" ? "year" : "month"}
+                          tickFormatter={
+                            selectedYear === "all"
+                              ? undefined
+                              : (v) => monthNames[v - 1]
+                          }
                           tick={{ fill: "#4b5563" }}
                         />
                         <YAxis tick={{ fill: "#4b5563" }} />
@@ -4878,6 +5157,7 @@ function Nurse() {
     if (activePage === "patient-accounts") return <PatientsPage />;
     if (activePage === "medical-records") return <MedicalRecords />;
     if (activePage === "Inventory") return <InventoryPage />;
+    if (activePage === "Notifications") return <NotificationPage />;
 
     return (
       <div className="text-center py-16">
@@ -4954,6 +5234,13 @@ function Nurse() {
                 >
                   <Icon className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                   <span className="font-semibold">{item.label}</span>
+
+                  {/* 🔔 NOTIFICATION BADGE - LAGAY MO ITO */}
+                  {item.id === "Notifications" && notificationCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+                      {notificationCount}
+                    </span>
+                  )}
                 </button>
               );
             })}

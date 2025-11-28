@@ -807,11 +807,19 @@ app.patch("/appointments/:id/cancel", auth, async (req, res) => {
       });
     }
 
-    // Update status to canceled
-    await pool.query(
-      "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1", // ✅ CHANGED
-      [appointmentId]
-    );
+    // Update status to canceled and save cancel reason if provided
+    const cancelReason = req.body?.cancel_remarks || null;
+    if (cancelReason) {
+      await pool.query(
+        "UPDATE appointments SET status = 'canceled', cancel_remarks = $2 WHERE appointment_id = $1",
+        [appointmentId, cancelReason]
+      );
+    } else {
+      await pool.query(
+        "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1",
+        [appointmentId]
+      );
+    }
 
     res.json({ message: "Appointment canceled successfully" });
   } catch (error) {
@@ -2038,7 +2046,9 @@ app.get("/sales", async (req, res) => {
 app.get("/analytics", auth, async (req, res) => {
   try {
     const { year, month } = req.query;
-    const selectedYear = year ? parseInt(year) : new Date().getFullYear();
+    const isAllYears = year === "all";
+    const selectedYear =
+      !isAllYears && year ? parseInt(year) : new Date().getFullYear();
     const selectedMonth = month && month !== "all" ? parseInt(month) : null;
     const selectedDiagnosis =
       req.query.diagnosis && req.query.diagnosis !== "all"
@@ -2055,16 +2065,137 @@ app.get("/analytics", auth, async (req, res) => {
       parseInt(r.year)
     );
 
-    // Get available months for selected year
-    const availableMonthsResult = await pool.query(`
-      SELECT DISTINCT EXTRACT(MONTH FROM appointment_date) AS month
-      FROM appointments
-      WHERE EXTRACT(YEAR FROM appointment_date) = ${selectedYear}
-      ORDER BY month
-    `);
-    const availableMonths = availableMonthsResult.rows.map((r) =>
-      parseInt(r.month)
-    );
+    // Get available months for selected year (empty for all-years view)
+    let availableMonths = [];
+    if (!isAllYears) {
+      const availableMonthsResult = await pool.query(`
+        SELECT DISTINCT EXTRACT(MONTH FROM appointment_date) AS month
+        FROM appointments
+        WHERE EXTRACT(YEAR FROM appointment_date) = ${selectedYear}
+        ORDER BY month
+      `);
+      availableMonths = availableMonthsResult.rows.map((r) =>
+        parseInt(r.month)
+      );
+    }
+
+    // If requesting all years, return per-year aggregates and KPIs
+    if (isAllYears) {
+      // Appointment counts per year
+      const appointmentPerYear = await pool.query(`
+        SELECT EXTRACT(YEAR FROM appointment_date) AS year, COUNT(*) AS total
+        FROM appointments
+        GROUP BY year
+        ORDER BY year
+      `);
+
+      // Diagnosis counts per year (split comma-separated diagnoses)
+      const diagnosisPerYear = await pool.query(`
+        SELECT EXTRACT(YEAR FROM a.appointment_date) AS year, COUNT(*) AS count
+        FROM medical_records mr
+        JOIN appointments a ON mr.appointment_id = a.appointment_id
+        CROSS JOIN LATERAL regexp_split_to_table(mr.diagnosis, ',') AS diagnosis_item
+        WHERE mr.diagnosis IS NOT NULL
+          AND mr.diagnosis != ''
+          AND TRIM(diagnosis_item) != ''
+        GROUP BY year
+        ORDER BY year
+      `);
+
+      // Appointment type counts per year
+      const appointmentTypePerYear = await pool.query(`
+        SELECT EXTRACT(YEAR FROM appointment_date) AS year, COUNT(*) AS count
+        FROM appointments
+        GROUP BY year
+        ORDER BY year
+      `);
+
+      // Total appointments (all years)
+      const totalAppointmentsAll = await pool.query(`
+        SELECT COUNT(*) AS total FROM appointments
+      `);
+
+      // Overall distinct patients (assumes appointments.user_id references patient)
+      const overallPatientsRes = await pool.query(`
+        SELECT COUNT(DISTINCT user_id) AS total FROM appointments
+      `);
+
+      // Most common appointment type (all years)
+      const commonTypeAll = await pool.query(`
+        SELECT appointment_type, COUNT(*) AS count
+        FROM appointments
+        GROUP BY appointment_type
+        ORDER BY count DESC
+        LIMIT 1;
+      `);
+
+      // Most common diagnosis (all years)
+      const commonDiagnosisAll = await pool.query(`
+        SELECT TRIM(diagnosis_item) AS diagnosis, COUNT(*) AS count
+        FROM medical_records mr
+        JOIN appointments a ON mr.appointment_id = a.appointment_id
+        CROSS JOIN LATERAL regexp_split_to_table(mr.diagnosis, ',') AS diagnosis_item
+        WHERE mr.diagnosis IS NOT NULL
+          AND mr.diagnosis != ''
+          AND TRIM(diagnosis_item) != ''
+        GROUP BY TRIM(diagnosis_item)
+        ORDER BY count DESC
+        LIMIT 1;
+      `);
+
+      // Inventory usage across all years
+      let inventoryUsageAll = { rows: [] };
+      try {
+        inventoryUsageAll = await pool.query(`
+          SELECT i.name, SUM(s.quantity) as total_sold
+          FROM sales s
+          JOIN inventory i ON s.inventory_id = i.inventory_id
+          GROUP BY i.name
+          ORDER BY total_sold DESC
+          LIMIT 10
+        `);
+      } catch (e) {
+        console.log(
+          "Inventory/Sales tables not found, skipping inventory usage"
+        );
+      }
+
+      // All diagnoses (already global)
+      const allDiagnoses = await pool.query(`
+        SELECT DISTINCT TRIM(diagnosis_item) AS diagnosis
+        FROM medical_records mr
+        JOIN appointments a ON mr.appointment_id = a.appointment_id
+        CROSS JOIN LATERAL regexp_split_to_table(mr.diagnosis, ',') AS diagnosis_item
+        WHERE mr.diagnosis IS NOT NULL 
+          AND mr.diagnosis != ''
+          AND TRIM(diagnosis_item) != ''
+        ORDER BY diagnosis
+      `);
+
+      return res.json({
+        availableYears,
+        availableMonths,
+        totalAppointments: parseInt(totalAppointmentsAll.rows[0]?.total || 0),
+        overallPatients: parseInt(overallPatientsRes.rows[0]?.total || 0),
+        commonAppointmentType: commonTypeAll.rows[0]?.appointment_type || "N/A",
+        commonDiagnosis: commonDiagnosisAll.rows[0]?.diagnosis || "N/A",
+        appointmentTrendByYear: appointmentPerYear.rows.map((r) => ({
+          year: String(parseInt(r.year)),
+          total: parseInt(r.total),
+        })),
+        diagnosisTrendByYear: diagnosisPerYear.rows.map((r) => ({
+          year: String(parseInt(r.year)),
+          count: parseInt(r.count),
+        })),
+        appointmentTypeTrendByYear: appointmentTypePerYear.rows.map((r) => ({
+          year: String(parseInt(r.year)),
+          count: parseInt(r.count),
+        })),
+        inventoryUsage: inventoryUsageAll.rows || [],
+        allDiagnoses: allDiagnoses.rows.map((r) => r.diagnosis),
+        diagnosisTimeTrend: [],
+      });
+    }
 
     // Build date filter conditions
     let dateFilter = `EXTRACT(YEAR FROM appointment_date) = ${selectedYear}`;
@@ -3025,6 +3156,80 @@ app.post("/appointments/walkin", auth, async (req, res) => {
   } catch (error) {
     console.error("❌ Error adding walk-in:", error);
     res.status(500).json({ error: "Server error: " + error.message });
+  }
+});
+
+// Get unread notifications for nurse
+app.get("/notifications/nurse", async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        a.appointment_id,
+        COALESCE(a.full_name, u.full_name) as patient_name,
+        a.appointment_date,
+        a.appointment_time,
+        a.appointment_type,
+        a.status,
+        a.created_at,
+        a.is_walkin
+      FROM appointments a
+      LEFT JOIN users u ON a.user_id = u.user_id
+      WHERE a.status = 'pending'
+      ORDER BY a.created_at DESC
+      LIMIT 20;
+    `;
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Mark notification as read (optional - for future use)
+app.patch("/notifications/:appointmentId/read", async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    // You can add a 'notification_read' column to appointments table later
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error marking notification as read:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get notifications for patient (approved, canceled, completed appointments)
+app.get("/notifications/patient", auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const query = `
+      SELECT 
+        a.appointment_id,
+        a.appointment_date,
+        a.appointment_time,
+        a.appointment_type,
+        a.status,
+        a.cancel_remarks,
+        a.vaccination_type,
+        a.additional_services,
+        a.created_at
+      FROM appointments a
+      WHERE a.user_id = $1
+        AND LOWER(a.status) IN ('approved', 'canceled', 'completed')
+        AND a.created_at >= NOW() - INTERVAL '7 days'
+      ORDER BY a.created_at DESC
+      LIMIT 20;
+    `;
+
+    const result = await pool.query(query, [userId]);
+
+    console.log(`📬 Patient ${userId} notifications:`, result.rows.length);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error fetching patient notifications:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 

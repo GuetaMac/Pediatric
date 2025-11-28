@@ -2356,7 +2356,7 @@ function Doctor() {
     const [error, setError] = useState(null);
 
     // Filter states
-    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [selectedYear, setSelectedYear] = useState("all");
     const [selectedMonth, setSelectedMonth] = useState("all");
     const [selectedDiagnosis, setSelectedDiagnosis] = useState("all");
     // Patient scope filter: 'all' or 'overall'
@@ -2501,7 +2501,11 @@ function Doctor() {
 
     const getFilterContext = () => {
       let context = "Clinic analytics data";
-      if (selectedYear) context += ` for year ${selectedYear}`;
+      if (selectedYear)
+        context +=
+          selectedYear === "all"
+            ? " for all years"
+            : ` for year ${selectedYear}`;
       if (selectedMonth !== "all") {
         const monthName = months.find((m) => m.value === selectedMonth)?.label;
         context += `, ${monthName}`;
@@ -2587,6 +2591,22 @@ function Doctor() {
     const filteredMonths = months.filter(
       (m) => m.value === "all" || availableMonths.includes(parseInt(m.value))
     );
+
+    // Derived chart data: when All Years is selected, prefer per-year aggregates
+    const appointmentChartData =
+      selectedYear === "all"
+        ? data?.appointmentTrendByYear || data?.appointmentTrend || []
+        : data?.appointmentTrend || [];
+
+    const diagnosisChartData =
+      selectedYear === "all"
+        ? data?.diagnosisTrendByYear || data?.diagnosisTrend || []
+        : data?.diagnosisTrend || [];
+
+    const appointmentTypeChartData =
+      selectedYear === "all"
+        ? data?.appointmentTypeTrendByYear || data?.appointmentTypeTrend || []
+        : data?.appointmentTypeTrend || [];
 
     // Copy insights to clipboard
     const handleCopyInsights = async () => {
@@ -2682,7 +2702,13 @@ function Doctor() {
               <Activity className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-800">Analytics</h2>
               <div className="text-xs text-gray-500 ml-2">
-                {selectedMonth === "all"
+                {selectedYear === "all"
+                  ? selectedMonth === "all"
+                    ? "All Years"
+                    : `${
+                        months.find((m) => m.value === selectedMonth)?.label
+                      } All Years`
+                  : selectedMonth === "all"
                   ? `Year ${selectedYear}`
                   : `${
                       months.find((m) => m.value === selectedMonth)?.label
@@ -2692,9 +2718,10 @@ function Doctor() {
             <div className="flex items-center gap-2">
               <select
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                onChange={(e) => setSelectedYear(e.target.value)}
                 className="bg-transparent border px-2 py-1 rounded text-sm"
               >
+                <option value="all">All Years</option>
                 {availableYears.map((year) => (
                   <option key={year} value={year}>
                     {year}
@@ -2755,15 +2782,15 @@ function Doctor() {
                 title="Monthly Appointments Trend"
                 chartId="monthly-trend"
                 chartType="Monthly Appointment Trend"
-                chartData={data.appointmentTrend}
+                chartData={appointmentChartData}
                 context={`${getFilterContext()}. Overall monthly appointment volume.`}
                 icon={TrendingUp}
                 gradient="border-purple-100"
               >
                 <div className="h-56">
-                  {data.appointmentTrend?.length ? (
+                  {appointmentChartData?.length ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={data.appointmentTrend}>
+                      <LineChart data={appointmentChartData}>
                         <CartesianGrid
                           strokeDasharray="3 3"
                           stroke="#edf2f7"
@@ -2771,10 +2798,16 @@ function Doctor() {
                         />
                         <XAxis
                           dataKey={
-                            selectedMonth !== "all" ? "monthLabel" : "month"
+                            selectedYear === "all"
+                              ? "year"
+                              : selectedMonth !== "all"
+                              ? "monthLabel"
+                              : "month"
                           }
                           tickFormatter={
-                            selectedMonth === "all"
+                            selectedYear === "all"
+                              ? undefined
+                              : selectedMonth === "all"
                               ? (v) => monthNames[v - 1]
                               : undefined
                           }
@@ -2804,15 +2837,15 @@ function Doctor() {
                 title="Diagnosis Distribution"
                 chartId="diagnosis-trend"
                 chartType="Monthly Diagnosis Distribution"
-                chartData={data.diagnosisTrend}
+                chartData={diagnosisChartData}
                 context={`${getFilterContext()}. Shows the most common diagnosis for each month.`}
                 icon={Stethoscope}
                 gradient="border-blue-100"
               >
                 <div className="h-56">
-                  {data.diagnosisTrend?.length ? (
+                  {diagnosisChartData?.length ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={data.diagnosisTrend}>
+                      <BarChart data={diagnosisChartData}>
                         <defs>
                           <linearGradient
                             id="colorDiagnosis"
@@ -2839,8 +2872,12 @@ function Doctor() {
                           opacity={0.5}
                         />
                         <XAxis
-                          dataKey="month"
-                          tickFormatter={(v) => monthNames[v - 1]}
+                          dataKey={selectedYear === "all" ? "year" : "month"}
+                          tickFormatter={
+                            selectedYear === "all"
+                              ? undefined
+                              : (v) => monthNames[v - 1]
+                          }
                           tick={{ fill: "#4b5563" }}
                         />
                         <YAxis tick={{ fill: "#4b5563" }} />
@@ -2866,15 +2903,15 @@ function Doctor() {
                 title="Appointment Type Distribution"
                 chartId="appointment-type-trend"
                 chartType="Appointment Type Distribution"
-                chartData={data.appointmentTypeTrend}
+                chartData={appointmentTypeChartData}
                 context={`${getFilterContext()}. Shows appointment types per month.`}
                 icon={Calendar}
                 gradient="border-green-100"
               >
                 <div className="h-56">
-                  {data.appointmentTypeTrend?.length ? (
+                  {appointmentTypeChartData?.length ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={data.appointmentTypeTrend}>
+                      <BarChart data={appointmentTypeChartData}>
                         <defs>
                           <linearGradient
                             id="colorAppointment"
@@ -2901,8 +2938,12 @@ function Doctor() {
                           opacity={0.5}
                         />
                         <XAxis
-                          dataKey="month"
-                          tickFormatter={(v) => monthNames[v - 1]}
+                          dataKey={selectedYear === "all" ? "year" : "month"}
+                          tickFormatter={
+                            selectedYear === "all"
+                              ? undefined
+                              : (v) => monthNames[v - 1]
+                          }
                           tick={{ fill: "#4b5563" }}
                         />
                         <YAxis tick={{ fill: "#4b5563" }} />
