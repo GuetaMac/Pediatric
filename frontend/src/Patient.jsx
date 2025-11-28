@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 
-// ✅ Appointment types with durations
+// ✅ APPOINTMENT TYPES
 const appointmentTypes = {
   Vaccination: 30,
   "Check-up": 60,
@@ -41,10 +41,31 @@ const appointmentTypes = {
   "Follow-up Check-up": 20,
   Consultation: 30,
 };
-
 // Clinic hours
 const clinicHours = { start: 9, end: 16 };
+// ✅ TIME CONVERSION FUNCTIONS
+const timeStringToMinutes = (timeStr) => {
+  const [time, period] = timeStr.split(" ");
+  let [hours, minutes] = time.split(":").map(Number);
+  if (period === "PM" && hours !== 12) hours += 12;
+  if (period === "AM" && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+};
 
+const minutesToTimeString = (minutes) => {
+  let hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+  return `${hours}:${mins.toString().padStart(2, "0")} ${ampm}`;
+};
+
+const formatSlot = (startMinutes, duration) => {
+  const endMinutes = startMinutes + duration;
+  return `${minutesToTimeString(startMinutes)} - ${minutesToTimeString(
+    endMinutes
+  )}`;
+};
 function Patient() {
   const [activePage, setActivePage] = useState("home");
   const [appointments, setAppointments] = useState([]);
@@ -123,6 +144,7 @@ function Patient() {
   }, []);
 
   // Booking states
+  const [vaccinationType, setVaccinationType] = useState("");
   const [selectedDate, setSelectedDate] = useState(null);
   const [appointmentType, setAppointmentType] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
@@ -273,24 +295,23 @@ function Patient() {
 
   // ✅ Book appointment
   const handleBookAppointment = async (patientConcerns, vaccinationType) => {
-    // Validation
     if (!selectedDate || !appointmentType || !selectedTime) {
       Swal.fire({
-        icon: "error",
+        icon: "warning",
         title: "Missing Information",
-        text: "Please fill in date, type, and time slot.",
-        confirmButtonColor: "#0EA5E9",
+        text: "Please select date, appointment type, and time slot.",
+        confirmButtonColor: "#0ea5e9",
       });
       return;
     }
 
-    // Vaccination type validation
-    if (appointmentType === "Vaccination" && !vaccinationType.trim()) {
+    // Validate vaccination selection
+    if (appointmentType === "Vaccination" && !vaccinationType) {
       Swal.fire({
-        icon: "error",
-        title: "Missing Information",
-        text: "Please specify the vaccination type.",
-        confirmButtonColor: "#0EA5E9",
+        icon: "warning",
+        title: "Select Vaccine",
+        text: "Please select a vaccination type from the available options.",
+        confirmButtonColor: "#0ea5e9",
       });
       return;
     }
@@ -306,7 +327,7 @@ function Patient() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            date: formatDateForBackend(selectedDate), // ✅ AYOS NA TO
+            date: selectedDate.toISOString().split("T")[0],
             time: selectedTime,
             type: appointmentType,
             concerns: patientConcerns,
@@ -314,8 +335,7 @@ function Patient() {
               additionalServices.length > 0
                 ? additionalServices.join(", ")
                 : "None",
-            vaccination_type:
-              appointmentType === "Vaccination" ? vaccinationType : null,
+            vaccination_type: vaccinationType || null,
           }),
         }
       );
@@ -325,17 +345,29 @@ function Patient() {
       if (response.ok) {
         await Swal.fire({
           icon: "success",
-          title: "Success!",
+          title: "Booked!",
           text: data.message,
-          confirmButtonColor: "#0EA5E9",
+          confirmButtonColor: "#0ea5e9",
         });
+
+        // Reset form
+        setSelectedDate(null);
+        setAppointmentType("");
+        setSelectedTime("");
+        setPatientConcerns("");
+        setAdditionalServices([]);
+        setVaccinationType("");
+        setSelectedVaccine(null);
+        setAvailableVaccines([]);
+
+        // Refresh appointments
         window.location.reload();
       } else {
         Swal.fire({
           icon: "error",
-          title: "Failed",
+          title: "Booking Failed",
           text: data.error || "Failed to book appointment",
-          confirmButtonColor: "#0EA5E9",
+          confirmButtonColor: "#0ea5e9",
         });
       }
     } catch (error) {
@@ -343,12 +375,139 @@ function Patient() {
       Swal.fire({
         icon: "error",
         title: "Error",
-        text: "Failed to book appointment",
-        confirmButtonColor: "#0EA5E9",
+        text: "Failed to book appointment. Please try again.",
+        confirmButtonColor: "#0ea5e9",
       });
     }
   };
 
+  // ✅ Fetch available vaccines
+  const fetchAvailableVaccines = async () => {
+    try {
+      setVaccinesLoading(true);
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/patient/available-vaccines`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to fetch vaccines");
+      }
+
+      const data = await response.json();
+      setAvailableVaccines(data.vaccines || []);
+      setVaccinesLoading(false);
+    } catch (err) {
+      console.error("Error fetching vaccines:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Cannot Load Vaccines",
+        text:
+          err.message ||
+          "Please make sure your birth date is set in your profile.",
+        confirmButtonColor: "#0ea5e9",
+      });
+      setVaccinesLoading(false);
+      setAppointmentType("");
+    }
+  };
+
+  // ✅ Load vaccines when Vaccination is selected
+  useEffect(() => {
+    if (appointmentType === "Vaccination") {
+      fetchAvailableVaccines();
+    }
+  }, [appointmentType]);
+  // Add vaccination history display in medical records section
+  // Add this inside the medical records section, before or after the existing records
+  <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-6 shadow-lg border-2 border-purple-200 mt-6">
+    <div className="flex items-center gap-3 mb-4">
+      <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center">
+        <span className="text-white text-xl">💉</span>
+      </div>
+      <h3 className="text-2xl font-bold text-purple-900">
+        Vaccination History
+      </h3>
+    </div>
+
+    <button
+      onClick={async () => {
+        try {
+          const token = localStorage.getItem("token");
+          const response = await fetch(
+            `${import.meta.env.VITE_API_URL}/patient/vaccination-history`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const history = await response.json();
+
+            if (history.length === 0) {
+              Swal.fire({
+                icon: "info",
+                title: "No Vaccination History",
+                text: "You don't have any vaccination records yet.",
+                confirmButtonColor: "#0ea5e9",
+              });
+              return;
+            }
+
+            // Format history for display
+            const historyHTML = history
+              .map(
+                (h) => `
+            <div style="text-align: left; margin-bottom: 15px; padding: 12px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 8px;">
+              <p style="margin: 0; font-weight: bold; color: #1e40af; font-size: 16px;">${
+                h.vaccine_name
+              }</p>
+              <p style="margin: 5px 0 0 0; color: #64748b; font-size: 14px;">
+                <strong>Dose ${h.dose_number}</strong> of ${h.total_doses} 
+                • ${new Date(h.vaccination_date).toLocaleDateString()}
+              </p>
+              ${
+                h.next_due_date
+                  ? `
+                <p style="margin: 5px 0 0 0; color: #059669; font-size: 13px;">
+                  ⏰ Next dose: ${new Date(
+                    h.next_due_date
+                  ).toLocaleDateString()}
+                </p>
+              `
+                  : ""
+              }
+            </div>
+          `
+              )
+              .join("");
+
+            Swal.fire({
+              title: "💉 Your Vaccination History",
+              html: historyHTML,
+              width: 600,
+              confirmButtonColor: "#0ea5e9",
+            });
+          }
+        } catch (err) {
+          console.error("Error fetching vaccination history:", err);
+        }
+      }}
+      className="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors shadow-md"
+    >
+      View My Vaccination History
+    </button>
+  </div>;
   // ✅ Toggle additional service
   const toggleAdditionalService = (type) => {
     if (additionalServices.includes(type)) {
@@ -364,10 +523,16 @@ function Patient() {
   };
 
   const AppointmentsPage = () => {
-    const availableSlots = generateTimeSlots();
     const [filterStatus, setFilterStatus] = useState("all");
     const [patientConcerns, setPatientConcerns] = useState(""); //new state para maayos typings
     const [vaccinationType, setVaccinationType] = useState(""); // for vaccine type
+
+    const [selectedDate, setSelectedDate] = useState(null);
+    const [appointmentType, setAppointmentType] = useState("");
+    const [selectedTime, setSelectedTime] = useState("");
+    const [additionalServices, setAdditionalServices] = useState([]);
+    const [appointments, setAppointments] = useState([]);
+    const [loading, setLoading] = useState(false);
 
     const [medicalRecords, setMedicalRecords] = useState([]);
     const [medicalLoading, setMedicalLoading] = useState(true);
@@ -385,6 +550,251 @@ function Patient() {
     const [importSubmitting, setImportSubmitting] = useState(false);
     const [openFolder, setOpenFolder] = useState(null);
     const [appointmentsOpen, setAppointmentsOpen] = useState(false);
+    const [availableVaccines, setAvailableVaccines] = useState([]);
+    const [vaccinesLoading, setVaccinesLoading] = useState(false);
+    const [selectedVaccine, setSelectedVaccine] = useState(null);
+
+    const isSameCalendarDay = (a, b) => {
+      const da = new Date(a);
+      const db = new Date(b);
+      if (Number.isNaN(da) || Number.isNaN(db)) return false;
+      return (
+        da.getFullYear() === db.getFullYear() &&
+        da.getMonth() === db.getMonth() &&
+        da.getDate() === db.getDate()
+      );
+    };
+
+    const parseAppointmentSlot = (appointmentTime, appointmentType) => {
+      const [startStr] = appointmentTime.split(" - ");
+      const startMinutes = timeStringToMinutes(startStr);
+      const duration = appointmentTypes[appointmentType] || 30;
+      return {
+        start: startMinutes,
+        end: startMinutes + duration,
+      };
+    };
+
+    const hasConflict = (newSlotStart, newSlotDuration) => {
+      if (!selectedDate) return false;
+      const newSlotEnd = newSlotStart + newSlotDuration;
+
+      return appointments.some((appt) => {
+        if (!isSameCalendarDay(appt.appointment_date, selectedDate))
+          return false;
+
+        const apptStatus = String(appt.status || "")
+          .toLowerCase()
+          .trim();
+        if (apptStatus !== "approved" && apptStatus !== "pending") return false;
+
+        if (!appt.appointment_time) return false;
+
+        const existing = parseAppointmentSlot(
+          appt.appointment_time,
+          appt.appointment_type
+        );
+        return newSlotStart < existing.end && existing.start < newSlotEnd;
+      });
+    };
+
+    // ✅ GENERATE TIME SLOTS FUNCTION
+    const generateTimeSlots = () => {
+      if (!appointmentType) return [];
+
+      const duration = appointmentTypes[appointmentType];
+      if (!duration) return [];
+
+      const slots = [];
+      const startMinutes = clinicHours.start * 60;
+      const endMinutes = clinicHours.end * 60;
+
+      for (
+        let currentMinutes = startMinutes;
+        currentMinutes + duration <= endMinutes;
+        currentMinutes += 30
+      ) {
+        const slotText = formatSlot(currentMinutes, duration);
+        const isAvailable = !hasConflict(currentMinutes, duration);
+
+        slots.push({
+          text: slotText,
+          value: slotText,
+          available: isAvailable,
+        });
+      }
+      return slots;
+    };
+
+    const availableSlots = generateTimeSlots();
+
+    // ✅ TOGGLE & SELECT FUNCTIONS
+    const toggleAdditionalService = (type) => {
+      if (additionalServices.includes(type)) {
+        setAdditionalServices(additionalServices.filter((t) => t !== type));
+      } else {
+        setAdditionalServices([...additionalServices, type]);
+      }
+    };
+
+    const handleSelectNone = () => {
+      setAdditionalServices([]);
+    };
+
+    // ✅ HANDLE BOOK APPOINTMENT
+    const handleBookAppointment = async (patientConcerns, vaccinationType) => {
+      if (!selectedDate || !appointmentType || !selectedTime) {
+        Swal.fire({
+          icon: "warning",
+          title: "Missing Information",
+          text: "Please select date, appointment type, and time slot.",
+          confirmButtonColor: "#0ea5e9",
+        });
+        return;
+      }
+
+      if (appointmentType === "Vaccination" && !vaccinationType) {
+        Swal.fire({
+          icon: "warning",
+          title: "Select Vaccine",
+          text: "Please select a vaccination type from the available options.",
+          confirmButtonColor: "#0ea5e9",
+        });
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/appointments`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              date: selectedDate.toISOString().split("T")[0],
+              time: selectedTime,
+              type: appointmentType,
+              concerns: patientConcerns,
+              additional_services:
+                additionalServices.length > 0
+                  ? additionalServices.join(", ")
+                  : "None",
+              vaccination_type: vaccinationType || null,
+            }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          await Swal.fire({
+            icon: "success",
+            title: "Booked!",
+            text: data.message,
+            confirmButtonColor: "#0ea5e9",
+          });
+
+          setSelectedDate(null);
+          setAppointmentType("");
+          setSelectedTime("");
+          setPatientConcerns("");
+          setAdditionalServices([]);
+          setVaccinationType("");
+          setSelectedVaccine(null);
+          setAvailableVaccines([]);
+          window.location.reload();
+        } else {
+          Swal.fire({
+            icon: "error",
+            title: "Booking Failed",
+            text: data.error || "Failed to book appointment",
+            confirmButtonColor: "#0ea5e9",
+          });
+        }
+      } catch (error) {
+        console.error("Error booking appointment:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to book appointment. Please try again.",
+          confirmButtonColor: "#0ea5e9",
+        });
+      }
+    };
+
+    // ✅ FETCH APPOINTMENTS - ADD THIS BEFORE YOUR EXISTING useEffect
+    useEffect(() => {
+      const fetchAppointments = async () => {
+        try {
+          setLoading(true);
+          const token = localStorage.getItem("token");
+          const response = await fetch(
+            `${import.meta.env.VITE_API_URL}/get/appointments`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+          if (response.ok) {
+            const data = await response.json();
+            setAppointments(data);
+          }
+        } catch (error) {
+          console.error("Error fetching appointments:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchAppointments();
+    }, []);
+    useEffect(() => {
+      if (appointmentType === "Vaccination") {
+        fetchAvailableVaccines();
+      }
+    }, [appointmentType]);
+
+    // Function to fetch available vaccines
+    const fetchAvailableVaccines = async () => {
+      try {
+        setVaccinesLoading(true);
+        const token = localStorage.getItem("token");
+
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/patient/available-vaccines`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to fetch vaccines");
+        }
+
+        const data = await response.json();
+        setAvailableVaccines(data.vaccines || []);
+        setVaccinesLoading(false);
+      } catch (err) {
+        console.error("Error fetching vaccines:", err);
+        Swal.fire({
+          icon: "error",
+          title: "Cannot Load Vaccines",
+          text:
+            err.message ||
+            "Please make sure your birth date is set in your profile.",
+          confirmButtonColor: "#0ea5e9",
+        });
+        setVaccinesLoading(false);
+        setAppointmentType(""); // Reset appointment type
+      }
+    };
 
     // ✅ DAGDAGIN MO ITO - Auto-load medical records and user info
     useEffect(() => {
@@ -833,17 +1243,102 @@ function Patient() {
             <div className="flex items-center gap-2 mb-2">
               <ClipboardList className="text-sky-600" />
               <h3 className="text-xl font-bold text-sky-800">
-                Specify Vaccination Type
+                Select Vaccination Type
               </h3>
             </div>
-            <input
-              type="text"
-              value={vaccinationType}
-              onChange={(e) => setVaccinationType(e.target.value)}
-              placeholder="e.g., COVID-19, Flu, Hepatitis B"
-              className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
-        focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-            />
+
+            {vaccinesLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
+                <span className="ml-3 text-sky-600">Loading vaccines...</span>
+              </div>
+            ) : (
+              <>
+                <select
+                  value={vaccinationType}
+                  onChange={(e) => {
+                    setVaccinationType(e.target.value);
+                    const vaccine = availableVaccines.find(
+                      (v) => v.vaccine_name === e.target.value
+                    );
+                    setSelectedVaccine(vaccine);
+                  }}
+                  className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
+            focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                >
+                  <option value="">-- Select Vaccine --</option>
+                  {availableVaccines
+                    .filter((v) => v.available)
+                    .map((vaccine) => (
+                      <option
+                        key={vaccine.vaccine_id}
+                        value={vaccine.vaccine_name}
+                      >
+                        {vaccine.vaccine_name} - {vaccine.reason}
+                      </option>
+                    ))}
+                </select>
+
+                {/* Show unavailable vaccines separately */}
+                {availableVaccines.filter((v) => !v.available).length > 0 && (
+                  <details className="mt-4">
+                    <summary className="cursor-pointer text-sm text-gray-600 hover:text-sky-600 font-semibold">
+                      Show unavailable vaccines (
+                      {availableVaccines.filter((v) => !v.available).length})
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {availableVaccines
+                        .filter((v) => !v.available)
+                        .map((vaccine) => (
+                          <div
+                            key={vaccine.vaccine_id}
+                            className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <p className="font-semibold text-gray-700">
+                                  {vaccine.vaccine_name}
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  {vaccine.description}
+                                </p>
+                              </div>
+                              <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-semibold">
+                                Unavailable
+                              </span>
+                            </div>
+                            <p className="text-sm text-red-600 mt-2">
+                              ⏱️ {vaccine.reason}
+                            </p>
+                          </div>
+                        ))}
+                    </div>
+                  </details>
+                )}
+
+                {/* Show selected vaccine details */}
+                {selectedVaccine && vaccinationType && (
+                  <div className="mt-4 p-4 bg-sky-50 rounded-lg border border-sky-200">
+                    <h4 className="font-bold text-sky-900 mb-2">
+                      📋 Vaccine Information
+                    </h4>
+                    <p className="text-sm text-sky-700 mb-2">
+                      <strong>Description:</strong>{" "}
+                      {selectedVaccine.description}
+                    </p>
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full font-semibold">
+                        Dose {selectedVaccine.next_dose_number} of{" "}
+                        {selectedVaccine.total_doses}
+                      </span>
+                      <span className="text-sky-600">
+                        {selectedVaccine.doses_received} dose(s) completed
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -1930,7 +2425,6 @@ function Patient() {
       </div>
     );
   };
-
   const Notifications = () => {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);

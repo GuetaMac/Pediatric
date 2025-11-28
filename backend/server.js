@@ -738,7 +738,7 @@ app.post("/appointments", auth, async (req, res) => {
       concerns,
       additional_services,
       vaccination_type,
-    } = req.body; // ✅ ADD vaccination_type
+    } = req.body;
     const userId = req.user.id;
 
     if (!date || !time || !type) {
@@ -747,19 +747,114 @@ app.post("/appointments", auth, async (req, res) => {
       });
     }
 
-    // ✅ Validate vaccination_type if type is Vaccination
-    if (type === "Vaccination" && !vaccination_type) {
-      return res.status(400).json({
-        error: "Please specify the vaccination type.",
-      });
+    // Validate vaccination_type if type is Vaccination
+    if (type === "Vaccination") {
+      if (!vaccination_type) {
+        return res.status(400).json({
+          error: "Please select a vaccination type.",
+        });
+      }
+
+      // Check if vaccine is available for this user
+      const userResult = await pool.query(
+        "SELECT birth_date FROM users WHERE user_id = $1",
+        [userId]
+      );
+
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const birthDate = userResult.rows[0].birth_date;
+      if (!birthDate) {
+        return res.status(400).json({
+          error:
+            "Birth date not set. Please update your profile to book vaccinations.",
+        });
+      }
+
+      const ageInMonths = calculateAgeInMonths(birthDate);
+
+      // Check vaccine eligibility
+      const vaccineCheck = await pool.query(
+        `
+        SELECT * FROM vaccine_definitions 
+        WHERE vaccine_name = $1 
+          AND min_age_months <= $2 
+          AND (max_age_months IS NULL OR max_age_months >= $2)
+      `,
+        [vaccination_type, ageInMonths]
+      );
+
+      if (vaccineCheck.rows.length === 0) {
+        return res.status(400).json({
+          error: `You are not eligible for ${vaccination_type} based on your age.`,
+        });
+      }
+
+      const vaccine = vaccineCheck.rows[0];
+
+      // Check vaccination history for cooldown
+      const historyCheck = await pool.query(
+        `
+        SELECT vaccine_name, dose_number, vaccination_date, next_due_date
+        FROM vaccine_history
+        WHERE user_id = $1 AND vaccine_name = $2
+        ORDER BY vaccination_date DESC
+        LIMIT 1
+      `,
+        [userId, vaccination_type]
+      );
+
+      if (historyCheck.rows.length > 0) {
+        const lastVaccination = historyCheck.rows[0];
+
+        // Count total doses received
+        const doseCountResult = await pool.query(
+          `
+          SELECT COUNT(*) as count
+          FROM vaccine_history
+          WHERE user_id = $1 AND vaccine_name = $2
+        `,
+          [userId, vaccination_type]
+        );
+
+        const dosesReceived = parseInt(doseCountResult.rows[0].count);
+
+        // Check if all doses completed (excluding boosters)
+        if (
+          dosesReceived >= vaccine.total_doses &&
+          !vaccine.booster_interval_days
+        ) {
+          return res.status(400).json({
+            error: `You have already completed all doses for ${vaccination_type}.`,
+          });
+        }
+
+        // Check cooldown period
+        if (lastVaccination.next_due_date) {
+          const nextDueDate = new Date(lastVaccination.next_due_date);
+          const appointmentDate = new Date(date);
+
+          if (appointmentDate < nextDueDate) {
+            const daysRemaining = Math.ceil(
+              (nextDueDate - appointmentDate) / (1000 * 60 * 60 * 24)
+            );
+            return res.status(400).json({
+              error: `${vaccination_type} is on cooldown. Next dose available on ${nextDueDate.toLocaleDateString()} (${daysRemaining} days remaining).`,
+            });
+          }
+        }
+      }
     }
 
     const additionalServicesValue = additional_services || "None";
 
-    await pool.query(
+    const result = await pool.query(
       `INSERT INTO appointments 
        (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, vaccination_type)
-       VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)`,
+       VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)
+       RETURNING appointment_id`,
       [
         userId,
         date,
@@ -768,17 +863,18 @@ app.post("/appointments", auth, async (req, res) => {
         concerns || "",
         additionalServicesValue,
         vaccination_type || null,
-      ] // ✅ ADD vaccination_type
+      ]
     );
 
-    res.json({ message: "Appointment booked successfully!" });
+    res.json({
+      message: "Appointment booked successfully!",
+      appointment_id: result.rows[0].appointment_id,
+    });
   } catch (error) {
     console.error("❌ Error booking appointment:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
-
-// ✅ Cancel appointment endpoint
 // ✅ Cancel appointment endpoint
 app.patch("/appointments/:id/cancel", auth, async (req, res) => {
   try {
@@ -3230,6 +3326,269 @@ app.get("/notifications/patient", auth, async (req, res) => {
   } catch (error) {
     console.error("Error fetching patient notifications:", error);
     res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Helper function to calculate age in months from birth_date
+function calculateAgeInMonths(birthDate) {
+  const birth = new Date(birthDate);
+  const today = new Date();
+
+  let months = (today.getFullYear() - birth.getFullYear()) * 12;
+  months += today.getMonth() - birth.getMonth();
+
+  // Adjust if the day hasn't been reached yet in the current month
+  if (today.getDate() < birth.getDate()) {
+    months--;
+  }
+
+  return months;
+}
+
+// Get available vaccines for user based on age and history
+app.get("/patient/available-vaccines", auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get user's birth date
+    const userResult = await pool.query(
+      "SELECT birth_date FROM users WHERE user_id = $1",
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const birthDate = userResult.rows[0].birth_date;
+    if (!birthDate) {
+      return res.status(400).json({
+        error: "Birth date not set. Please update your profile.",
+      });
+    }
+
+    const ageInMonths = calculateAgeInMonths(birthDate);
+
+    // Get all vaccine definitions
+    const vaccinesResult = await pool.query(
+      `
+      SELECT * FROM vaccine_definitions 
+      WHERE min_age_months <= $1 
+        AND (max_age_months IS NULL OR max_age_months >= $1)
+      ORDER BY vaccine_name
+    `,
+      [ageInMonths]
+    );
+
+    // Get user's vaccination history
+    const historyResult = await pool.query(
+      `
+      SELECT vaccine_name, dose_number, vaccination_date, next_due_date
+      FROM vaccine_history
+      WHERE user_id = $1
+      ORDER BY vaccination_date DESC
+    `,
+      [userId]
+    );
+
+    const vaccineHistory = historyResult.rows;
+
+    // Process each vaccine to determine availability
+    const availableVaccines = [];
+
+    for (const vaccine of vaccinesResult.rows) {
+      const userHistory = vaccineHistory.filter(
+        (h) => h.vaccine_name === vaccine.vaccine_name
+      );
+
+      const lastDose = userHistory[0]; // Most recent dose
+      const dosesReceived = userHistory.length;
+
+      let available = true;
+      let reason = "";
+      let nextDoseNumber = dosesReceived + 1;
+
+      // Check if all doses completed
+      if (dosesReceived >= vaccine.total_doses) {
+        // Check if booster is available
+        if (vaccine.booster_interval_days && lastDose) {
+          const daysSinceLastDose = Math.floor(
+            (new Date() - new Date(lastDose.vaccination_date)) /
+              (1000 * 60 * 60 * 24)
+          );
+
+          if (daysSinceLastDose >= vaccine.booster_interval_days) {
+            nextDoseNumber = dosesReceived + 1; // Booster
+            reason = `Booster available (last dose: ${new Date(
+              lastDose.vaccination_date
+            ).toLocaleDateString()})`;
+          } else {
+            available = false;
+            const daysRemaining =
+              vaccine.booster_interval_days - daysSinceLastDose;
+            reason = `Cooldown: ${daysRemaining} days until booster`;
+          }
+        } else {
+          available = false;
+          reason = "All doses completed";
+        }
+      } else if (lastDose && lastDose.next_due_date) {
+        // Check if next dose is due
+        const nextDueDate = new Date(lastDose.next_due_date);
+        const today = new Date();
+
+        if (today < nextDueDate) {
+          available = false;
+          const daysRemaining = Math.ceil(
+            (nextDueDate - today) / (1000 * 60 * 60 * 24)
+          );
+          reason = `Cooldown: ${daysRemaining} days until next dose`;
+        } else {
+          reason = `Dose ${nextDoseNumber}/${vaccine.total_doses} due`;
+        }
+      } else {
+        reason = `Dose ${nextDoseNumber}/${vaccine.total_doses} available`;
+      }
+
+      availableVaccines.push({
+        vaccine_id: vaccine.vaccine_id,
+        vaccine_name: vaccine.vaccine_name,
+        description: vaccine.description,
+        available: available,
+        reason: reason,
+        next_dose_number: nextDoseNumber,
+        total_doses: vaccine.total_doses,
+        doses_received: dosesReceived,
+      });
+    }
+
+    res.json({
+      age_in_months: ageInMonths,
+      vaccines: availableVaccines,
+    });
+  } catch (err) {
+    console.error("❌ Error fetching available vaccines:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.post("/appointments/:id/complete-vaccination", auth, async (req, res) => {
+  try {
+    const appointmentId = req.params.id;
+
+    // Get appointment details
+    const apptResult = await pool.query(
+      `
+      SELECT a.*, u.birth_date
+      FROM appointments a
+      JOIN users u ON a.user_id = u.user_id
+      WHERE a.appointment_id = $1 AND a.appointment_type = 'Vaccination'
+    `,
+      [appointmentId]
+    );
+
+    if (apptResult.rows.length === 0) {
+      return res
+        .status(404)
+        .json({ error: "Vaccination appointment not found" });
+    }
+
+    const appointment = apptResult.rows[0];
+
+    // Get vaccine definition
+    const vaccineResult = await pool.query(
+      `
+      SELECT * FROM vaccine_definitions WHERE vaccine_name = $1
+    `,
+      [appointment.vaccination_type]
+    );
+
+    if (vaccineResult.rows.length === 0) {
+      return res.status(404).json({ error: "Vaccine definition not found" });
+    }
+
+    const vaccine = vaccineResult.rows[0];
+
+    // Count current doses
+    const doseCountResult = await pool.query(
+      `
+      SELECT COUNT(*) as count
+      FROM vaccine_history
+      WHERE user_id = $1 AND vaccine_name = $2
+    `,
+      [appointment.user_id, appointment.vaccination_type]
+    );
+
+    const dosesReceived = parseInt(doseCountResult.rows[0].count);
+    const nextDoseNumber = dosesReceived + 1;
+
+    // Calculate next due date
+    let nextDueDate = null;
+    const vaccinationDate = new Date(appointment.appointment_date);
+
+    if (nextDoseNumber === 1 && vaccine.interval_dose_2_days) {
+      nextDueDate = new Date(vaccinationDate);
+      nextDueDate.setDate(nextDueDate.getDate() + vaccine.interval_dose_2_days);
+    } else if (nextDoseNumber === 2 && vaccine.interval_dose_3_days) {
+      nextDueDate = new Date(vaccinationDate);
+      nextDueDate.setDate(nextDueDate.getDate() + vaccine.interval_dose_3_days);
+    } else if (
+      nextDoseNumber >= vaccine.total_doses &&
+      vaccine.booster_interval_days
+    ) {
+      nextDueDate = new Date(vaccinationDate);
+      nextDueDate.setDate(
+        nextDueDate.getDate() + vaccine.booster_interval_days
+      );
+    }
+
+    // Record in vaccine history
+    await pool.query(
+      `
+      INSERT INTO vaccine_history 
+      (user_id, vaccine_name, dose_number, vaccination_date, next_due_date, appointment_id)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `,
+      [
+        appointment.user_id,
+        appointment.vaccination_type,
+        nextDoseNumber,
+        appointment.appointment_date,
+        nextDueDate,
+        appointmentId,
+      ]
+    );
+
+    res.json({
+      message: "Vaccination recorded successfully",
+      next_due_date: nextDueDate,
+    });
+  } catch (err) {
+    console.error("❌ Error completing vaccination:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ============ GET USER VACCINATION HISTORY ============
+app.get("/patient/vaccination-history", auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await pool.query(
+      `
+      SELECT vh.*, vd.description, vd.total_doses
+      FROM vaccine_history vh
+      JOIN vaccine_definitions vd ON vh.vaccine_name = vd.vaccine_name
+      WHERE vh.user_id = $1
+      ORDER BY vh.vaccination_date DESC
+    `,
+      [userId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("❌ Error fetching vaccination history:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
