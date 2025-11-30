@@ -38,6 +38,15 @@ function PatientProfile() {
   const [qrSize, setQrSize] = useState(180);
   const qrRef = useRef(null);
 
+  // Vaccination records
+  const [vaccinations, setVaccinations] = useState([]);
+  const [vacLoading, setVacLoading] = useState(true);
+  const [vacError, setVacError] = useState(null);
+  const [showVaccineModal, setShowVaccineModal] = useState(false);
+  const [vaccineDefs, setVaccineDefs] = useState([]);
+  const [defsLoading, setDefsLoading] = useState(false);
+  const [defsError, setDefsError] = useState(null);
+
   // Update QR code size based on window width
   useEffect(() => {
     const updateQrSize = () => {
@@ -53,7 +62,194 @@ function PatientProfile() {
     fetchProfile();
     fetchUserInfo();
     fetchLastCheckup(); // ✅ Get latest completed appointment
+    fetchVaccinationHistory();
   }, []);
+
+  // Allow page scrolling when modal is open so mobile users can reach the close button.
+  // Also keep a persistent return to restore previous overflow.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    if (showVaccineModal) {
+      // enable scrolling on the page (so users can scroll up to access modal controls)
+      document.body.style.overflow = "auto";
+    } else {
+      document.body.style.overflow = prev || "";
+    }
+
+    return () => {
+      document.body.style.overflow = prev || "";
+    };
+  }, [showVaccineModal]);
+
+  // Fetch vaccine definitions (available vaccines) when needed
+  const fetchVaccineDefinitions = async () => {
+    setDefsLoading(true);
+    setDefsError(null);
+    try {
+      const base = import.meta.env.VITE_API_URL;
+      // try a few common endpoints defensively (prioritize DB-backed endpoint)
+      const candidates = [
+        "/vaccine_definitions",
+        "/vaccine-definitions",
+        "/vaccines",
+        "/vaccine-defs",
+      ];
+      let data = null;
+      for (const path of candidates) {
+        try {
+          const res = await fetch(`${base}${path}`, {
+            headers: {
+              Authorization: `Bearer ${
+                window.localStorage.getItem("token") || ""
+              }`,
+              "Content-Type": "application/json",
+            },
+          });
+          if (!res.ok) continue;
+          const json = await res.json();
+          if (Array.isArray(json) && json.length > 0) {
+            data = json;
+            break;
+          }
+        } catch (e) {
+          // ignore and try next
+        }
+      }
+
+      if (!data) {
+        // fallback: derive from existing vaccination history
+        const derived = Array.from(
+          new Set(
+            (vaccinations || [])
+              .map((v) => v.vaccine_name || v.name || v.vaccine)
+              .filter(Boolean)
+          )
+        );
+        data = derived.map((n) => ({ name: n }));
+      }
+
+      setVaccineDefs(data || []);
+      return data || [];
+    } catch (err) {
+      console.error("Error fetching vaccine definitions:", err);
+      setDefsError("Unable to load vaccine definitions.");
+      setVaccineDefs([]);
+      return [];
+    } finally {
+      setDefsLoading(false);
+    }
+  };
+
+  // 🔹 Fetch vaccination history for logged-in patient
+  const fetchVaccinationHistory = async () => {
+    setVacLoading(true);
+    setVacError(null);
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/patient/vaccination-history`,
+        {
+          headers: {
+            Authorization: `Bearer ${
+              window.localStorage.getItem("token") || ""
+            }`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          setVaccinations([]);
+          setVacLoading(false);
+          return;
+        }
+        throw new Error("Failed to fetch vaccination history");
+      }
+
+      const data = await res.json();
+      // Expecting an array of vaccination records; be defensive
+      const arr = Array.isArray(data) ? data : [];
+      setVaccinations(arr);
+      return arr;
+    } catch (err) {
+      console.error("Error fetching vaccination history:", err);
+      setVacError("Unable to load vaccination records.");
+      return [];
+    } finally {
+      setVacLoading(false);
+    }
+  };
+
+  const formatDate = (d) => {
+    if (!d) return "-";
+    try {
+      return new Date(d).toLocaleDateString();
+    } catch (e) {
+      return String(d);
+    }
+  };
+
+  // Build matrix grouped by vaccine name with slots for doses and boosters
+  const buildVaccineMatrix = (records) => {
+    const map = {};
+
+    const parseDoseNumber = (rec) => {
+      // Try numeric fields
+      const n = rec.dose_number || rec.doseNum || rec.dose_no || null;
+      if (n != null && !Number.isNaN(Number(n))) return Number(n);
+
+      // Try string like '1st', '2nd', '3rd', 'Booster 1'
+      const s = (rec.dose || rec.series || "" + rec.note || "")
+        .toString()
+        .toLowerCase();
+      if (/1st|first|\b1\b/.test(s)) return 1;
+      if (/2nd|second|\b2\b/.test(s)) return 2;
+      if (/3rd|third|\b3\b/.test(s)) return 3;
+      if (/booster\s*1|boost1|b1/.test(s)) return 4;
+      if (/booster\s*2|boost2|b2/.test(s)) return 5;
+      if (/booster\s*3|boost3|b3/.test(s)) return 6;
+
+      return null;
+    };
+
+    (records || []).forEach((rec) => {
+      const name =
+        rec.vaccine_name || rec.name || rec.vaccine || "Unknown Vaccine";
+      if (!map[name]) {
+        map[name] = { name, slots: Array(6).fill(null) }; // 0..2 doses, 3..5 boosters
+      }
+
+      const idx = parseDoseNumber(rec);
+      const date =
+        rec.date_given ||
+        rec.vaccination_date ||
+        rec.administered_at ||
+        rec.date ||
+        null;
+
+      if (idx && idx >= 1 && idx <= 3) {
+        map[name].slots[idx - 1] = date || rec.note || "Recorded";
+      } else if (idx && idx >= 4 && idx <= 6) {
+        map[name].slots[idx - 4 + 3] = date || rec.note || "Recorded";
+      } else {
+        // Try to place in first empty slot (prioritize doses)
+        const firstEmpty = map[name].slots.findIndex(
+          (s, i) => s == null && i < 3
+        );
+        if (firstEmpty !== -1)
+          map[name].slots[firstEmpty] = date || rec.note || "Recorded";
+        else {
+          const firstBoostEmpty = map[name].slots.findIndex(
+            (s, i) => s == null && i >= 3
+          );
+          if (firstBoostEmpty !== -1)
+            map[name].slots[firstBoostEmpty] = date || rec.note || "Recorded";
+        }
+      }
+    });
+
+    return Object.values(map);
+  };
 
   // 🔹 Fetch patient profile record for the logged-in user (patient_profiles table)
   const fetchProfile = async () => {
@@ -430,6 +626,184 @@ function PatientProfile() {
               </div>
             ))}
           </div>
+
+          {/* Vaccination Records */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg sm:text-xl font-bold text-sky-700">
+                Vaccination Records
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    // Show modal immediately so mobile users see it, then fetch data
+                    setShowVaccineModal(true);
+                    // fetch defs/history (do not await here so modal shows quickly)
+                    fetchVaccineDefinitions();
+                    fetchVaccinationHistory();
+                  }}
+                  className="text-sm bg-yellow-400 text-sky-900 px-3 py-1 rounded-md font-semibold hover:bg-yellow-500 transition"
+                >
+                  Vaccine record
+                </button>
+                <button
+                  onClick={fetchVaccinationHistory}
+                  className="text-xs text-sky-600 bg-sky-50 border border-sky-100 px-2 py-1 rounded hover:bg-sky-100 transition"
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white/50 border border-sky-100 rounded-lg p-3 sm:p-4 text-sm text-gray-600">
+              <p>
+                Click the{" "}
+                <span className="font-semibold text-sky-700">
+                  Vaccine record
+                </span>{" "}
+                button to view detailed vaccination history.
+              </p>
+            </div>
+          </div>
+
+          {/* Vaccine Record Modal */}
+          {showVaccineModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={() => setShowVaccineModal(false)}
+              />
+              <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[85vh] overflow-auto z-10">
+                <div className="sticky top-0 bg-white z-30 flex items-center justify-between p-4 border-b">
+                  <h3 className="text-lg font-bold text-sky-800">
+                    Vaccine Record
+                  </h3>
+                  <button
+                    onClick={() => setShowVaccineModal(false)}
+                    className="text-xl px-3 py-1 hover:bg-gray-100 rounded"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="p-4">
+                  <div className="overflow-x-auto">
+                    <table className="table-auto w-full text-sm">
+                      <thead>
+                        <tr className="bg-sky-50">
+                          <th className="px-3 py-2 text-left font-semibold">
+                            Vaccine
+                          </th>
+                          <th className="px-3 py-2 text-center font-semibold">
+                            1st Dose
+                          </th>
+                          <th className="px-3 py-2 text-center font-semibold">
+                            2nd Dose
+                          </th>
+                          <th className="px-3 py-2 text-center font-semibold">
+                            3rd Dose
+                          </th>
+                          <th className="px-3 py-2 text-center font-semibold">
+                            Booster 1
+                          </th>
+                          <th className="px-3 py-2 text-center font-semibold">
+                            Booster 2
+                          </th>
+                          <th className="px-3 py-2 text-center font-semibold">
+                            Booster 3
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {defsLoading || vacLoading ? (
+                          <tr>
+                            <td
+                              colSpan={7}
+                              className="p-4 text-center text-sky-600"
+                            >
+                              Loading vaccination records…
+                            </td>
+                          </tr>
+                        ) : (
+                          (function () {
+                            // Build a quick map of existing vaccine rows from history
+                            const historyRows = buildVaccineMatrix(
+                              vaccinations || []
+                            ).reduce((acc, r) => {
+                              acc[r.name] = r;
+                              return acc;
+                            }, {});
+
+                            const defs =
+                              vaccineDefs && vaccineDefs.length > 0
+                                ? vaccineDefs
+                                : Object.keys(historyRows).map((n) => ({
+                                    name: n,
+                                  }));
+
+                            if (!defs || defs.length === 0) {
+                              return (
+                                <tr>
+                                  <td
+                                    colSpan={7}
+                                    className="p-6 text-center text-gray-600"
+                                  >
+                                    No vaccine record available.
+                                  </td>
+                                </tr>
+                              );
+                            }
+
+                            return defs.map((def, i) => {
+                              const name =
+                                def.name ||
+                                def.vaccine_name ||
+                                def.title ||
+                                "Unknown Vaccine";
+                              const row = historyRows[name];
+                              const slots =
+                                row && row.slots
+                                  ? row.slots
+                                  : Array(6).fill(null);
+
+                              return (
+                                <tr
+                                  key={name + i}
+                                  className="odd:bg-white even:bg-sky-50"
+                                >
+                                  <td className="px-3 py-2 align-top">
+                                    <div className="font-medium text-sky-900 truncate max-w-xs">
+                                      {name}
+                                    </div>
+                                  </td>
+                                  {slots.map((s, idx) => (
+                                    <td
+                                      key={idx}
+                                      className="px-3 py-2 text-center align-top text-xs"
+                                    >
+                                      {s ? (
+                                        <span className="text-gray-700">
+                                          {formatDate(s)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-red-500 font-medium">
+                                          Not availed
+                                        </span>
+                                      )}
+                                    </td>
+                                  ))}
+                                </tr>
+                              );
+                            });
+                          })()
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {message && (
             <p className="mt-4 text-center text-red-600 text-sm sm:text-base px-2">

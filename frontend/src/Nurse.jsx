@@ -4281,7 +4281,7 @@ function Nurse() {
     }
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-100 p-4 md:p-8">
+      <div className="min-h-screen bg-transparent p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border-t-4 border-yellow-400">

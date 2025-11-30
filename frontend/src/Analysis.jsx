@@ -94,9 +94,9 @@ function PatientDashboard({ onNavigateToAppointments }) {
   ];
 
   return (
-    <div className="p-8 bg-transparent">
+    <div className="p-6 bg-transparent">
       {/* Greeting Section - Hidden on mobile */}
-      <div className="hidden md:block relative bg-white/60 border border-sky-100 p-8 rounded-3xl shadow-md mb-10 overflow-hidden transition hover:shadow-lg">
+      <div className="hidden md:block relative bg-white/60 border border-sky-100 p-6 rounded-2xl shadow-sm mb-8 overflow-hidden transition hover:shadow-md">
         <div className="relative z-10">
           <h1 className="text-3xl font-bold text-sky-700 mb-2">
             {userInfo
@@ -113,11 +113,11 @@ function PatientDashboard({ onNavigateToAppointments }) {
         </div>
       </div>
       {/* Latest Approved Appointment Section */}
-      <div className="bg-gradient-to-br from-white to-sky-50 border-t-4 border-sky-400 shadow-lg rounded-3xl p-6 sm:p-8 mb-12 transition hover:shadow-xl">
+      <div className="bg-gradient-to-br from-white to-sky-50 border-t-2 border-sky-400 shadow-sm rounded-2xl p-4 sm:p-6 mb-6 transition hover:shadow-md">
         {/* Header with Icon */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="bg-gradient-to-br from-sky-400 to-sky-600 p-3 rounded-xl shadow-md">
-            <CalendarDays className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+        <div className="flex items-center gap-3 mb-4">
+          <div className="bg-gradient-to-br from-sky-400 to-sky-600 p-2 rounded-lg shadow-sm">
+            <CalendarDays className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
           </div>
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-sky-800">
@@ -130,15 +130,15 @@ function PatientDashboard({ onNavigateToAppointments }) {
         </div>
 
         {appointment ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Patient Name Card */}
-            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border-l-4 border-yellow-400 rounded-xl p-4 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="bg-yellow-400 p-2 rounded-full">
-                  <User className="w-5 h-5 text-blue-900" />
+            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border-l-4 border-yellow-400 rounded-lg p-3 shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="bg-yellow-400 p-1.5 rounded-full">
+                  <User className="w-4 h-4 text-blue-900" />
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-amber-900">
+                  <p className="text-base font-semibold text-amber-900">
                     {userInfo?.full_name || "Loading..."}
                   </p>
                 </div>
@@ -146,23 +146,23 @@ function PatientDashboard({ onNavigateToAppointments }) {
             </div>
 
             {/* Appointment Details Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Date */}
-              <div className="bg-white border-2 border-sky-100 rounded-xl p-4 hover:border-sky-300 transition-all shadow-sm hover:shadow-md">
-                <div className="flex items-center gap-3">
-                  <div className="bg-sky-100 p-2 rounded-lg">
-                    <CalendarDays className="w-5 h-5 text-sky-600" />
+              <div className="bg-white border border-sky-100 rounded-md p-3 hover:border-sky-300 transition shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="bg-sky-100 p-1.5 rounded-md">
+                    <CalendarDays className="w-4 h-4 text-sky-600" />
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 font-medium uppercase">
                       Date
                     </p>
-                    <p className="text-sm sm:text-base font-bold text-gray-800">
+                    <p className="text-sm font-medium text-gray-800">
                       {new Date(
                         appointment.appointment_date
                       ).toLocaleDateString("en-US", {
                         year: "numeric",
-                        month: "long",
+                        month: "short",
                         day: "numeric",
                       })}
                     </p>
@@ -171,16 +171,16 @@ function PatientDashboard({ onNavigateToAppointments }) {
               </div>
 
               {/* Time */}
-              <div className="bg-white border-2 border-sky-100 rounded-xl p-4 hover:border-sky-300 transition-all shadow-sm hover:shadow-md">
-                <div className="flex items-center gap-3">
-                  <div className="bg-purple-100 p-2 rounded-lg">
-                    <Clock className="w-5 h-5 text-purple-600" />
+              <div className="bg-white border border-sky-100 rounded-md p-3 hover:border-sky-300 transition shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="bg-purple-100 p-1.5 rounded-md">
+                    <Clock className="w-4 h-4 text-purple-600" />
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 font-medium uppercase">
                       Time
                     </p>
-                    <p className="text-sm sm:text-base font-bold text-gray-800">
+                    <p className="text-sm font-medium text-gray-800">
                       {appointment.appointment_time}
                     </p>
                   </div>
@@ -188,16 +188,16 @@ function PatientDashboard({ onNavigateToAppointments }) {
               </div>
 
               {/* Service */}
-              <div className="bg-white border-2 border-sky-100 rounded-xl p-4 hover:border-sky-300 transition-all shadow-sm hover:shadow-md">
-                <div className="flex items-center gap-3">
-                  <div className="bg-green-100 p-2 rounded-lg">
-                    <Stethoscope className="w-5 h-5 text-green-600" />
+              <div className="bg-white border border-sky-100 rounded-md p-3 hover:border-sky-300 transition shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="bg-green-100 p-1.5 rounded-md">
+                    <Stethoscope className="w-4 h-4 text-green-600" />
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 font-medium uppercase">
                       Service
                     </p>
-                    <p className="text-sm sm:text-base font-bold text-gray-800">
+                    <p className="text-sm font-medium text-gray-800">
                       {appointment.appointment_type}
                     </p>
                   </div>
@@ -205,16 +205,16 @@ function PatientDashboard({ onNavigateToAppointments }) {
               </div>
 
               {/* Status */}
-              <div className="bg-white border-2 border-sky-100 rounded-xl p-4 hover:border-sky-300 transition-all shadow-sm hover:shadow-md">
-                <div className="flex items-center gap-3">
-                  <div className="bg-emerald-100 p-2 rounded-lg">
-                    <CheckCircle className="w-5 h-5 text-emerald-600" />
+              <div className="bg-white border border-sky-100 rounded-md p-3 hover:border-sky-300 transition shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="bg-emerald-100 p-1.5 rounded-md">
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 font-medium uppercase">
                       Status
                     </p>
-                    <p className="text-sm sm:text-base font-bold text-emerald-600 capitalize">
+                    <p className="text-sm font-medium text-emerald-600 capitalize">
                       {appointment.status}
                     </p>
                   </div>

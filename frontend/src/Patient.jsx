@@ -1127,6 +1127,91 @@ function Patient() {
       }
     };
 
+    // Avail vaccine: prompt for vaccine details then save to server
+    const handleAvailVaccine = async (appt) => {
+      const defaultVaccine = appt.vaccination_type || "";
+      const today = new Date().toISOString().split("T")[0];
+
+      const { value: formValues } = await Swal.fire({
+        title: "Record Vaccination",
+        html:
+          `<input id="swal-vaccine" class="swal2-input" placeholder="Vaccine name" value="${defaultVaccine}">` +
+          `<select id="swal-dose" class="swal2-select mt-2" style="display:block;margin:8px auto;padding:8px;border-radius:8px;border:1px solid #e5e7eb;">` +
+          `<option value="1">1st Dose</option>` +
+          `<option value="2">2nd Dose</option>` +
+          `<option value="3">3rd Dose</option>` +
+          `<option value="4">Booster 1</option>` +
+          `<option value="5">Booster 2</option>` +
+          `<option value="6">Booster 3</option>` +
+          `</select>` +
+          `<input id="swal-date" type="date" class="swal2-input" value="${today}">`,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: "Save",
+        cancelButtonText: "Cancel",
+        preConfirm: () => {
+          const vaccine = document.getElementById("swal-vaccine").value;
+          const dose = document.getElementById("swal-dose").value;
+          const date = document.getElementById("swal-date").value;
+          if (!vaccine || !vaccine.trim()) {
+            Swal.showValidationMessage("Please enter vaccine name");
+            return null;
+          }
+          return { vaccine: vaccine.trim(), dose: Number(dose), date };
+        },
+      });
+
+      if (!formValues) return;
+
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/appointments/${
+            appt.appointment_id
+          }/complete-vaccination`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              vaccine_name: formValues.vaccine,
+              dose_number: formValues.dose,
+              date_given: formValues.date || new Date().toISOString(),
+            }),
+          }
+        );
+
+        const data = await res.json();
+        if (res.ok) {
+          await Swal.fire({
+            icon: "success",
+            title: "Saved",
+            text: data.message || "Vaccination recorded",
+            confirmButtonColor: "#0EA5E9",
+          });
+          // refresh the page data
+          window.location.reload();
+        } else {
+          Swal.fire({
+            icon: "error",
+            title: "Failed",
+            text: data.error || "Failed to save vaccination",
+            confirmButtonColor: "#0EA5E9",
+          });
+        }
+      } catch (err) {
+        console.error("Error saving vaccination:", err);
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to save vaccination",
+          confirmButtonColor: "#0EA5E9",
+        });
+      }
+    };
+
     return (
       <div className="bg-transparent rounded-3xl p-6 md:p-10 space-y-6">
         {/* Header */}
@@ -1600,6 +1685,15 @@ function Patient() {
                                   Cancel
                                 </button>
                               )}
+                              {appt.appointment_type === "Vaccination" &&
+                                status === "approved" && (
+                                  <button
+                                    onClick={() => handleAvailVaccine(appt)}
+                                    className="px-3 py-1 bg-purple-600 text-white rounded-full font-semibold hover:bg-purple-700 transition-all text-xs"
+                                  >
+                                    Avail Vaccine
+                                  </button>
+                                )}
                             </div>
                           </div>
                         </li>
@@ -2573,7 +2667,7 @@ function Patient() {
     }
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-sky-50 to-blue-100 p-4 md:p-8">
+      <div className="min-h-screen bg-transparent p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border-t-4 border-yellow-400">

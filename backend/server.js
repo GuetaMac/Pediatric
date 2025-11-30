@@ -1222,6 +1222,16 @@ app.put("/appointments/:id/status", auth, async (req, res) => {
       });
     }
 
+    // fetch appointment before updating so we have context (user, type, date, etc.)
+    const apptRes = await pool.query(
+      "SELECT * FROM appointments WHERE appointment_id = $1",
+      [id]
+    );
+    if (apptRes.rows.length === 0) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+    const appointment = apptRes.rows[0];
+
     // 👇 UPDATE: Save cancel_remarks if status is Canceled
     const result = await pool.query(
       "UPDATE appointments SET status = $1, cancel_remarks = $2 WHERE appointment_id = $3 RETURNING appointment_id, status, cancel_remarks",
@@ -1232,7 +1242,92 @@ app.put("/appointments/:id/status", auth, async (req, res) => {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
-    res.json(result.rows[0]); // return id, status, and cancel_remarks
+    const updated = result.rows[0];
+
+    // If appointment was marked Completed and it's a Vaccination appointment,
+    // persist the vaccine to `vaccine_history` if not already recorded for this appointment.
+    if (
+      status === "Completed" &&
+      appointment.appointment_type === "Vaccination"
+    ) {
+      try {
+        // Check if vaccine history already linked to this appointment
+        const exist = await pool.query(
+          "SELECT COUNT(*) as cnt FROM vaccine_history WHERE appointment_id = $1",
+          [id]
+        );
+        if (parseInt(exist.rows[0].cnt) === 0) {
+          // Determine vaccine name, dose, and date from request body if provided
+          const { vaccine_name, dose_number, date_given } = req.body || {};
+          const vaccineName = vaccine_name || appointment.vaccination_type;
+
+          // If no vaccine name available, skip
+          if (vaccineName) {
+            // Count existing doses for this user+vaccine
+            const doseCountResult = await pool.query(
+              "SELECT COUNT(*) as count FROM vaccine_history WHERE user_id = $1 AND vaccine_name = $2",
+              [appointment.user_id, vaccineName]
+            );
+            const dosesReceived = parseInt(doseCountResult.rows[0].count);
+            const nextDoseNumber = dose_number
+              ? parseInt(dose_number)
+              : dosesReceived + 1;
+
+            // Try to fetch vaccine definition to compute next_due_date
+            const vaccineDefRes = await pool.query(
+              "SELECT * FROM vaccine_definitions WHERE vaccine_name = $1",
+              [vaccineName]
+            );
+            const vaccinationDate =
+              date_given ||
+              appointment.appointment_date ||
+              new Date().toISOString();
+            let nextDueDate = null;
+            if (vaccineDefRes.rows.length > 0) {
+              const vdef = vaccineDefRes.rows[0];
+              if (nextDoseNumber === 1 && vdef.interval_dose_2_days) {
+                const nd = new Date(vaccinationDate);
+                nd.setDate(nd.getDate() + vdef.interval_dose_2_days);
+                nextDueDate = nd;
+              } else if (nextDoseNumber === 2 && vdef.interval_dose_3_days) {
+                const nd = new Date(vaccinationDate);
+                nd.setDate(nd.getDate() + vdef.interval_dose_3_days);
+                nextDueDate = nd;
+              } else if (
+                nextDoseNumber >= vdef.total_doses &&
+                vdef.booster_interval_days
+              ) {
+                const nd = new Date(vaccinationDate);
+                nd.setDate(nd.getDate() + vdef.booster_interval_days);
+                nextDueDate = nd;
+              }
+            }
+
+            await pool.query(
+              `INSERT INTO vaccine_history
+               (user_id, vaccine_name, dose_number, vaccination_date, next_due_date, appointment_id)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [
+                appointment.user_id,
+                vaccineName,
+                nextDoseNumber,
+                vaccinationDate,
+                nextDueDate,
+                id,
+              ]
+            );
+          }
+        }
+      } catch (err) {
+        console.error(
+          "Error saving vaccine history on appointment completion:",
+          err
+        );
+        // don't fail the status update if vaccine save fails; just log
+      }
+    }
+
+    res.json(updated); // return id, status, and cancel_remarks
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: "Server error" });
@@ -3468,6 +3563,19 @@ app.get("/patient/available-vaccines", auth, async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Error fetching available vaccines:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Public endpoint to fetch all vaccine definitions from DB
+app.get("/vaccine_definitions", auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM vaccine_definitions ORDER BY vaccine_name"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching vaccine_definitions:", err);
     res.status(500).json({ error: "Server error" });
   }
 });
