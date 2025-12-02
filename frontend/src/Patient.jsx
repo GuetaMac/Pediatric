@@ -41,31 +41,7 @@ const appointmentTypes = {
   "Follow-up Check-up": 20,
   Consultation: 30,
 };
-// Clinic hours
-const clinicHours = { start: 9, end: 16 };
-// ✅ TIME CONVERSION FUNCTIONS
-const timeStringToMinutes = (timeStr) => {
-  const [time, period] = timeStr.split(" ");
-  let [hours, minutes] = time.split(":").map(Number);
-  if (period === "PM" && hours !== 12) hours += 12;
-  if (period === "AM" && hours === 12) hours = 0;
-  return hours * 60 + minutes;
-};
 
-const minutesToTimeString = (minutes) => {
-  let hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12 || 12;
-  return `${hours}:${mins.toString().padStart(2, "0")} ${ampm}`;
-};
-
-const formatSlot = (startMinutes, duration) => {
-  const endMinutes = startMinutes + duration;
-  return `${minutesToTimeString(startMinutes)} - ${minutesToTimeString(
-    endMinutes
-  )}`;
-};
 function Patient() {
   const [activePage, setActivePage] = useState("home");
   const [appointments, setAppointments] = useState([]);
@@ -84,7 +60,6 @@ function Patient() {
         );
         const data = await response.json();
 
-        // ✅ FILTER - Only count UNREAD notifications
         const lastViewedTime = localStorage.getItem("lastNotificationView");
         const unreadCount = lastViewedTime
           ? data.filter(
@@ -102,9 +77,7 @@ function Patient() {
     const interval = setInterval(fetchNotificationCount, 30000);
     return () => clearInterval(interval);
   }, []);
-  // Add badge sa navigation button (sa Notifications link)
 
-  // Close mobile menu on window resize to desktop
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 768) {
@@ -115,7 +88,6 @@ function Patient() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Fetch patient user info
   useEffect(() => {
     const fetchPatientInfo = async () => {
       try {
@@ -143,396 +115,24 @@ function Patient() {
     fetchPatientInfo();
   }, []);
 
-  // Booking states
-  const [vaccinationType, setVaccinationType] = useState("");
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [appointmentType, setAppointmentType] = useState("");
-  const [selectedTime, setSelectedTime] = useState("");
-  const [additionalServices, setAdditionalServices] = useState([]); // Array of selected additional services
-  const [bookingStatus, setBookingStatus] = useState(null);
-
   const handleLogout = () => {
     localStorage.removeItem("token");
     window.location.href = "/";
   };
 
-  // ✅ Convert time string to minutes
-  const timeStringToMinutes = (timeStr) => {
-    const [time, period] = timeStr.split(" ");
-    let [hours, minutes] = time.split(":").map(Number);
-
-    if (period === "PM" && hours !== 12) hours += 12;
-    if (period === "AM" && hours === 12) hours = 0;
-
-    return hours * 60 + minutes;
-  };
-
-  // ✅ Convert minutes back to string
-  const minutesToTimeString = (minutes) => {
-    let hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    const ampm = hours >= 12 ? "PM" : "AM";
-    hours = hours % 12 || 12;
-    return `${hours}:${mins.toString().padStart(2, "0")} ${ampm}`;
-  };
-
-  // ✅ Format slot string
-  const formatSlot = (startMinutes, duration) => {
-    const endMinutes = startMinutes + duration;
-    return `${minutesToTimeString(startMinutes)} - ${minutesToTimeString(
-      endMinutes
-    )}`;
-  };
-
-  // ✅ Compare dates ignoring time (robust to different formats)
-  const isSameCalendarDay = (a, b) => {
-    const da = new Date(a);
-    const db = new Date(b);
-    if (Number.isNaN(da) || Number.isNaN(db)) return false;
-    return (
-      da.getFullYear() === db.getFullYear() &&
-      da.getMonth() === db.getMonth() &&
-      da.getDate() === db.getDate()
-    );
-  };
-
-  // ✅ Parse appointment slot
-  const parseAppointmentSlot = (appointmentTime, appointmentType) => {
-    const [startStr] = appointmentTime.split(" - ");
-    const startMinutes = timeStringToMinutes(startStr);
-    const duration = appointmentTypes[appointmentType] || 30;
-
-    return {
-      start: startMinutes,
-      end: startMinutes + duration,
-    };
-  };
-
-  // ✅ Check if conflict exists
-  const hasConflict = (newSlotStart, newSlotDuration) => {
-    if (!selectedDate) return false;
-
-    const newSlotEnd = newSlotStart + newSlotDuration;
-
-    return appointments.some((appt) => {
-      // Match same calendar day regardless of string format
-      if (!isSameCalendarDay(appt.appointment_date, selectedDate)) return false;
-
-      // Only block when appointment is active (pending/approved)
-      const apptStatus = String(appt.status || "")
-        .toLowerCase()
-        .trim();
-      if (apptStatus !== "approved" && apptStatus !== "pending") return false;
-
-      // Must have a time to compare
-      if (!appt.appointment_time) return false;
-
-      const existing = parseAppointmentSlot(
-        appt.appointment_time,
-        appt.appointment_type
-      );
-
-      return newSlotStart < existing.end && existing.start < newSlotEnd;
-    });
-  };
-
-  // ✅ Generate slots
-  const generateTimeSlots = () => {
-    if (!appointmentType) return [];
-
-    const duration = appointmentTypes[appointmentType];
-    const slots = [];
-    const startMinutes = clinicHours.start * 60;
-    const endMinutes = clinicHours.end * 60;
-
-    for (
-      let currentMinutes = startMinutes;
-      currentMinutes + duration <= endMinutes;
-      currentMinutes += 30
-    ) {
-      const slotText = formatSlot(currentMinutes, duration);
-      const isAvailable = !hasConflict(currentMinutes, duration);
-
-      slots.push({
-        text: slotText,
-        value: slotText,
-        available: isAvailable,
-      });
-    }
-    return slots;
-  };
-
-  // ✅ Fetch appointments
-  const fetchAppointments = async () => {
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/get/appointments`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
-      const data = await res.json();
-      setAppointments(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAppointments();
-  }, []);
-
-  const formatDateForBackend = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
-  // ✅ Book appointment
-  const handleBookAppointment = async (patientConcerns, vaccinationType) => {
-    if (!selectedDate || !appointmentType || !selectedTime) {
-      Swal.fire({
-        icon: "warning",
-        title: "Missing Information",
-        text: "Please select date, appointment type, and time slot.",
-        confirmButtonColor: "#0ea5e9",
-      });
-      return;
-    }
-
-    // Validate vaccination selection
-    if (appointmentType === "Vaccination" && !vaccinationType) {
-      Swal.fire({
-        icon: "warning",
-        title: "Select Vaccine",
-        text: "Please select a vaccination type from the available options.",
-        confirmButtonColor: "#0ea5e9",
-      });
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/appointments`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            date: selectedDate.toISOString().split("T")[0],
-            time: selectedTime,
-            type: appointmentType,
-            concerns: patientConcerns,
-            additional_services:
-              additionalServices.length > 0
-                ? additionalServices.join(", ")
-                : "None",
-            vaccination_type: vaccinationType || null,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (response.ok) {
-        await Swal.fire({
-          icon: "success",
-          title: "Booked!",
-          text: data.message,
-          confirmButtonColor: "#0ea5e9",
-        });
-
-        // Reset form
-        setSelectedDate(null);
-        setAppointmentType("");
-        setSelectedTime("");
-        setPatientConcerns("");
-        setAdditionalServices([]);
-        setVaccinationType("");
-        setSelectedVaccine(null);
-        setAvailableVaccines([]);
-
-        // Refresh appointments
-        window.location.reload();
-      } else {
-        Swal.fire({
-          icon: "error",
-          title: "Booking Failed",
-          text: data.error || "Failed to book appointment",
-          confirmButtonColor: "#0ea5e9",
-        });
-      }
-    } catch (error) {
-      console.error("Error booking appointment:", error);
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Failed to book appointment. Please try again.",
-        confirmButtonColor: "#0ea5e9",
-      });
-    }
-  };
-
-  // ✅ Fetch available vaccines
-  const fetchAvailableVaccines = async () => {
-    try {
-      setVaccinesLoading(true);
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/patient/available-vaccines`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to fetch vaccines");
-      }
-
-      const data = await response.json();
-      setAvailableVaccines(data.vaccines || []);
-      setVaccinesLoading(false);
-    } catch (err) {
-      console.error("Error fetching vaccines:", err);
-      Swal.fire({
-        icon: "error",
-        title: "Cannot Load Vaccines",
-        text:
-          err.message ||
-          "Please make sure your birth date is set in your profile.",
-        confirmButtonColor: "#0ea5e9",
-      });
-      setVaccinesLoading(false);
-      setAppointmentType("");
-    }
-  };
-
-  // ✅ Load vaccines when Vaccination is selected
-  useEffect(() => {
-    if (appointmentType === "Vaccination") {
-      fetchAvailableVaccines();
-    }
-  }, [appointmentType]);
-  // Add vaccination history display in medical records section
-  // Add this inside the medical records section, before or after the existing records
-  <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl p-6 shadow-lg border-2 border-purple-200 mt-6">
-    <div className="flex items-center gap-3 mb-4">
-      <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center">
-        <span className="text-white text-xl">💉</span>
-      </div>
-      <h3 className="text-2xl font-bold text-purple-900">
-        Vaccination History
-      </h3>
-    </div>
-
-    <button
-      onClick={async () => {
-        try {
-          const token = localStorage.getItem("token");
-          const response = await fetch(
-            `${import.meta.env.VITE_API_URL}/patient/vaccination-history`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-
-          if (response.ok) {
-            const history = await response.json();
-
-            if (history.length === 0) {
-              Swal.fire({
-                icon: "info",
-                title: "No Vaccination History",
-                text: "You don't have any vaccination records yet.",
-                confirmButtonColor: "#0ea5e9",
-              });
-              return;
-            }
-
-            // Format history for display
-            const historyHTML = history
-              .map(
-                (h) => `
-            <div style="text-align: left; margin-bottom: 15px; padding: 12px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 8px;">
-              <p style="margin: 0; font-weight: bold; color: #1e40af; font-size: 16px;">${
-                h.vaccine_name
-              }</p>
-              <p style="margin: 5px 0 0 0; color: #64748b; font-size: 14px;">
-                <strong>Dose ${h.dose_number}</strong> of ${h.total_doses} 
-                • ${new Date(h.vaccination_date).toLocaleDateString()}
-              </p>
-              ${
-                h.next_due_date
-                  ? `
-                <p style="margin: 5px 0 0 0; color: #059669; font-size: 13px;">
-                  ⏰ Next dose: ${new Date(
-                    h.next_due_date
-                  ).toLocaleDateString()}
-                </p>
-              `
-                  : ""
-              }
-            </div>
-          `
-              )
-              .join("");
-
-            Swal.fire({
-              title: "💉 Your Vaccination History",
-              html: historyHTML,
-              width: 600,
-              confirmButtonColor: "#0ea5e9",
-            });
-          }
-        } catch (err) {
-          console.error("Error fetching vaccination history:", err);
-        }
-      }}
-      className="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors shadow-md"
-    >
-      View My Vaccination History
-    </button>
-  </div>;
-  // ✅ Toggle additional service
-  const toggleAdditionalService = (type) => {
-    if (additionalServices.includes(type)) {
-      setAdditionalServices(additionalServices.filter((t) => t !== type));
-    } else {
-      setAdditionalServices([...additionalServices, type]);
-    }
-  };
-
-  // ✅ Handle "None" selection
-  const handleSelectNone = () => {
-    setAdditionalServices([]);
-  };
-
+  // ✅ APPOINTMENTS PAGE COMPONENT
   const AppointmentsPage = () => {
     const [filterStatus, setFilterStatus] = useState("all");
-    const [patientConcerns, setPatientConcerns] = useState(""); //new state para maayos typings
-    const [vaccinationType, setVaccinationType] = useState(""); // for vaccine type
-
-    const [selectedDate, setSelectedDate] = useState(null);
+    const [patientConcerns, setPatientConcerns] = useState("");
+    const [vaccinationType, setVaccinationType] = useState("");
     const [appointmentType, setAppointmentType] = useState("");
-    const [selectedTime, setSelectedTime] = useState("");
     const [additionalServices, setAdditionalServices] = useState([]);
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [selectedDate, setSelectedDate] = useState(null);
+    const [availableSlots, setAvailableSlots] = useState([]);
+    const [selectedSlot, setSelectedSlot] = useState(null);
+    const [slotsLoading, setSlotsLoading] = useState(false);
 
     const [medicalRecords, setMedicalRecords] = useState([]);
     const [medicalLoading, setMedicalLoading] = useState(true);
@@ -554,178 +154,142 @@ function Patient() {
     const [vaccinesLoading, setVaccinesLoading] = useState(false);
     const [selectedVaccine, setSelectedVaccine] = useState(null);
 
-    const isSameCalendarDay = (a, b) => {
-      const da = new Date(a);
-      const db = new Date(b);
-      if (Number.isNaN(da) || Number.isNaN(db)) return false;
-      return (
-        da.getFullYear() === db.getFullYear() &&
-        da.getMonth() === db.getMonth() &&
-        da.getDate() === db.getDate()
-      );
-    };
+    // Add this state at the top of AppointmentsPage component
+    const [calendarSlots, setCalendarSlots] = useState({});
+    const [loadingCalendar, setLoadingCalendar] = useState(false);
+    const [selectedMonth, setSelectedMonth] = useState(new Date());
 
-    const parseAppointmentSlot = (appointmentTime, appointmentType) => {
-      const [startStr] = appointmentTime.split(" - ");
-      const startMinutes = timeStringToMinutes(startStr);
-      const duration = appointmentTypes[appointmentType] || 30;
-      return {
-        start: startMinutes,
-        end: startMinutes + duration,
-      };
-    };
+    // ADD THIS HELPER FUNCTION HERE - before any other functions
+    const formatDateDisplay = (dateString) => {
+      if (!dateString) return "N/A";
 
-    const hasConflict = (newSlotStart, newSlotDuration) => {
-      if (!selectedDate) return false;
-      const newSlotEnd = newSlotStart + newSlotDuration;
+      // dateString format: "2025-12-03"
+      const [year, month, day] = dateString.split("-").map(Number);
 
-      return appointments.some((appt) => {
-        if (!isSameCalendarDay(appt.appointment_date, selectedDate))
-          return false;
+      // Create date object using LOCAL timezone (not UTC)
+      const date = new Date(year, month - 1, day);
 
-        const apptStatus = String(appt.status || "")
-          .toLowerCase()
-          .trim();
-        if (apptStatus !== "approved" && apptStatus !== "pending") return false;
-
-        if (!appt.appointment_time) return false;
-
-        const existing = parseAppointmentSlot(
-          appt.appointment_time,
-          appt.appointment_type
-        );
-        return newSlotStart < existing.end && existing.start < newSlotEnd;
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
       });
     };
 
-    // ✅ GENERATE TIME SLOTS FUNCTION
-    const generateTimeSlots = () => {
-      if (!appointmentType) return [];
+    // Add this function to fetch slots for entire month
+    const fetchMonthSlots = async (month) => {
+      if (!appointmentType) return;
 
-      const duration = appointmentTypes[appointmentType];
-      if (!duration) return [];
+      try {
+        setLoadingCalendar(true);
+        const token = localStorage.getItem("token");
 
-      const slots = [];
-      const startMinutes = clinicHours.start * 60;
-      const endMinutes = clinicHours.end * 60;
+        const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
+        const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0);
 
-      for (
-        let currentMinutes = startMinutes;
-        currentMinutes + duration <= endMinutes;
-        currentMinutes += 30
-      ) {
-        const slotText = formatSlot(currentMinutes, duration);
-        const isAvailable = !hasConflict(currentMinutes, duration);
+        const startDate = firstDay.toISOString().split("T")[0];
+        const endDate = lastDay.toISOString().split("T")[0];
 
-        slots.push({
-          text: slotText,
-          value: slotText,
-          available: isAvailable,
-        });
+        console.log("Fetching slots from:", startDate, "to:", endDate); // ← ADD THIS
+
+        const response = await fetch(
+          `${
+            import.meta.env.VITE_API_URL
+          }/patient/available-slots-range?start_date=${startDate}&end_date=${endDate}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log("Received slots:", data); // ← ADD THIS
+          const slotsByDate = data.reduce((acc, slot) => {
+            const date = slot.schedule_date;
+            if (!acc[date]) acc[date] = [];
+            acc[date].push(slot);
+            return acc;
+          }, {});
+          setCalendarSlots(slotsByDate);
+        }
+      } catch (error) {
+        console.error("Error fetching month slots:", error);
+      } finally {
+        setLoadingCalendar(false);
       }
-      return slots;
     };
 
-    const availableSlots = generateTimeSlots();
-
-    // ✅ TOGGLE & SELECT FUNCTIONS
-    const toggleAdditionalService = (type) => {
-      if (additionalServices.includes(type)) {
-        setAdditionalServices(additionalServices.filter((t) => t !== type));
+    // Fetch month slots when appointment type changes
+    useEffect(() => {
+      if (appointmentType) {
+        fetchMonthSlots(selectedMonth);
       } else {
-        setAdditionalServices([...additionalServices, type]);
+        setCalendarSlots({});
       }
+    }, [appointmentType, selectedMonth]);
+
+    // Helper function to get available slot count for a date
+    // Helper function to get available slot count for a date
+    const getAvailableSlotCount = (date) => {
+      // Format date without timezone conversion
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const dateStr = `${year}-${month}-${day}`;
+
+      const slots = calendarSlots[dateStr] || [];
+      return slots.reduce((sum, slot) => sum + slot.available_slots, 0);
     };
 
-    const handleSelectNone = () => {
-      setAdditionalServices([]);
-    };
-
-    // ✅ HANDLE BOOK APPOINTMENT
-    const handleBookAppointment = async (patientConcerns, vaccinationType) => {
-      if (!selectedDate || !appointmentType || !selectedTime) {
-        Swal.fire({
-          icon: "warning",
-          title: "Missing Information",
-          text: "Please select date, appointment type, and time slot.",
-          confirmButtonColor: "#0ea5e9",
-        });
-        return;
-      }
-
-      if (appointmentType === "Vaccination" && !vaccinationType) {
-        Swal.fire({
-          icon: "warning",
-          title: "Select Vaccine",
-          text: "Please select a vaccination type from the available options.",
-          confirmButtonColor: "#0ea5e9",
-        });
+    // Fetch available slots when date is selected
+    const fetchAvailableSlots = async (date) => {
+      if (!date) {
+        setAvailableSlots([]);
         return;
       }
 
       try {
+        setSlotsLoading(true);
         const token = localStorage.getItem("token");
+        // Format date without timezone conversion
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const dateString = `${year}-${month}-${day}`;
+
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/appointments`,
+          `${
+            import.meta.env.VITE_API_URL
+          }/patient/available-slots?date=${dateString}`,
           {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              date: selectedDate.toISOString().split("T")[0],
-              time: selectedTime,
-              type: appointmentType,
-              concerns: patientConcerns,
-              additional_services:
-                additionalServices.length > 0
-                  ? additionalServices.join(", ")
-                  : "None",
-              vaccination_type: vaccinationType || null,
-            }),
+            headers: { Authorization: `Bearer ${token}` },
           }
         );
 
-        const data = await response.json();
-
         if (response.ok) {
-          await Swal.fire({
-            icon: "success",
-            title: "Booked!",
-            text: data.message,
-            confirmButtonColor: "#0ea5e9",
-          });
-
-          setSelectedDate(null);
-          setAppointmentType("");
-          setSelectedTime("");
-          setPatientConcerns("");
-          setAdditionalServices([]);
-          setVaccinationType("");
-          setSelectedVaccine(null);
-          setAvailableVaccines([]);
-          window.location.reload();
+          const data = await response.json();
+          setAvailableSlots(data);
         } else {
-          Swal.fire({
-            icon: "error",
-            title: "Booking Failed",
-            text: data.error || "Failed to book appointment",
-            confirmButtonColor: "#0ea5e9",
-          });
+          setAvailableSlots([]);
         }
       } catch (error) {
-        console.error("Error booking appointment:", error);
-        Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: "Failed to book appointment. Please try again.",
-          confirmButtonColor: "#0ea5e9",
-        });
+        console.error("Error fetching slots:", error);
+        setAvailableSlots([]);
+      } finally {
+        setSlotsLoading(false);
       }
     };
 
-    // ✅ FETCH APPOINTMENTS - ADD THIS BEFORE YOUR EXISTING useEffect
+    // Fetch slots when date changes
+    useEffect(() => {
+      if (selectedDate && appointmentType) {
+        fetchAvailableSlots(selectedDate);
+      } else {
+        setAvailableSlots([]);
+      }
+    }, [selectedDate, appointmentType]);
+
+    // Fetch appointments
     useEffect(() => {
       const fetchAppointments = async () => {
         try {
@@ -751,13 +315,14 @@ function Patient() {
       };
       fetchAppointments();
     }, []);
+
+    // Fetch available vaccines when Vaccination is selected
     useEffect(() => {
       if (appointmentType === "Vaccination") {
         fetchAvailableVaccines();
       }
     }, [appointmentType]);
 
-    // Function to fetch available vaccines
     const fetchAvailableVaccines = async () => {
       try {
         setVaccinesLoading(true);
@@ -792,18 +357,17 @@ function Patient() {
           confirmButtonColor: "#0ea5e9",
         });
         setVaccinesLoading(false);
-        setAppointmentType(""); // Reset appointment type
+        setAppointmentType("");
       }
     };
 
-    // ✅ DAGDAGIN MO ITO - Auto-load medical records and user info
+    // Auto-load medical records and user info
     useEffect(() => {
       const loadUserAndRecords = async () => {
         try {
           const token = localStorage.getItem("token");
           if (!token) return;
 
-          // Load user info for import
           const userRes = await fetch(
             `${import.meta.env.VITE_API_URL}/patient/user-info`,
             { headers: { Authorization: `Bearer ${token}` } }
@@ -815,7 +379,6 @@ function Patient() {
             }
           }
 
-          // Load medical records
           await fetchPatientRecords();
         } catch (error) {
           console.error("Error loading data:", error);
@@ -824,7 +387,7 @@ function Patient() {
 
       loadUserAndRecords();
     }, []);
-    // ✅ DAGDAGIN MO ITO - Medical Records helper functions
+
     const fetchPatientRecords = async () => {
       try {
         setMedicalLoading(true);
@@ -863,6 +426,100 @@ function Patient() {
       }
     };
 
+    const toggleAdditionalService = (type) => {
+      if (additionalServices.includes(type)) {
+        setAdditionalServices(additionalServices.filter((t) => t !== type));
+      } else {
+        setAdditionalServices([...additionalServices, type]);
+      }
+    };
+
+    const handleSelectNone = () => {
+      setAdditionalServices([]);
+    };
+
+    const handleBookAppointment = async (patientConcerns, vaccinationType) => {
+      if (!selectedDate || !appointmentType || !selectedSlot) {
+        Swal.fire({
+          icon: "warning",
+          title: "Missing Information",
+          text: "Please select date, appointment type, and time slot.",
+          confirmButtonColor: "#0ea5e9",
+        });
+        return;
+      }
+
+      if (appointmentType === "Vaccination" && !vaccinationType) {
+        Swal.fire({
+          icon: "warning",
+          title: "Select Vaccine",
+          text: "Please select a vaccination type from the available options.",
+          confirmButtonColor: "#0ea5e9",
+        });
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/appointments`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              schedule_id: selectedSlot.schedule_id,
+              type: appointmentType,
+              concerns: patientConcerns,
+              additional_services:
+                additionalServices.length > 0
+                  ? additionalServices.join(", ")
+                  : "None",
+              vaccination_type: vaccinationType || null,
+            }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          await Swal.fire({
+            icon: "success",
+            title: "Booked!",
+            text: data.message,
+            confirmButtonColor: "#0ea5e9",
+          });
+
+          setSelectedDate(null);
+          setAppointmentType("");
+          setSelectedSlot(null);
+          setPatientConcerns("");
+          setAdditionalServices([]);
+          setVaccinationType("");
+          setSelectedVaccine(null);
+          setAvailableVaccines([]);
+          window.location.reload();
+        } else {
+          Swal.fire({
+            icon: "error",
+            title: "Booking Failed",
+            text: data.error || "Failed to book appointment",
+            confirmButtonColor: "#0ea5e9",
+          });
+        }
+      } catch (error) {
+        console.error("Error booking appointment:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to book appointment. Please try again.",
+          confirmButtonColor: "#0ea5e9",
+        });
+      }
+    };
+
     const groupedRecords = medicalRecords.reduce((groups, record) => {
       const type = record.appointment_type || "Others";
       if (!groups[type]) groups[type] = [];
@@ -891,7 +548,6 @@ function Patient() {
         return;
       }
 
-      // Compute age
       let age = "N/A";
       if (patient.birth_date && patient.appointment_date) {
         const birth = new Date(patient.birth_date);
@@ -986,9 +642,7 @@ function Patient() {
         <p class="field"><span class="label">Time:</span> ${appointmentTime}</p>
         ${
           patient.status === "canceled" && patient.cancel_remarks
-            ? `
-        <p class="field"><span class="label">Cancellation Reason:</span> ${patient.cancel_remarks}</p>
-        `
+            ? `<p class="field"><span class="label">Cancellation Reason:</span> ${patient.cancel_remarks}</p>`
             : ""
         }
         </div>
@@ -1026,7 +680,6 @@ function Patient() {
       printWindow.document.close();
     };
 
-    // Get available additional services (exclude the primary appointment type)
     const availableAdditionalServices = Object.keys(appointmentTypes).filter(
       (type) => type !== appointmentType
     );
@@ -1036,29 +689,7 @@ function Patient() {
       return filterStatus === "all" ? true : status === filterStatus;
     });
 
-    // Show all canceled appointments so their cancellation reasons are visible,
-    // but limit non-canceled items to the 5 most recent to keep the list compact.
-    const sorted = filteredAppointments.sort(
-      (a, b) => new Date(a.appointment_date) - new Date(b.appointment_date)
-    );
-    const canceledAppointments = sorted.filter(
-      (a) =>
-        String(a.status || "")
-          .toLowerCase()
-          .trim() === "canceled"
-    );
-    const nonCanceled = sorted.filter(
-      (a) =>
-        String(a.status || "")
-          .toLowerCase()
-          .trim() !== "canceled"
-    );
-    const displayAppointments = [
-      ...canceledAppointments,
-      ...nonCanceled.slice(0, 5),
-    ];
     const handleCancelAppointment = async (appointmentId) => {
-      // Prompt for cancellation reason and require non-empty input
       const reasonResult = await Swal.fire({
         title: "Reason for cancellation",
         input: "text",
@@ -1106,7 +737,6 @@ function Patient() {
             confirmButtonColor: "#0EA5E9",
           });
 
-          // Refresh appointments list
           window.location.reload();
         } else {
           Swal.fire({
@@ -1127,7 +757,6 @@ function Patient() {
       }
     };
 
-    // Avail vaccine: prompt for vaccine details then save to server
     const handleAvailVaccine = async (appt) => {
       const defaultVaccine = appt.vaccination_type || "";
       const today = new Date().toISOString().split("T")[0];
@@ -1191,7 +820,6 @@ function Patient() {
             text: data.message || "Vaccination recorded",
             confirmButtonColor: "#0EA5E9",
           });
-          // refresh the page data
           window.location.reload();
         } else {
           Swal.fire({
@@ -1226,102 +854,401 @@ function Patient() {
           </p>
         </div>
 
-        {/* Step Cards */}
-        <div className="grid gap-4 md:grid-cols-3">
-          {/* Date Picker */}
-          <div className="bg-white rounded-2xl p-4 shadow-lg border border-sky-100 hover:shadow-xl transition-all relative z-20">
-            <style>{`
-  .react-datepicker__day--sunday {
-    display: none !important;
-  }
-  .react-datepicker__day-name:last-child {
-    display: none !important;
-  }
-`}</style>
-
-            <div className="flex items-center gap-2 mb-2">
-              <Calendar className="text-sky-600" />
-              <h3 className="text-xl font-bold text-sky-800">1. Pick a Date</h3>
+        {/* New Calendar-Based Booking */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* LEFT SIDE - Calendar */}
+          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-lg border border-sky-100">
+            <div className="flex items-center gap-2 mb-4">
+              <Calendar className="text-sky-600 w-6 h-6" />
+              <h3 className="text-2xl font-bold text-sky-800">
+                Select Date & Time
+              </h3>
             </div>
-            <div className="relative z-30">
-              <DatePicker
-                selected={selectedDate}
-                onChange={(date) => {
-                  setSelectedDate(date);
-                  setSelectedTime("");
+
+            {/* Appointment Type Selection */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-sky-800 mb-2">
+                1. Choose Appointment Type
+              </label>
+              <select
+                value={appointmentType}
+                onChange={(e) => {
+                  setAppointmentType(e.target.value);
+                  setSelectedDate(null);
+                  setSelectedSlot(null);
                   setAdditionalServices([]);
                 }}
-                filterDate={(date) => date.getDay() !== 0}
-                minDate={new Date()}
-                dateFormat="MMMM d, yyyy"
-                calendarStartDay={1}
                 className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
-        focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-                placeholderText="Select a date"
-                popperClassName="z-50"
-              />
+          focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+              >
+                <option value="">-- Select Type --</option>
+                {Object.keys(appointmentTypes).map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
             </div>
-          </div>
 
-          {/* Appointment Type */}
-          <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
-            <div className="flex items-center gap-2 mb-2">
-              <ClipboardList className="text-sky-600" />
-              <h3 className="text-xl font-bold text-sky-800">2. Visit Type</h3>
-            </div>
-            <select
-              value={appointmentType}
-              onChange={(e) => {
-                setAppointmentType(e.target.value);
-                setSelectedTime("");
-                setAdditionalServices([]);
-              }}
-              className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
-            focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-            >
-              <option value="">-- Choose --</option>
-              {Object.keys(appointmentTypes).map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Time Slot */}
-          <div className="bg-white rounded-2xl p-5 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="text-sky-600" />
-              <h3 className="text-xl font-bold text-sky-800">3. Time Slot</h3>
-            </div>
-            <select
-              value={selectedTime}
-              onChange={(e) => setSelectedTime(e.target.value)}
-              className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
-            focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-              disabled={!appointmentType || !selectedDate}
-            >
-              <option value="">-- Choose Slot --</option>
-              {availableSlots.map((slot, idx) => (
-                <option
-                  key={idx}
-                  value={slot.value}
-                  disabled={!slot.available}
-                  className={slot.available ? "" : "text-gray-400 bg-gray-100"}
-                >
-                  {slot.text} {!slot.available ? "(Booked)" : ""}
-                </option>
-              ))}
-            </select>
-            {appointmentType &&
-              selectedDate &&
-              availableSlots.filter((s) => s.available).length === 0 && (
-                <p className="text-red-500 text-sm mt-2">
-                  No slots available for this date/type.
+            {!appointmentType && (
+              <div className="text-center py-12 bg-sky-50 rounded-xl border-2 border-dashed border-sky-300">
+                <ClipboardList className="w-12 h-12 text-sky-300 mx-auto mb-3" />
+                <p className="text-sky-600">
+                  Please select an appointment type first
                 </p>
-              )}
+              </div>
+            )}
+
+            {appointmentType && (
+              <>
+                {/* Custom Calendar */}
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold text-sky-800 mb-2">
+                    2. Pick a Date
+                  </label>
+
+                  {loadingCalendar && (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500 mx-auto"></div>
+                      <p className="text-sky-600 text-sm mt-2">
+                        Loading calendar...
+                      </p>
+                    </div>
+                  )}
+
+                  {!loadingCalendar && (
+                    <div className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-xl p-4 border border-sky-200">
+                      {/* Month Navigation */}
+                      <div className="flex items-center justify-between mb-4">
+                        <button
+                          onClick={() => {
+                            const newMonth = new Date(selectedMonth);
+                            newMonth.setMonth(newMonth.getMonth() - 1);
+                            setSelectedMonth(newMonth);
+                          }}
+                          className="p-2 hover:bg-white rounded-lg transition-colors"
+                        >
+                          <ChevronDown className="w-5 h-5 rotate-90 text-sky-700" />
+                        </button>
+
+                        <h4 className="text-lg font-bold text-sky-900">
+                          {selectedMonth.toLocaleDateString("en-US", {
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </h4>
+
+                        <button
+                          onClick={() => {
+                            const newMonth = new Date(selectedMonth);
+                            newMonth.setMonth(newMonth.getMonth() + 1);
+                            setSelectedMonth(newMonth);
+                          }}
+                          className="p-2 hover:bg-white rounded-lg transition-colors"
+                        >
+                          <ChevronDown className="w-5 h-5 -rotate-90 text-sky-700" />
+                        </button>
+                      </div>
+
+                      {/* Calendar Grid */}
+
+                      <div className="grid grid-cols-7 gap-2">
+                        {/* Day Headers */}
+                        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+                          (day) => (
+                            <div
+                              key={day}
+                              className="text-center text-xs font-semibold text-sky-700 py-2"
+                            >
+                              {day}
+                            </div>
+                          )
+                        )}
+
+                        {/* Calendar Days */}
+                        {(() => {
+                          const year = selectedMonth.getFullYear();
+                          const month = selectedMonth.getMonth();
+                          const firstDay = new Date(year, month, 1);
+                          const lastDay = new Date(year, month + 1, 0);
+                          const startingDayOfWeek = firstDay.getDay();
+                          const daysInMonth = lastDay.getDate();
+
+                          // Adjust for Monday start (0=Sun, 1=Mon, 2=Tue, etc.)
+                          // If Sunday (0), place at position 6 (last column)
+                          // Otherwise, shift left by 1
+                          const adjustedStartDay =
+                            startingDayOfWeek === 0 ? 6 : startingDayOfWeek - 1;
+
+                          const days = [];
+
+                          // Empty cells before month starts
+                          for (let i = 0; i < adjustedStartDay; i++) {
+                            days.push(
+                              <div
+                                key={`empty-${i}`}
+                                className="aspect-square"
+                              />
+                            );
+                          }
+
+                          // Days of the month
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+
+                          for (let day = 1; day <= daysInMonth; day++) {
+                            const date = new Date(year, month, day);
+                            // Fix: Use local date string to avoid timezone issues
+                            const dateStr = `${year}-${String(
+                              month + 1
+                            ).padStart(2, "0")}-${String(day).padStart(
+                              2,
+                              "0"
+                            )}`;
+                            const dayOfWeek = date.getDay();
+
+                            // Show Sundays as closed
+                            if (dayOfWeek === 0) {
+                              days.push(
+                                <div
+                                  key={`day-${day}`}
+                                  className="aspect-square rounded-lg bg-gray-200 flex items-center justify-center relative border border-gray-300"
+                                >
+                                  <div className="text-center">
+                                    <span className="text-sm text-gray-500">
+                                      {day}
+                                    </span>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      Closed
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                              continue;
+                            }
+
+                            const isPast = date < today;
+                            const availableSlots = getAvailableSlotCount(date);
+                            const isSelected =
+                              selectedDate &&
+                              date.toDateString() ===
+                                selectedDate.toDateString();
+
+                            let bgColor = "bg-white hover:bg-sky-100";
+                            let textColor = "text-gray-700";
+                            let badge = null;
+
+                            if (isPast) {
+                              bgColor = "bg-gray-100 cursor-not-allowed";
+                              textColor = "text-gray-400";
+                            } else if (isSelected) {
+                              bgColor =
+                                "bg-yellow-400 border-2 border-yellow-500";
+                              textColor = "text-sky-900 font-bold";
+                            } else if (availableSlots > 0) {
+                              bgColor =
+                                "bg-green-50 hover:bg-green-100 border border-green-200";
+                              textColor = "text-green-800 font-semibold";
+                              badge = (
+                                <span className="absolute bottom-1 right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                                  {availableSlots}
+                                </span>
+                              );
+                            } else {
+                              bgColor =
+                                "bg-red-50 cursor-not-allowed border border-red-200";
+                              textColor = "text-red-400";
+                              badge = (
+                                <span className="absolute bottom-1 right-1 text-red-400 text-xs">
+                                  ✕
+                                </span>
+                              );
+                            }
+
+                            days.push(
+                              <button
+                                key={`day-${day}`}
+                                disabled={isPast || availableSlots === 0}
+                                onClick={() => {
+                                  setSelectedDate(date);
+                                  fetchAvailableSlots(date);
+                                }}
+                                className={`aspect-square rounded-lg ${bgColor} ${textColor} 
+    flex items-center justify-center relative transition-all
+    ${!isPast && availableSlots > 0 ? "cursor-pointer hover:scale-105" : ""}`}
+                              >
+                                <span className="text-sm">{day}</span>
+                                {badge}
+                              </button>
+                            );
+                          }
+
+                          return days;
+                        })()}
+                      </div>
+
+                      {/* Legend */}
+                      <div className="mt-4 pt-4 border-t border-sky-200 flex flex-wrap gap-4 text-xs">
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-green-50 border border-green-200 rounded"></div>
+                          <span className="text-gray-700">Available</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-red-50 border border-red-200 rounded"></div>
+                          <span className="text-gray-700">No slots</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-yellow-400 border-2 border-yellow-500 rounded"></div>
+                          <span className="text-gray-700">Selected</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Time Slots - Only show when date is selected */}
+                {selectedDate && (
+                  <div>
+                    <label className="block text-sm font-semibold text-sky-800 mb-2">
+                      3. Choose Time Slot
+                    </label>
+
+                    {slotsLoading ? (
+                      <div className="flex items-center justify-center py-4 bg-sky-50 rounded-xl">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-500"></div>
+                        <span className="ml-2 text-sky-600">
+                          Loading slots...
+                        </span>
+                      </div>
+                    ) : availableSlots.length === 0 ? (
+                      <div className="text-center py-6 bg-red-50 rounded-xl border border-red-200">
+                        <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+                        <p className="text-red-600 text-sm">
+                          No slots available for this date
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {availableSlots.map((slot) => {
+                          const isSelected =
+                            selectedSlot?.schedule_id === slot.schedule_id;
+                          return (
+                            <button
+                              key={slot.schedule_id}
+                              onClick={() => setSelectedSlot(slot)}
+                              className={`p-4 rounded-xl border-2 transition-all ${
+                                isSelected
+                                  ? "bg-yellow-400 border-yellow-500 text-sky-900"
+                                  : "bg-white border-sky-200 hover:border-sky-400 text-sky-800"
+                              }`}
+                            >
+                              <div className="flex items-center justify-center gap-2 mb-2">
+                                <Clock className="w-4 h-4" />
+                                <span className="font-bold text-lg">
+                                  {slot.start_time.substring(0, 5)} -{" "}
+                                  {slot.end_time?.substring(0, 5) || "N/A"}
+                                </span>
+                              </div>
+                              <div
+                                className={`text-xs font-semibold ${
+                                  isSelected ? "text-sky-900" : "text-sky-600"
+                                }`}
+                              >
+                                {slot.available_slots}/{slot.total_slots}{" "}
+                                available
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* RIGHT SIDE - Summary Card */}
+          <div className="bg-white rounded-2xl p-6 shadow-lg border border-sky-100 h-fit sticky top-6">
+            <h3 className="text-xl font-bold text-sky-800 mb-4 flex items-center gap-2">
+              <ClipboardList className="w-6 h-6 text-sky-600" />
+              Appointment Summary
+            </h3>
+
+            <div className="space-y-4">
+              {/* Appointment Type */}
+              <div>
+                <p className="text-sm text-sky-600 font-semibold mb-1">
+                  Appointment Type
+                </p>
+                <p className="text-lg font-bold text-sky-900">
+                  {appointmentType || "—"}
+                </p>
+              </div>
+
+              {/* Selected Date */}
+              <div>
+                <p className="text-sm text-sky-600 font-semibold mb-1">Date</p>
+                <p className="text-lg font-bold text-sky-900">
+                  {selectedDate
+                    ? selectedDate.toLocaleDateString("en-US", {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })
+                    : "—"}
+                </p>
+              </div>
+
+              {/* Selected Time */}
+              <div>
+                <p className="text-sm text-sky-600 font-semibold mb-1">Time</p>
+                <p className="text-lg font-bold text-sky-900">
+                  {selectedSlot
+                    ? `${selectedSlot.start_time.substring(0, 5)} - ${
+                        selectedSlot.end_time?.substring(0, 5) || "N/A"
+                      }`
+                    : "—"}
+                </p>
+              </div>
+
+              {/* Status Indicator */}
+              <div className="pt-4 border-t border-sky-200">
+                {!appointmentType && (
+                  <div className="text-center py-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-600">
+                      Select appointment type
+                    </p>
+                  </div>
+                )}
+                {appointmentType && !selectedDate && (
+                  <div className="text-center py-3 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-blue-600">
+                      Pick a date from calendar
+                    </p>
+                  </div>
+                )}
+                {appointmentType && selectedDate && !selectedSlot && (
+                  <div className="text-center py-3 bg-yellow-50 rounded-lg">
+                    <p className="text-sm text-yellow-700">
+                      Choose a time slot
+                    </p>
+                  </div>
+                )}
+                {appointmentType && selectedDate && selectedSlot && (
+                  <div className="text-center py-3 bg-green-50 rounded-lg border border-green-200">
+                    <CheckCircle className="w-6 h-6 text-green-600 mx-auto mb-1" />
+                    <p className="text-sm text-green-700 font-semibold">
+                      Ready to book!
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
+
         {/* Vaccination Type - Only show if Vaccination is selected */}
         {appointmentType === "Vaccination" && (
           <div className="bg-white rounded-2xl p-4 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
@@ -1349,7 +1276,7 @@ function Patient() {
                     setSelectedVaccine(vaccine);
                   }}
                   className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
-            focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                focus:ring-2 focus:ring-yellow-400 focus:outline-none"
                 >
                   <option value="">-- Select Vaccine --</option>
                   {availableVaccines
@@ -1364,7 +1291,6 @@ function Patient() {
                     ))}
                 </select>
 
-                {/* Show unavailable vaccines separately */}
                 {availableVaccines.filter((v) => !v.available).length > 0 && (
                   <details className="mt-4">
                     <summary className="cursor-pointer text-sm text-gray-600 hover:text-sky-600 font-semibold">
@@ -1401,7 +1327,6 @@ function Patient() {
                   </details>
                 )}
 
-                {/* Show selected vaccine details */}
                 {selectedVaccine && vaccinationType && (
                   <div className="mt-4 p-4 bg-sky-50 rounded-lg border border-sky-200">
                     <h4 className="font-bold text-sky-900 mb-2">
@@ -1428,7 +1353,7 @@ function Patient() {
         )}
 
         {/* Additional Services Section */}
-        {selectedDate && appointmentType && selectedTime && (
+        {selectedDate && appointmentType && selectedSlot && (
           <div className="bg-white rounded-2xl p-4 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
             <div className="flex items-center gap-2 mb-3">
               <ClipboardList className="text-sky-600" />
@@ -1441,7 +1366,6 @@ function Patient() {
               you don't want any additional services.
             </p>
             <div className="space-y-3">
-              {/* None option */}
               <label
                 className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
                   additionalServices.length === 0
@@ -1459,7 +1383,6 @@ function Patient() {
                 <span className="flex-1 font-semibold text-sky-800">None</span>
               </label>
 
-              {/* Available additional services */}
               {availableAdditionalServices.map((type) => {
                 const isSelected = additionalServices.includes(type);
                 return (
@@ -1500,7 +1423,7 @@ function Patient() {
           <div className="flex items-center gap-2 mb-2">
             <ClipboardList className="text-sky-600" />
             <h3 className="text-xl font-bold text-sky-800">
-              {selectedDate && appointmentType && selectedTime
+              {selectedDate && appointmentType && selectedSlot
                 ? "5. Patient Concerns"
                 : "4. Patient Concerns"}
             </h3>
@@ -1510,7 +1433,7 @@ function Patient() {
             onChange={(e) => setPatientConcerns(e.target.value)}
             placeholder="Describe symptoms or reason for visit"
             className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white resize-none
-        focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+          focus:ring-2 focus:ring-yellow-400 focus:outline-none"
             rows={3}
           />
           {patientConcerns.length > 0 && (
@@ -1525,14 +1448,13 @@ function Patient() {
           <button
             onClick={() =>
               handleBookAppointment(patientConcerns, vaccinationType)
-            } // ✅ ADD vaccinationType
+            }
             className="inline-block bg-yellow-400 text-sky-900 px-10 py-4 rounded-full text-lg
-    font-bold shadow-md hover:bg-yellow-500 hover:scale-105 hover:shadow-lg transition-all"
+          font-bold shadow-md hover:bg-yellow-500 hover:scale-105 hover:shadow-lg transition-all"
           >
             Book Appointment
           </button>
         </div>
-
         {/* Timeline Section */}
         <div className="bg-white rounded-2xl shadow-lg border border-sky-100 overflow-hidden">
           <div
@@ -1598,13 +1520,7 @@ function Patient() {
                     )
                     .map((appt, index) => {
                       const status = appt.status?.toLowerCase().trim();
-                      const date = new Date(
-                        appt.appointment_date
-                      ).toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      });
+                      const date = formatDateDisplay(appt.appointment_date);
 
                       let dot = "bg-yellow-400";
                       let badge = "bg-yellow-100 text-yellow-700";
@@ -1630,7 +1546,33 @@ function Patient() {
                                 {appt.appointment_type}
                               </h4>
                               <p className="text-gray-600 text-sm">
-                                {date} • {appt.appointment_time}
+                                {date} •{" "}
+                                {(() => {
+                                  const start =
+                                    appt.appointment_time?.substring(0, 5) ||
+                                    "N/A";
+                                  const end = appt.end_time?.substring(0, 5);
+
+                                  if (!end) return start;
+
+                                  // Convert to 12-hour format with AM/PM
+                                  const formatTime = (time24) => {
+                                    const [hours, minutes] = time24.split(":");
+                                    const hour = parseInt(hours);
+                                    const ampm = hour >= 12 ? "PM" : "AM";
+                                    const hour12 =
+                                      hour === 0
+                                        ? 12
+                                        : hour > 12
+                                        ? hour - 12
+                                        : hour;
+                                    return `${hour12}:${minutes} ${ampm}`;
+                                  };
+
+                                  return `${formatTime(start)} - ${formatTime(
+                                    end
+                                  )}`;
+                                })()}
                               </p>
 
                               {appt.appointment_type === "Vaccination" &&
@@ -2806,10 +2748,8 @@ function Patient() {
   const menuItems = [
     { id: "home", label: "Home", icon: Home },
     { id: "appointments", label: "Appointments", icon: Calendar },
-    { id: "notifications", label: "Notifications", icon: Bell },
     { id: "profile", label: "Profile", icon: User },
   ];
-
   const renderContent = () => {
     switch (activePage) {
       case "home":
@@ -2856,7 +2796,7 @@ function Patient() {
           {/* Logo + Branding */}
           <div className="mb-6 sm:mb-8">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 flex-1">
                 {/* Logo in white circle */}
                 <div className="bg-white p-1.5 sm:p-2 rounded-full flex items-center justify-center shadow-md">
                   <img
@@ -2867,12 +2807,32 @@ function Patient() {
                 </div>
 
                 {/* Text Branding */}
-                <div>
+                <div className="flex-1">
                   <h2 className="text-xl sm:text-2xl font-bold">Castillo</h2>
                   <p className="text-blue-200 text-xs sm:text-sm">
                     Children Clinic
                   </p>
                 </div>
+
+                {/* Notification Bell Icon */}
+                <button
+                  onClick={() => {
+                    setActivePage("notifications");
+                    localStorage.setItem(
+                      "lastNotificationView",
+                      new Date().toISOString()
+                    );
+                    setNotificationCount(0);
+                  }}
+                  className="relative p-2 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <Bell className="w-6 h-6 text-white" />
+                  {notificationCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+                      {notificationCount}
+                    </span>
+                  )}
+                </button>
               </div>
 
               <button
@@ -2912,15 +2872,6 @@ function Patient() {
                   onClick={() => {
                     setActivePage(item.id);
                     setIsMobileMenuOpen(false);
-
-                    // ✅ MARK AS READ - Save timestamp
-                    if (item.id === "notifications") {
-                      localStorage.setItem(
-                        "lastNotificationView",
-                        new Date().toISOString()
-                      );
-                      setNotificationCount(0);
-                    }
                   }}
                   className={`w-full flex items-center p-2.5 sm:p-3 rounded-lg transition-all ${
                     activePage === item.id
@@ -2930,12 +2881,6 @@ function Patient() {
                 >
                   <Icon className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                   <span className="font-semibold">{item.label}</span>
-
-                  {item.id === "notifications" && notificationCount > 0 && (
-                    <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
-                      {notificationCount}
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -2969,27 +2914,53 @@ function Patient() {
             <p className="text-blue-200 text-xs">Children Clinic</p>
           </div>
         </div>
-        <button
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 rounded-lg hover:bg-blue-700 transition"
-          aria-label="Toggle menu"
-        >
-          {isMobileMenuOpen ? (
-            <X className="w-6 h-6" />
-          ) : (
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path d="M4 6h16M4 12h16M4 18h16"></path>
-            </svg>
-          )}
-        </button>
+
+        {/* Notification + Hamburger Container */}
+        <div className="flex items-center gap-3">
+          {/* Notification Bell */}
+          <button
+            onClick={() => {
+              setActivePage("notifications");
+              setIsMobileMenuOpen(false);
+              localStorage.setItem(
+                "lastNotificationView",
+                new Date().toISOString()
+              );
+              setNotificationCount(0);
+            }}
+            className="relative p-2 hover:bg-blue-700 rounded-lg transition-colors"
+          >
+            <Bell className="w-5 h-5 text-white" />
+            {notificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center animate-pulse">
+                {notificationCount}
+              </span>
+            )}
+          </button>
+
+          {/* Hamburger Menu */}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 rounded-lg hover:bg-blue-700 transition"
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? (
+              <X className="w-6 h-6" />
+            ) : (
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16"></path>
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Content Area */}

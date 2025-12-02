@@ -732,8 +732,7 @@ app.put("/users/:user_id", async (req, res) => {
 app.post("/appointments", auth, async (req, res) => {
   try {
     const {
-      date,
-      time,
+      schedule_id, // NEW: instead of date/time
       type,
       concerns,
       additional_services,
@@ -741,13 +740,27 @@ app.post("/appointments", auth, async (req, res) => {
     } = req.body;
     const userId = req.user.id;
 
-    if (!date || !time || !type) {
+    if (!schedule_id || !type) {
       return res.status(400).json({
-        error: "Please fill in all required fields (date, time, type).",
+        error: "Please fill in all required fields.",
       });
     }
 
-    // Validate vaccination_type if type is Vaccination
+    // Check if schedule exists and has available slots
+    const scheduleCheck = await pool.query(
+      `SELECT schedule_date, start_time, available_slots 
+       FROM clinic_schedules 
+       WHERE schedule_id = $1 AND status = 'active' AND available_slots > 0`,
+      [schedule_id]
+    );
+
+    if (scheduleCheck.rows.length === 0) {
+      return res.status(400).json({ error: "Schedule is no longer available" });
+    }
+
+    const { schedule_date, start_time } = scheduleCheck.rows[0];
+
+    // Vaccination validation (keep your existing code)
     if (type === "Vaccination") {
       if (!vaccination_type) {
         return res.status(400).json({
@@ -834,7 +847,7 @@ app.post("/appointments", auth, async (req, res) => {
         // Check cooldown period
         if (lastVaccination.next_due_date) {
           const nextDueDate = new Date(lastVaccination.next_due_date);
-          const appointmentDate = new Date(date);
+          const appointmentDate = new Date(schedule_date); // ← FIXED: was "date"
 
           if (appointmentDate < nextDueDate) {
             const daysRemaining = Math.ceil(
@@ -850,86 +863,176 @@ app.post("/appointments", auth, async (req, res) => {
 
     const additionalServicesValue = additional_services || "None";
 
-    const result = await pool.query(
-      `INSERT INTO appointments 
-       (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, vaccination_type)
-       VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7)
-       RETURNING appointment_id`,
-      [
-        userId,
-        date,
-        time,
-        type,
-        concerns || "",
-        additionalServicesValue,
-        vaccination_type || null,
-      ]
-    );
+    // Start transaction
+    await pool.query("BEGIN");
 
-    res.json({
-      message: "Appointment booked successfully!",
-      appointment_id: result.rows[0].appointment_id,
-    });
+    try {
+      // Insert appointment
+      // Insert appointment - use ::date to prevent timezone issues
+      const result = await pool.query(
+        `INSERT INTO appointments 
+   (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, vaccination_type, schedule_id)
+   VALUES ($1, $2::date, $3, $4, 'pending', $5, $6, $7, $8)
+   RETURNING appointment_id`,
+        [
+          userId,
+          schedule_date,
+          start_time,
+          type,
+          concerns || "",
+          additionalServicesValue,
+          vaccination_type || null,
+          schedule_id,
+        ]
+      );
+      // Decrease available slots
+      await pool.query(
+        `UPDATE clinic_schedules 
+         SET available_slots = available_slots - 1 
+         WHERE schedule_id = $1`,
+        [schedule_id]
+      );
+
+      await pool.query("COMMIT");
+
+      res.json({
+        message: "Appointment booked successfully!",
+        appointment_id: result.rows[0].appointment_id,
+      });
+    } catch (error) {
+      await pool.query("ROLLBACK");
+      throw error;
+    }
   } catch (error) {
     console.error("❌ Error booking appointment:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
-// ✅ Cancel appointment endpoint
+// ✅ Cancel appointment endpoint - SIMPLIFIED VERSION
 app.patch("/appointments/:id/cancel", auth, async (req, res) => {
   try {
-    const appointmentId = req.params.id;
+    const { id } = req.params;
+    const { cancel_remarks } = req.body;
     const userId = req.user.id;
 
-    // Check if appointment exists and belongs to user
-    const checkResult = await pool.query(
-      "SELECT * FROM appointments WHERE appointment_id = $1 AND user_id = $2", // ✅ CHANGED
-      [appointmentId, userId]
+    console.log("=== CANCEL REQUEST ===");
+    console.log("Appointment ID:", id);
+    console.log("User ID:", userId);
+    console.log("Cancel Remarks:", cancel_remarks);
+
+    // Validate cancel remarks
+    if (!cancel_remarks || !cancel_remarks.trim()) {
+      return res.status(400).json({ error: "Cancellation reason is required" });
+    }
+
+    // Get appointment details first (without transaction)
+    const appointmentResult = await pool.query(
+      `SELECT appointment_id, schedule_id, status, user_id 
+       FROM appointments 
+       WHERE appointment_id = $1`,
+      [id]
     );
 
-    if (checkResult.rows.length === 0) {
+    console.log("Query result:", appointmentResult.rows);
+
+    if (appointmentResult.rows.length === 0) {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
-    const appointment = checkResult.rows[0];
+    const appointment = appointmentResult.rows[0];
 
-    // Prevent canceling if already completed or canceled
-    if (
-      appointment.status === "completed" ||
-      appointment.status === "canceled"
-    ) {
-      return res.status(400).json({
-        error: `Cannot cancel ${appointment.status} appointment`,
-      });
+    // Check ownership
+    if (appointment.user_id !== userId) {
+      return res.status(403).json({ error: "Not authorized" });
     }
 
-    // Update status to canceled and save cancel reason if provided
-    const cancelReason = req.body?.cancel_remarks || null;
-    if (cancelReason) {
-      await pool.query(
-        "UPDATE appointments SET status = 'canceled', cancel_remarks = $2 WHERE appointment_id = $1",
-        [appointmentId, cancelReason]
-      );
-    } else {
-      await pool.query(
-        "UPDATE appointments SET status = 'canceled' WHERE appointment_id = $1",
-        [appointmentId]
-      );
+    // Check status
+    if (appointment.status === "canceled") {
+      return res.status(400).json({ error: "Already canceled" });
     }
 
-    res.json({ message: "Appointment canceled successfully" });
+    if (appointment.status === "completed") {
+      return res
+        .status(400)
+        .json({ error: "Cannot cancel completed appointment" });
+    }
+
+    // Now start transaction
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      // Update appointment status
+      await client.query(
+        `UPDATE appointments 
+         SET status = $1, cancel_remarks = $2 
+         WHERE appointment_id = $3`,
+        ["canceled", cancel_remarks.trim(), id]
+      );
+
+      console.log("Appointment updated to canceled");
+
+      // Restore slot if needed
+      if (
+        (appointment.status === "pending" ||
+          appointment.status === "approved") &&
+        appointment.schedule_id
+      ) {
+        await client.query(
+          `UPDATE clinic_schedules 
+           SET available_slots = available_slots + 1 
+           WHERE schedule_id = $1`,
+          [appointment.schedule_id]
+        );
+        console.log("Slot restored");
+      }
+
+      await client.query("COMMIT");
+      console.log("=== CANCEL SUCCESS ===");
+
+      res.json({ message: "Appointment canceled successfully" });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error("Transaction error:", err);
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (error) {
-    console.error("❌ Error canceling appointment:", error);
-    res.status(500).json({ error: "Server error" });
+    console.error("=== CANCEL ERROR ===");
+    console.error(error);
+    res.status(500).json({
+      error: "Failed to cancel appointment",
+      details: error.message,
+    });
   }
 });
-
 // GET appointments for logged-in user
 app.get("/get/appointments", auth, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await pool.query(
-      "SELECT * FROM appointments WHERE user_id = $1 ORDER BY appointment_date, appointment_time",
+      `SELECT 
+    a.appointment_id,
+    a.user_id,
+    a.schedule_id,
+    TO_CHAR(a.appointment_date, 'YYYY-MM-DD') as appointment_date,
+    a.appointment_time,
+    cs.end_time,
+    a.appointment_type,
+        a.concerns,
+        a.additional_services,
+        a.vaccination_type,
+        a.status,
+        a.cancel_remarks,
+        a.created_at,
+        cs.available_slots,
+        cs.total_slots
+      FROM appointments a
+      LEFT JOIN clinic_schedules cs ON a.schedule_id = cs.schedule_id
+      WHERE a.user_id = $1 
+      ORDER BY a.appointment_date, a.appointment_time`,
       [userId]
     );
     res.json(result.rows);
@@ -938,33 +1041,34 @@ app.get("/get/appointments", auth, async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 });
-
 app.get("/appointments/nurse", async (req, res) => {
   try {
     const query = `
-      SELECT 
-        a.appointment_id,
-        a.user_id,
-        a.full_name as walk_in_name,
-        u.full_name as user_full_name,
-        COALESCE(a.full_name, u.full_name) as full_name,
-        u.email,
-        a.appointment_date,
-        a.appointment_time,
-        a.appointment_type,
-        a.status,
-        a.concerns,
-        a.additional_services,
-        a.vaccination_type,
-        a.cancel_remarks,
-        a.is_walkin,
-        a.created_at,
-        COALESCE(pp.phone_number, '') as phone_number
-      FROM appointments a
-      LEFT JOIN users u ON a.user_id = u.user_id
-      LEFT JOIN patient_profiles pp ON u.user_id = pp.user_id
-      ORDER BY a.appointment_date, a.appointment_time;
-    `;
+  SELECT 
+    a.appointment_id,
+    a.user_id,
+    a.full_name as walk_in_name,
+    u.full_name as user_full_name,
+    COALESCE(a.full_name, u.full_name) as full_name,
+    u.email,
+    a.appointment_date,
+    a.appointment_time,
+    cs.end_time,
+    a.appointment_type,
+    a.status,
+    a.concerns,
+    a.additional_services,
+    a.vaccination_type,
+    a.cancel_remarks,
+    a.is_walkin,
+    a.created_at,
+    COALESCE(pp.phone_number, '') as phone_number
+  FROM appointments a
+  LEFT JOIN users u ON a.user_id = u.user_id
+  LEFT JOIN patient_profiles pp ON u.user_id = pp.user_id
+  LEFT JOIN clinic_schedules cs ON a.schedule_id = cs.schedule_id
+  ORDER BY a.appointment_date, a.appointment_time;
+`;
     const result = await pool.query(query);
 
     console.log("📋 Total appointments:", result.rows.length);
@@ -1160,6 +1264,7 @@ app.get("/appointments/doctor", auth, async (req, res) => {
       `SELECT a.appointment_id, 
               a.appointment_date::text as appointment_date,
               a.appointment_time::text as appointment_time,
+              cs.end_time::text as end_time,
               a.appointment_type, 
               a.status, 
               u.full_name, 
@@ -1172,6 +1277,7 @@ app.get("/appointments/doctor", auth, async (req, res) => {
               m.remarks
        FROM appointments a
        JOIN users u ON a.user_id = u.user_id
+       LEFT JOIN clinic_schedules cs ON a.schedule_id = cs.schedule_id
        LEFT JOIN medical_records m ON a.appointment_id = m.appointment_id
        WHERE LOWER(a.status) = 'approved'
          AND a.appointment_date::date = CURRENT_DATE
@@ -1187,6 +1293,7 @@ app.get("/appointments/doctor", auth, async (req, res) => {
       appointment_time: row.appointment_time
         ? row.appointment_time.substring(0, 8)
         : null, // Ensure HH:MM:SS format
+      end_time: row.end_time ? row.end_time.substring(0, 8) : null, // Ensure HH:MM:SS format
       weight: row.weight || null,
       height: row.height || null,
       temperature: row.temperature || null,
@@ -1471,18 +1578,27 @@ app.get("/patients", auth, async (req, res) => {
   }
 });
 
+// Helper function to format time
+function formatTime(timeString) {
+  const [hours, minutes] = timeString.split(":");
+  const hour = parseInt(hours);
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minutes} ${ampm}`;
+}
+
 // 📅 Get current patient's latest approved appointment
 app.get("/appointments/latest-approved", auth, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // 🔍 Fetch the most recent approved appointment for the logged-in patient
     const result = await pool.query(
       `
       SELECT 
         a.appointment_id,
         a.appointment_date::text AS appointment_date,
         a.appointment_time::text AS appointment_time,
+        cs.end_time::text AS end_time,
         a.appointment_type,
         a.concerns,
         a.status,
@@ -1490,6 +1606,7 @@ app.get("/appointments/latest-approved", auth, async (req, res) => {
         u.email
       FROM appointments a
       JOIN users u ON a.user_id = u.user_id
+      LEFT JOIN clinic_schedules cs ON a.schedule_id = cs.schedule_id
       WHERE a.user_id = $1
         AND LOWER(a.status) = 'approved'
       ORDER BY a.appointment_date DESC, a.appointment_time DESC
@@ -1498,19 +1615,37 @@ app.get("/appointments/latest-approved", auth, async (req, res) => {
       [userId]
     );
 
-    // ❌ No approved appointment found
     if (result.rows.length === 0) {
       return res
         .status(404)
         .json({ message: "No approved appointment found." });
     }
 
-    // ✅ Format for cleaner output
     const appointment = result.rows[0];
+
+    // Format time range
+    const formatTimeRange = (startTime, endTime) => {
+      const formatSingleTime = (timeStr) => {
+        const [hours, minutes] = timeStr.split(":");
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const hour12 = hour % 12 || 12;
+        return `${hour12}:${minutes} ${ampm}`;
+      };
+
+      if (endTime) {
+        return `${formatSingleTime(startTime)} - ${formatSingleTime(endTime)}`;
+      }
+      return formatSingleTime(startTime);
+    };
+
     const formatted = {
       appointment_id: appointment.appointment_id,
       appointment_date: appointment.appointment_date.split("T")[0],
-      appointment_time: appointment.appointment_time.substring(0, 8),
+      appointment_time: formatTimeRange(
+        appointment.appointment_time,
+        appointment.end_time
+      ),
       appointment_type: appointment.appointment_type,
       concerns: appointment.concerns,
       status: appointment.status,
@@ -3354,21 +3489,23 @@ app.post("/appointments/walkin", auth, async (req, res) => {
 app.get("/notifications/nurse", async (req, res) => {
   try {
     const query = `
-      SELECT 
-        a.appointment_id,
-        COALESCE(a.full_name, u.full_name) as patient_name,
-        a.appointment_date,
-        a.appointment_time,
-        a.appointment_type,
-        a.status,
-        a.created_at,
-        a.is_walkin
-      FROM appointments a
-      LEFT JOIN users u ON a.user_id = u.user_id
-      WHERE a.status = 'pending'
-      ORDER BY a.created_at DESC
-      LIMIT 20;
-    `;
+  SELECT 
+    a.appointment_id,
+    COALESCE(a.full_name, u.full_name) as patient_name,
+    a.appointment_date,
+    a.appointment_time,
+    cs.end_time,
+    a.appointment_type,
+    a.status,
+    a.created_at,
+    a.is_walkin
+  FROM appointments a
+  LEFT JOIN users u ON a.user_id = u.user_id
+  LEFT JOIN clinic_schedules cs ON a.schedule_id = cs.schedule_id
+  WHERE a.status = 'pending'
+  ORDER BY a.created_at DESC
+  LIMIT 20;
+`;
     const result = await pool.query(query);
     res.json(result.rows);
   } catch (error) {
@@ -3696,6 +3833,185 @@ app.get("/patient/vaccination-history", auth, async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error("❌ Error fetching vaccination history:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ==================== NURSE: Manage Schedules ====================
+
+// Get all schedules (for nurse view)
+app.get("/nurse/schedules", auth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+  SELECT 
+    schedule_id,
+    TO_CHAR(schedule_date, 'YYYY-MM-DD') as schedule_date,
+    start_time,
+    end_time,
+    total_slots,
+    available_slots,
+        status,
+        created_at
+      FROM clinic_schedules
+      ORDER BY schedule_date, start_time
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error fetching schedules:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Create new schedule slots
+app.post("/nurse/schedules", auth, async (req, res) => {
+  try {
+    const { schedule_date, time_slots } = req.body;
+    const userId = req.user.id;
+
+    if (!schedule_date || !time_slots || time_slots.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "Please provide date and time slots" });
+    }
+
+    // Check if the date is Sunday (using local timezone)
+    const dateObj = new Date(schedule_date + "T00:00:00");
+    if (dateObj.getDay() === 0) {
+      return res.status(400).json({
+        error: "Cannot create schedules on Sundays",
+      });
+    }
+
+    const created = [];
+    const errors = [];
+
+    for (const timeSlot of time_slots) {
+      try {
+        // Calculate end_time (1 hour after start_time)
+        const startHour = parseInt(timeSlot.split(":")[0]);
+        const endTime = `${String(startHour + 1).padStart(2, "0")}:00`;
+
+        const result = await pool.query(
+          `INSERT INTO clinic_schedules 
+       (schedule_date, start_time, end_time, total_slots, available_slots, created_by, status)
+       VALUES ($1::date, $2, $3, 2, 2, $4, 'active')
+       ON CONFLICT (schedule_date, start_time) DO NOTHING
+       RETURNING schedule_id, start_time, end_time`,
+          [schedule_date, timeSlot, endTime, userId]
+        );
+
+        if (result.rows.length > 0) {
+          created.push(result.rows[0]);
+        } else {
+          errors.push(`${timeSlot} already exists`);
+        }
+      } catch (err) {
+        errors.push(`${timeSlot}: ${err.message}`);
+      }
+    }
+
+    res.json({
+      message: `Created ${created.length} schedule(s)`,
+      created,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+  } catch (error) {
+    console.error("Error creating schedules:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Delete schedule
+app.delete("/nurse/schedules/:schedule_id", auth, async (req, res) => {
+  try {
+    const { schedule_id } = req.params;
+
+    // Check if schedule has appointments
+    const appointmentCheck = await pool.query(
+      `SELECT COUNT(*) as count FROM appointments 
+       WHERE schedule_id = $1 AND status IN ('pending', 'approved')`,
+      [schedule_id]
+    );
+
+    if (parseInt(appointmentCheck.rows[0].count) > 0) {
+      return res.status(400).json({
+        error: "Cannot delete schedule with pending/approved appointments",
+      });
+    }
+
+    await pool.query("DELETE FROM clinic_schedules WHERE schedule_id = $1", [
+      schedule_id,
+    ]);
+    res.json({ message: "Schedule deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting schedule:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ==================== PATIENT: Get Available Slots ====================
+
+// Get available slots for a specific date
+app.get("/patient/available-slots", auth, async (req, res) => {
+  try {
+    const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({ error: "Date is required" });
+    }
+
+    const result = await pool.query(
+      `SELECT 
+    schedule_id,
+    start_time,
+    end_time,
+    available_slots,
+    total_slots
+  FROM clinic_schedules
+      WHERE schedule_date = $1 
+        AND status = 'active'
+        AND available_slots > 0
+      ORDER BY start_time`,
+      [date]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error fetching available slots:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Get available slots for date range (for calendar view)
+app.get("/patient/available-slots-range", auth, async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+
+    if (!start_date || !end_date) {
+      return res
+        .status(400)
+        .json({ error: "Start and end dates are required" });
+    }
+
+    const result = await pool.query(
+      `SELECT 
+    schedule_id,
+    TO_CHAR(schedule_date, 'YYYY-MM-DD') as schedule_date,
+    start_time,
+    end_time,
+    available_slots,
+    total_slots
+  FROM clinic_schedules
+      WHERE schedule_date BETWEEN $1 AND $2
+        AND status = 'active'
+        AND available_slots > 0
+      ORDER BY schedule_date, start_time`,
+      [start_date, end_date]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error fetching slot range:", error);
     res.status(500).json({ error: "Server error" });
   }
 });

@@ -318,6 +318,26 @@ function Doctor() {
                 const datetime = new Date(`${dateStr}T${timeStr}`);
                 const valid = !isNaN(datetime);
 
+                const formatTimeRange = (startTime, endTime) => {
+                  if (!startTime) return "N/A";
+
+                  const start = startTime.substring(0, 5);
+                  const end = endTime?.substring(0, 5);
+
+                  if (!end) return start;
+
+                  const formatTime = (time24) => {
+                    const [hours, minutes] = time24.split(":");
+                    const hour = parseInt(hours);
+                    const ampm = hour >= 12 ? "PM" : "AM";
+                    const hour12 =
+                      hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                    return `${hour12}:${minutes} ${ampm}`;
+                  };
+
+                  return `${formatTime(start)} - ${formatTime(end)}`;
+                };
+
                 return (
                   <div
                     key={appt.appointment_id}
@@ -328,17 +348,19 @@ function Doctor() {
                         {appt.full_name} – {appt.appointment_type}
                       </p>
                       <p className="text-xs sm:text-sm text-gray-500">
-                        {valid
-                          ? `${datetime.toLocaleDateString("en-US", {
-                              weekday: "short",
-                              month: "short",
-                              day: "numeric",
-                            })} • ${datetime.toLocaleTimeString("en-US", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: true,
-                            })}`
-                          : `Invalid date/time`}
+                        {(() => {
+                          const date = new Date(appt.appointment_date);
+                          const timeDisplay = formatTimeRange(
+                            appt.appointment_time,
+                            appt.end_time
+                          );
+
+                          return `${date.toLocaleDateString("en-US", {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                          })} • ${timeDisplay}`;
+                        })()}
                       </p>
 
                       {/* Vitals / Medical record summary */}

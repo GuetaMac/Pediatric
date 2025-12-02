@@ -31,6 +31,7 @@ import {
   ChevronRight,
   Syringe,
   Bell,
+  Plus,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
@@ -49,6 +50,8 @@ import {
 } from "recharts";
 import { Sparkles, Activity, TrendingUp } from "lucide-react";
 import { ClipboardList } from "lucide-react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 function Nurse() {
   const [activePage, setActivePage] = useState("home");
@@ -101,10 +104,10 @@ function Nurse() {
     { id: "home", label: "Dashboard", icon: Home },
     { id: "analytics", label: "Analytics", icon: Activity },
     { id: "patients", label: "Manage Appointments", icon: CalendarDays },
+    { id: "Schedules", label: "Manage Schedules", icon: Calendar },
     { id: "patient-accounts", label: "Patient Accounts", icon: Baby },
     { id: "medical-records", label: "Medical Records", icon: FileText },
     { id: "Inventory", label: "Inventory", icon: Package },
-    { id: "Notifications", label: "Notifications", icon: Bell },
   ];
 
   // HOME PAGE
@@ -137,6 +140,26 @@ function Nurse() {
       vaccinationType: "",
       concerns: "",
     });
+
+    // Helper function to format time range
+    const formatTimeRange = (startTime, endTime) => {
+      if (!startTime) return "N/A";
+
+      const start = startTime.substring(0, 5);
+      const end = endTime?.substring(0, 5);
+
+      if (!end) return start;
+
+      const formatTime = (time24) => {
+        const [hours, minutes] = time24.split(":");
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        return `${hour12}:${minutes} ${ampm}`;
+      };
+
+      return `${formatTime(start)} - ${formatTime(end)}`;
+    };
 
     const formatMonth = (d) => {
       if (!d) return "-";
@@ -597,7 +620,10 @@ function Nurse() {
                                 <span className="font-semibold text-gray-700">
                                   Time:
                                 </span>{" "}
-                                {patient.appointment_time}
+                                {formatTimeRange(
+                                  patient.appointment_time,
+                                  patient.end_time
+                                )}
                               </p>
                               <p>
                                 <span className="font-semibold text-gray-700">
@@ -1704,7 +1730,25 @@ function Nurse() {
                         <p className="font-semibold">
                           <span className="text-gray-700">Date:</span>{" "}
                           {formatDate(appt.appointment_date)} -{" "}
-                          {appt.appointment_time}
+                          {(() => {
+                            const start =
+                              appt.appointment_time?.substring(0, 5) || "N/A";
+                            const end = appt.end_time?.substring(0, 5);
+
+                            if (!end) return start;
+
+                            // Convert to 12-hour format with AM/PM
+                            const formatTime = (time24) => {
+                              const [hours, minutes] = time24.split(":");
+                              const hour = parseInt(hours);
+                              const ampm = hour >= 12 ? "PM" : "AM";
+                              const hour12 =
+                                hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                              return `${hour12}:${minutes} ${ampm}`;
+                            };
+
+                            return `${formatTime(start)} - ${formatTime(end)}`;
+                          })()}
                         </p>
                         <p>
                           <b>Type:</b> {appt.appointment_type}
@@ -4280,6 +4324,26 @@ function Nurse() {
       );
     }
 
+    // Helper function to format time range
+    const formatTimeRange = (startTime, endTime) => {
+      if (!startTime) return "N/A";
+
+      const start = startTime.substring(0, 5);
+      const end = endTime?.substring(0, 5);
+
+      if (!end) return start;
+
+      const formatTime = (time24) => {
+        const [hours, minutes] = time24.split(":");
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        return `${hour12}:${minutes} ${ampm}`;
+      };
+
+      return `${formatTime(start)} - ${formatTime(end)}`;
+    };
+
     return (
       <div className="min-h-screen bg-transparent p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
@@ -4368,7 +4432,12 @@ function Nurse() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4 text-sky-500" />
-                            <span>{notif.appointment_time}</span>
+                            <span>
+                              {formatTimeRange(
+                                notif.appointment_time,
+                                notif.end_time
+                              )}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -5149,6 +5218,446 @@ function Nurse() {
     );
   };
 
+  const ManageSchedules = () => {
+    const [schedules, setSchedules] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [selectedDate, setSelectedDate] = useState(null);
+    const [selectedTimeSlots, setSelectedTimeSlots] = useState([]);
+    const [filterDate, setFilterDate] = useState(null);
+
+    // Predefined time slots (8 AM to 5 PM, hourly)
+    // Predefined time slots (8 AM to 5 PM, hourly) with time ranges
+    const timeSlots = [
+      { start: "08:00", end: "09:00", label: "8:00 - 9:00 AM" },
+      { start: "09:00", end: "10:00", label: "9:00 - 10:00 AM" },
+      { start: "10:00", end: "11:00", label: "10:00 - 11:00 AM" },
+      { start: "11:00", end: "12:00", label: "11:00 AM - 12:00 PM" },
+      { start: "13:00", end: "14:00", label: "1:00 - 2:00 PM" },
+      { start: "14:00", end: "15:00", label: "2:00 - 3:00 PM" },
+      { start: "15:00", end: "16:00", label: "3:00 - 4:00 PM" },
+      { start: "16:00", end: "17:00", label: "4:00 - 5:00 PM" },
+      { start: "17:00", end: "18:00", label: "5:00 - 6:00 PM" },
+    ];
+
+    // Fetch all schedules
+    const fetchSchedules = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/nurse/schedules`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setSchedules(data);
+        }
+      } catch (error) {
+        console.error("Error fetching schedules:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    useEffect(() => {
+      fetchSchedules();
+    }, []);
+
+    // Toggle time slot selection
+    const toggleTimeSlot = (startTime) => {
+      if (selectedTimeSlots.includes(startTime)) {
+        setSelectedTimeSlots(selectedTimeSlots.filter((t) => t !== startTime));
+      } else {
+        setSelectedTimeSlots([...selectedTimeSlots, startTime]);
+      }
+    };
+    // Create schedules
+    const handleCreateSchedules = async () => {
+      if (!selectedDate) {
+        Swal.fire({
+          icon: "warning",
+          title: "Select Date",
+          text: "Please select a date first",
+          confirmButtonColor: "#0ea5e9",
+        });
+        return;
+      }
+      // Check if selected date is Sunday
+      if (selectedDate.getDay() === 0) {
+        Swal.fire({
+          icon: "warning",
+          title: "Invalid Date",
+          text: "Cannot create schedules on Sundays. The clinic is closed.",
+          confirmButtonColor: "#0ea5e9",
+        });
+        return;
+      }
+
+      if (selectedTimeSlots.length === 0) {
+        Swal.fire({
+          icon: "warning",
+          title: "Select Time Slots",
+          text: "Please select at least one time slot",
+          confirmButtonColor: "#0ea5e9",
+        });
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/nurse/schedules`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              schedule_date: `${selectedDate.getFullYear()}-${String(
+                selectedDate.getMonth() + 1
+              ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(
+                2,
+                "0"
+              )}`,
+              time_slots: selectedTimeSlots,
+            }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          await Swal.fire({
+            icon: "success",
+            title: "Schedules Created!",
+            text: data.message,
+            confirmButtonColor: "#0ea5e9",
+          });
+
+          // Reset form
+          setSelectedDate(null);
+          setSelectedTimeSlots([]);
+          fetchSchedules();
+        } else {
+          Swal.fire({
+            icon: "error",
+            title: "Failed",
+            text: data.error || "Failed to create schedules",
+            confirmButtonColor: "#0ea5e9",
+          });
+        }
+      } catch (error) {
+        console.error("Error creating schedules:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to create schedules",
+          confirmButtonColor: "#0ea5e9",
+        });
+      }
+    };
+
+    // Delete schedule
+    const handleDeleteSchedule = async (scheduleId) => {
+      const result = await Swal.fire({
+        title: "Delete Schedule?",
+        text: "This will delete the schedule slot permanently",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#EF4444",
+        cancelButtonColor: "#0EA5E9",
+        confirmButtonText: "Yes, delete it",
+        cancelButtonText: "Cancel",
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/nurse/schedules/${scheduleId}`,
+          {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          await Swal.fire({
+            icon: "success",
+            title: "Deleted!",
+            text: data.message,
+            confirmButtonColor: "#0ea5e9",
+          });
+          fetchSchedules();
+        } else {
+          Swal.fire({
+            icon: "error",
+            title: "Failed",
+            text: data.error || "Failed to delete schedule",
+            confirmButtonColor: "#0ea5e9",
+          });
+        }
+      } catch (error) {
+        console.error("Error deleting schedule:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to delete schedule",
+          confirmButtonColor: "#0ea5e9",
+        });
+      }
+    };
+
+    // Filter schedules by date
+    const filteredSchedules = filterDate
+      ? schedules.filter((s) => {
+          const schedDate = new Date(s.schedule_date);
+          return (
+            schedDate.getFullYear() === filterDate.getFullYear() &&
+            schedDate.getMonth() === filterDate.getMonth() &&
+            schedDate.getDate() === filterDate.getDate()
+          );
+        })
+      : schedules;
+
+    // Group schedules by date
+    const groupedSchedules = filteredSchedules.reduce((groups, schedule) => {
+      const date = schedule.schedule_date;
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(schedule);
+      return groups;
+    }, {});
+
+    return (
+      <div className="bg-white rounded-3xl p-6 md:p-10 space-y-6 shadow-lg">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b-2 border-sky-200 pb-4">
+          <div>
+            <h2 className="text-3xl font-extrabold text-sky-800 flex items-center gap-3">
+              <Calendar className="w-8 h-8 text-yellow-500" />
+              Manage Clinic Schedules
+            </h2>
+            <p className="text-sky-600 mt-1">
+              Create time slots for patient appointments
+            </p>
+          </div>
+          <button
+            onClick={fetchSchedules}
+            className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
+
+        {/* Create Schedule Form */}
+        <div className="bg-gradient-to-br from-yellow-50 to-sky-50 rounded-2xl p-6 border-2 border-yellow-200">
+          <h3 className="text-xl font-bold text-sky-800 mb-4 flex items-center gap-2">
+            <Plus className="w-6 h-6 text-yellow-500" />
+            Create New Schedule Slots
+          </h3>
+
+          <div className="space-y-4">
+            {/* Date Picker */}
+            <div>
+              <label className="block text-sm font-semibold text-sky-800 mb-2">
+                Select Date
+              </label>
+              <DatePicker
+                selected={selectedDate}
+                onChange={setSelectedDate}
+                minDate={new Date()}
+                filterDate={(date) => date.getDay() !== 0} // ← ADD THIS LINE
+                dateFormat="MMMM d, yyyy"
+                className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
+                focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                placeholderText="Choose a date"
+              />
+            </div>
+
+            {/* Time Slots Selection */}
+            <div>
+              <label className="block text-sm font-semibold text-sky-800 mb-2">
+                Select Time Slots (2 slots per hour)
+              </label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {timeSlots.map((slot) => {
+                  const isSelected = selectedTimeSlots.includes(slot.start);
+                  return (
+                    <button
+                      key={slot.start}
+                      onClick={() => toggleTimeSlot(slot.start)}
+                      className={`px-3 py-3 rounded-lg font-semibold transition-all text-sm ${
+                        isSelected
+                          ? "bg-yellow-400 text-sky-900 border-2 border-yellow-500"
+                          : "bg-white text-sky-700 border-2 border-sky-200 hover:border-sky-400"
+                      }`}
+                    >
+                      <Clock className="w-4 h-4 mx-auto mb-1" />
+                      {slot.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedTimeSlots.length > 0 && (
+                <p className="text-sm text-sky-600 mt-2">
+                  ✓ {selectedTimeSlots.length} time slot(s) selected
+                </p>
+              )}
+            </div>
+
+            {/* Create Button */}
+            <button
+              onClick={handleCreateSchedules}
+              className="w-full bg-yellow-400 text-sky-900 px-6 py-4 rounded-xl text-lg font-bold
+              hover:bg-yellow-500 hover:scale-105 transition-all shadow-md"
+            >
+              <Plus className="w-5 h-5 inline mr-2" />
+              Create Schedule Slots
+            </button>
+          </div>
+        </div>
+
+        {/* Filter by Date */}
+        <div className="bg-sky-50 rounded-xl p-4 border border-sky-200">
+          <label className="block text-sm font-semibold text-sky-800 mb-2">
+            Filter by Date (Optional)
+          </label>
+          <div className="flex gap-3">
+            <DatePicker
+              selected={filterDate}
+              onChange={setFilterDate}
+              dateFormat="MMMM d, yyyy"
+              className="flex-1 border-2 border-sky-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+              placeholderText="All dates"
+              isClearable
+            />
+          </div>
+        </div>
+
+        {/* Schedules List */}
+        <div className="space-y-4">
+          <h3 className="text-xl font-bold text-sky-800">
+            Existing Schedules ({filteredSchedules.length})
+          </h3>
+
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500 mx-auto"></div>
+              <p className="text-sky-600 mt-4">Loading schedules...</p>
+            </div>
+          ) : Object.keys(groupedSchedules).length === 0 ? (
+            <div className="text-center py-12 bg-sky-50 rounded-xl border-2 border-dashed border-sky-300">
+              <AlertCircle className="w-12 h-12 text-sky-300 mx-auto mb-3" />
+              <p className="text-sky-600">No schedules found</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {Object.entries(groupedSchedules)
+                .sort(([dateA], [dateB]) => new Date(dateA) - new Date(dateB))
+                .map(([date, dateSchedules]) => (
+                  <div
+                    key={date}
+                    className="bg-white rounded-xl border-2 border-sky-200 overflow-hidden shadow-sm"
+                  >
+                    {/* Date Header */}
+                    <div className="bg-gradient-to-r from-sky-500 to-blue-500 px-6 py-4">
+                      <h4 className="text-xl font-bold text-white">
+                        📅{" "}
+                        {(() => {
+                          // date format: "2025-12-04"
+                          const parts = date.split("-");
+                          const year = parseInt(parts[0]);
+                          const month = parseInt(parts[1]) - 1; // 0-indexed
+                          const day = parseInt(parts[2]);
+                          const dateObj = new Date(year, month, day);
+
+                          return dateObj.toLocaleDateString("en-US", {
+                            weekday: "long",
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          });
+                        })()}
+                      </h4>
+                    </div>
+
+                    {/* Time Slots */}
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {dateSchedules
+                        .sort((a, b) =>
+                          a.start_time.localeCompare(b.start_time)
+                        )
+                        .map((schedule) => (
+                          <div
+                            key={schedule.schedule_id}
+                            className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-lg p-4 border-2 border-sky-200 hover:shadow-md transition-shadow"
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-5 h-5 text-sky-600" />
+                                <span className="text-lg font-bold text-sky-900">
+                                  {schedule.start_time.substring(0, 5)} -{" "}
+                                  {schedule.end_time?.substring(0, 5) || "N/A"}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() =>
+                                  handleDeleteSchedule(schedule.schedule_id)
+                                }
+                                className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-sky-700">
+                                  Available Slots:
+                                </span>
+                                <span
+                                  className={`text-lg font-bold ${
+                                    schedule.available_slots > 0
+                                      ? "text-green-600"
+                                      : "text-red-600"
+                                  }`}
+                                >
+                                  {schedule.available_slots} /{" "}
+                                  {schedule.total_slots}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                    schedule.status === "active"
+                                      ? "bg-green-100 text-green-700"
+                                      : "bg-gray-100 text-gray-600"
+                                  }`}
+                                >
+                                  {schedule.status.toUpperCase()}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
   // RENDER CURRENT PAGE
   const renderContent = () => {
     if (activePage === "home") return <HomePage />;
@@ -5158,7 +5667,7 @@ function Nurse() {
     if (activePage === "medical-records") return <MedicalRecords />;
     if (activePage === "Inventory") return <InventoryPage />;
     if (activePage === "Notifications") return <NotificationPage />;
-
+    if (activePage === "Schedules") return <ManageSchedules />;
     return (
       <div className="text-center py-16">
         <h1 className="text-2xl font-bold text-gray-600">
@@ -5187,7 +5696,7 @@ function Nurse() {
         <div className="p-4 sm:p-6">
           {/* Logo + Branding */}
           <div className="flex items-center justify-between mb-6 sm:mb-8">
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 flex-1">
               {/* Logo in white circle */}
               <div className="bg-white p-1.5 sm:p-2 rounded-full flex items-center justify-center shadow-md">
                 <img
@@ -5198,12 +5707,28 @@ function Nurse() {
               </div>
 
               {/* Text Branding */}
-              <div>
+              <div className="flex-1">
                 <h2 className="text-xl sm:text-2xl font-bold">Castillo</h2>
                 <p className="text-blue-200 text-xs sm:text-sm">
                   Children Clinic
                 </p>
               </div>
+
+              {/* Notification Bell Icon */}
+              <button
+                onClick={() => {
+                  setActivePage("Notifications");
+                  setNotificationCount(0);
+                }}
+                className="relative p-2 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <Bell className="w-6 h-6 text-white" />
+                {notificationCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+                    {notificationCount}
+                  </span>
+                )}
+              </button>
             </div>
 
             <button
@@ -5234,13 +5759,6 @@ function Nurse() {
                 >
                   <Icon className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
                   <span className="font-semibold">{item.label}</span>
-
-                  {/* 🔔 NOTIFICATION BADGE - LAGAY MO ITO */}
-                  {item.id === "Notifications" && notificationCount > 0 && (
-                    <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
-                      {notificationCount}
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -5273,6 +5791,7 @@ function Nurse() {
       </div>
 
       {/* Mobile Header with Hamburger */}
+      {/* Mobile Header with Hamburger */}
       <div className="md:hidden fixed top-0 left-0 right-0 bg-gradient-to-b from-blue-600 to-blue-800 text-white p-3 sm:p-4 flex items-center justify-between z-40 shadow-lg">
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="bg-white bg-opacity-20 p-1.5 sm:p-2 rounded-full flex items-center justify-center shadow-md">
@@ -5287,27 +5806,49 @@ function Nurse() {
             <p className="text-blue-200 text-xs">Children Clinic</p>
           </div>
         </div>
-        <button
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 rounded-lg hover:bg-blue-700 transition"
-          aria-label="Toggle menu"
-        >
-          {isMobileMenuOpen ? (
-            <X className="w-6 h-6" />
-          ) : (
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path d="M4 6h16M4 12h16M4 18h16"></path>
-            </svg>
-          )}
-        </button>
+
+        {/* Notification + Hamburger Container */}
+        <div className="flex items-center gap-3">
+          {/* Notification Bell */}
+          <button
+            onClick={() => {
+              setActivePage("Notifications");
+              setIsMobileMenuOpen(false);
+              setNotificationCount(0);
+            }}
+            className="relative p-2 hover:bg-blue-700 rounded-lg transition-colors"
+          >
+            <Bell className="w-5 h-5 text-white" />
+            {notificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center animate-pulse">
+                {notificationCount}
+              </span>
+            )}
+          </button>
+
+          {/* Hamburger Menu */}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 rounded-lg hover:bg-blue-700 transition"
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? (
+              <X className="w-6 h-6" />
+            ) : (
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16"></path>
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Content Area */}

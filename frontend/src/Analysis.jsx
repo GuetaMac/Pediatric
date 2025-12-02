@@ -93,6 +93,14 @@ function PatientDashboard({ onNavigateToAppointments }) {
     },
   ];
 
+  const formatTime = (timeString) => {
+    const [hours, minutes] = timeString.split(":");
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
+  };
+
   return (
     <div className="p-6 bg-transparent">
       {/* Greeting Section - Hidden on mobile */}
