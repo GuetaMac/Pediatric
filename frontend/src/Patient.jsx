@@ -17,6 +17,7 @@ import {
   Calendar,
   FolderOpen,
   ChevronDown,
+  RefreshCw,
   Clock,
   ClipboardList,
   Star,
@@ -49,6 +50,7 @@ function Patient() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [patientName, setPatientName] = useState("Patient");
   const [notificationCount, setNotificationCount] = useState(0);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   useEffect(() => {
     const fetchNotificationCount = async () => {
@@ -841,922 +843,124 @@ function Patient() {
     };
 
     return (
-      <div className="bg-transparent rounded-3xl p-6 md:p-10 space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <Star className="mx-auto w-12 h-12 text-yellow-400 drop-shadow-md" />
-          <h2 className="text-4xl font-extrabold text-sky-800 drop-shadow-sm">
-            Book Your Appointment
-          </h2>
-          <p className="text-sky-600 text-lg">
-            Choose a date, visit type, time, and optionally add additional
-            services.
-          </p>
-        </div>
-
-        {/* New Calendar-Based Booking */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* LEFT SIDE - Calendar */}
-          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-lg border border-sky-100">
-            <div className="flex items-center gap-2 mb-4">
-              <Calendar className="text-sky-600 w-6 h-6" />
-              <h3 className="text-2xl font-bold text-sky-800">
-                Select Date & Time
-              </h3>
-            </div>
-
-            {/* Appointment Type Selection */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-sky-800 mb-2">
-                1. Choose Appointment Type
-              </label>
-              <select
-                value={appointmentType}
-                onChange={(e) => {
-                  setAppointmentType(e.target.value);
-                  setSelectedDate(null);
-                  setSelectedSlot(null);
-                  setAdditionalServices([]);
-                }}
-                className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
-          focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-              >
-                <option value="">-- Select Type --</option>
-                {Object.keys(appointmentTypes).map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {!appointmentType && (
-              <div className="text-center py-12 bg-sky-50 rounded-xl border-2 border-dashed border-sky-300">
-                <ClipboardList className="w-12 h-12 text-sky-300 mx-auto mb-3" />
-                <p className="text-sky-600">
-                  Please select an appointment type first
-                </p>
-              </div>
-            )}
-
-            {appointmentType && (
-              <>
-                {/* Custom Calendar */}
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-sky-800 mb-2">
-                    2. Pick a Date
-                  </label>
-
-                  {loadingCalendar && (
-                    <div className="text-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500 mx-auto"></div>
-                      <p className="text-sky-600 text-sm mt-2">
-                        Loading calendar...
-                      </p>
-                    </div>
-                  )}
-
-                  {!loadingCalendar && (
-                    <div className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-xl p-4 border border-sky-200">
-                      {/* Month Navigation */}
-                      <div className="flex items-center justify-between mb-4">
-                        <button
-                          onClick={() => {
-                            const newMonth = new Date(selectedMonth);
-                            newMonth.setMonth(newMonth.getMonth() - 1);
-                            setSelectedMonth(newMonth);
-                          }}
-                          className="p-2 hover:bg-white rounded-lg transition-colors"
-                        >
-                          <ChevronDown className="w-5 h-5 rotate-90 text-sky-700" />
-                        </button>
-
-                        <h4 className="text-lg font-bold text-sky-900">
-                          {selectedMonth.toLocaleDateString("en-US", {
-                            month: "long",
-                            year: "numeric",
-                          })}
-                        </h4>
-
-                        <button
-                          onClick={() => {
-                            const newMonth = new Date(selectedMonth);
-                            newMonth.setMonth(newMonth.getMonth() + 1);
-                            setSelectedMonth(newMonth);
-                          }}
-                          className="p-2 hover:bg-white rounded-lg transition-colors"
-                        >
-                          <ChevronDown className="w-5 h-5 -rotate-90 text-sky-700" />
-                        </button>
-                      </div>
-
-                      {/* Calendar Grid */}
-
-                      <div className="grid grid-cols-7 gap-2">
-                        {/* Day Headers */}
-                        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
-                          (day) => (
-                            <div
-                              key={day}
-                              className="text-center text-xs font-semibold text-sky-700 py-2"
-                            >
-                              {day}
-                            </div>
-                          )
-                        )}
-
-                        {/* Calendar Days */}
-                        {(() => {
-                          const year = selectedMonth.getFullYear();
-                          const month = selectedMonth.getMonth();
-                          const firstDay = new Date(year, month, 1);
-                          const lastDay = new Date(year, month + 1, 0);
-                          const startingDayOfWeek = firstDay.getDay();
-                          const daysInMonth = lastDay.getDate();
-
-                          // Adjust for Monday start (0=Sun, 1=Mon, 2=Tue, etc.)
-                          // If Sunday (0), place at position 6 (last column)
-                          // Otherwise, shift left by 1
-                          const adjustedStartDay =
-                            startingDayOfWeek === 0 ? 6 : startingDayOfWeek - 1;
-
-                          const days = [];
-
-                          // Empty cells before month starts
-                          for (let i = 0; i < adjustedStartDay; i++) {
-                            days.push(
-                              <div
-                                key={`empty-${i}`}
-                                className="aspect-square"
-                              />
-                            );
-                          }
-
-                          // Days of the month
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-
-                          for (let day = 1; day <= daysInMonth; day++) {
-                            const date = new Date(year, month, day);
-                            // Fix: Use local date string to avoid timezone issues
-                            const dateStr = `${year}-${String(
-                              month + 1
-                            ).padStart(2, "0")}-${String(day).padStart(
-                              2,
-                              "0"
-                            )}`;
-                            const dayOfWeek = date.getDay();
-
-                            // Show Sundays as closed
-                            if (dayOfWeek === 0) {
-                              days.push(
-                                <div
-                                  key={`day-${day}`}
-                                  className="aspect-square rounded-lg bg-gray-200 flex items-center justify-center relative border border-gray-300"
-                                >
-                                  <div className="text-center">
-                                    <span className="text-sm text-gray-500">
-                                      {day}
-                                    </span>
-                                    <div className="text-xs text-gray-500 mt-1">
-                                      Closed
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                              continue;
-                            }
-
-                            const isPast = date < today;
-                            const availableSlots = getAvailableSlotCount(date);
-                            const isSelected =
-                              selectedDate &&
-                              date.toDateString() ===
-                                selectedDate.toDateString();
-
-                            let bgColor = "bg-white hover:bg-sky-100";
-                            let textColor = "text-gray-700";
-                            let badge = null;
-
-                            if (isPast) {
-                              bgColor = "bg-gray-100 cursor-not-allowed";
-                              textColor = "text-gray-400";
-                            } else if (isSelected) {
-                              bgColor =
-                                "bg-yellow-400 border-2 border-yellow-500";
-                              textColor = "text-sky-900 font-bold";
-                            } else if (availableSlots > 0) {
-                              bgColor =
-                                "bg-green-50 hover:bg-green-100 border border-green-200";
-                              textColor = "text-green-800 font-semibold";
-                              badge = (
-                                <span className="absolute bottom-1 right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-                                  {availableSlots}
-                                </span>
-                              );
-                            } else {
-                              bgColor =
-                                "bg-red-50 cursor-not-allowed border border-red-200";
-                              textColor = "text-red-400";
-                              badge = (
-                                <span className="absolute bottom-1 right-1 text-red-400 text-xs">
-                                  ✕
-                                </span>
-                              );
-                            }
-
-                            days.push(
-                              <button
-                                key={`day-${day}`}
-                                disabled={isPast || availableSlots === 0}
-                                onClick={() => {
-                                  setSelectedDate(date);
-                                  fetchAvailableSlots(date);
-                                }}
-                                className={`aspect-square rounded-lg ${bgColor} ${textColor} 
-    flex items-center justify-center relative transition-all
-    ${!isPast && availableSlots > 0 ? "cursor-pointer hover:scale-105" : ""}`}
-                              >
-                                <span className="text-sm">{day}</span>
-                                {badge}
-                              </button>
-                            );
-                          }
-
-                          return days;
-                        })()}
-                      </div>
-
-                      {/* Legend */}
-                      <div className="mt-4 pt-4 border-t border-sky-200 flex flex-wrap gap-4 text-xs">
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-green-50 border border-green-200 rounded"></div>
-                          <span className="text-gray-700">Available</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-red-50 border border-red-200 rounded"></div>
-                          <span className="text-gray-700">No slots</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-yellow-400 border-2 border-yellow-500 rounded"></div>
-                          <span className="text-gray-700">Selected</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Time Slots - Only show when date is selected */}
-                {selectedDate && (
-                  <div>
-                    <label className="block text-sm font-semibold text-sky-800 mb-2">
-                      3. Choose Time Slot
-                    </label>
-
-                    {slotsLoading ? (
-                      <div className="flex items-center justify-center py-4 bg-sky-50 rounded-xl">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-500"></div>
-                        <span className="ml-2 text-sky-600">
-                          Loading slots...
-                        </span>
-                      </div>
-                    ) : availableSlots.length === 0 ? (
-                      <div className="text-center py-6 bg-red-50 rounded-xl border border-red-200">
-                        <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
-                        <p className="text-red-600 text-sm">
-                          No slots available for this date
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {availableSlots.map((slot) => {
-                          const isSelected =
-                            selectedSlot?.schedule_id === slot.schedule_id;
-                          return (
-                            <button
-                              key={slot.schedule_id}
-                              onClick={() => setSelectedSlot(slot)}
-                              className={`p-4 rounded-xl border-2 transition-all ${
-                                isSelected
-                                  ? "bg-yellow-400 border-yellow-500 text-sky-900"
-                                  : "bg-white border-sky-200 hover:border-sky-400 text-sky-800"
-                              }`}
-                            >
-                              <div className="flex items-center justify-center gap-2 mb-2">
-                                <Clock className="w-4 h-4" />
-                                <span className="font-bold text-lg">
-                                  {slot.start_time.substring(0, 5)} -{" "}
-                                  {slot.end_time?.substring(0, 5) || "N/A"}
-                                </span>
-                              </div>
-                              <div
-                                className={`text-xs font-semibold ${
-                                  isSelected ? "text-sky-900" : "text-sky-600"
-                                }`}
-                              >
-                                {slot.available_slots}/{slot.total_slots}{" "}
-                                available
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* RIGHT SIDE - Summary Card */}
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-sky-100 h-fit sticky top-6">
-            <h3 className="text-xl font-bold text-sky-800 mb-4 flex items-center gap-2">
-              <ClipboardList className="w-6 h-6 text-sky-600" />
-              Appointment Summary
-            </h3>
-
-            <div className="space-y-4">
-              {/* Appointment Type */}
-              <div>
-                <p className="text-sm text-sky-600 font-semibold mb-1">
-                  Appointment Type
-                </p>
-                <p className="text-lg font-bold text-sky-900">
-                  {appointmentType || "—"}
-                </p>
-              </div>
-
-              {/* Selected Date */}
-              <div>
-                <p className="text-sm text-sky-600 font-semibold mb-1">Date</p>
-                <p className="text-lg font-bold text-sky-900">
-                  {selectedDate
-                    ? selectedDate.toLocaleDateString("en-US", {
-                        weekday: "long",
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      })
-                    : "—"}
-                </p>
-              </div>
-
-              {/* Selected Time */}
-              <div>
-                <p className="text-sm text-sky-600 font-semibold mb-1">Time</p>
-                <p className="text-lg font-bold text-sky-900">
-                  {selectedSlot
-                    ? `${selectedSlot.start_time.substring(0, 5)} - ${
-                        selectedSlot.end_time?.substring(0, 5) || "N/A"
-                      }`
-                    : "—"}
-                </p>
-              </div>
-
-              {/* Status Indicator */}
-              <div className="pt-4 border-t border-sky-200">
-                {!appointmentType && (
-                  <div className="text-center py-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-600">
-                      Select appointment type
-                    </p>
-                  </div>
-                )}
-                {appointmentType && !selectedDate && (
-                  <div className="text-center py-3 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-600">
-                      Pick a date from calendar
-                    </p>
-                  </div>
-                )}
-                {appointmentType && selectedDate && !selectedSlot && (
-                  <div className="text-center py-3 bg-yellow-50 rounded-lg">
-                    <p className="text-sm text-yellow-700">
-                      Choose a time slot
-                    </p>
-                  </div>
-                )}
-                {appointmentType && selectedDate && selectedSlot && (
-                  <div className="text-center py-3 bg-green-50 rounded-lg border border-green-200">
-                    <CheckCircle className="w-6 h-6 text-green-600 mx-auto mb-1" />
-                    <p className="text-sm text-green-700 font-semibold">
-                      Ready to book!
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Vaccination Type - Only show if Vaccination is selected */}
-        {appointmentType === "Vaccination" && (
-          <div className="bg-white rounded-2xl p-4 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
-            <div className="flex items-center gap-2 mb-2">
-              <ClipboardList className="text-sky-600" />
-              <h3 className="text-xl font-bold text-sky-800">
-                Select Vaccination Type
-              </h3>
-            </div>
-
-            {vaccinesLoading ? (
-              <div className="flex items-center justify-center py-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
-                <span className="ml-3 text-sky-600">Loading vaccines...</span>
-              </div>
-            ) : (
-              <>
-                <select
-                  value={vaccinationType}
-                  onChange={(e) => {
-                    setVaccinationType(e.target.value);
-                    const vaccine = availableVaccines.find(
-                      (v) => v.vaccine_name === e.target.value
-                    );
-                    setSelectedVaccine(vaccine);
-                  }}
-                  className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
-                focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-                >
-                  <option value="">-- Select Vaccine --</option>
-                  {availableVaccines
-                    .filter((v) => v.available)
-                    .map((vaccine) => (
-                      <option
-                        key={vaccine.vaccine_id}
-                        value={vaccine.vaccine_name}
-                      >
-                        {vaccine.vaccine_name} - {vaccine.reason}
-                      </option>
-                    ))}
-                </select>
-
-                {availableVaccines.filter((v) => !v.available).length > 0 && (
-                  <details className="mt-4">
-                    <summary className="cursor-pointer text-sm text-gray-600 hover:text-sky-600 font-semibold">
-                      Show unavailable vaccines (
-                      {availableVaccines.filter((v) => !v.available).length})
-                    </summary>
-                    <div className="mt-2 space-y-2">
-                      {availableVaccines
-                        .filter((v) => !v.available)
-                        .map((vaccine) => (
-                          <div
-                            key={vaccine.vaccine_id}
-                            className="p-3 bg-gray-50 rounded-lg border border-gray-200"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <p className="font-semibold text-gray-700">
-                                  {vaccine.vaccine_name}
-                                </p>
-                                <p className="text-sm text-gray-600">
-                                  {vaccine.description}
-                                </p>
-                              </div>
-                              <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-semibold">
-                                Unavailable
-                              </span>
-                            </div>
-                            <p className="text-sm text-red-600 mt-2">
-                              ⏱️ {vaccine.reason}
-                            </p>
-                          </div>
-                        ))}
-                    </div>
-                  </details>
-                )}
-
-                {selectedVaccine && vaccinationType && (
-                  <div className="mt-4 p-4 bg-sky-50 rounded-lg border border-sky-200">
-                    <h4 className="font-bold text-sky-900 mb-2">
-                      📋 Vaccine Information
-                    </h4>
-                    <p className="text-sm text-sky-700 mb-2">
-                      <strong>Description:</strong>{" "}
-                      {selectedVaccine.description}
-                    </p>
-                    <div className="flex items-center gap-4 text-sm">
-                      <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full font-semibold">
-                        Dose {selectedVaccine.next_dose_number} of{" "}
-                        {selectedVaccine.total_doses}
-                      </span>
-                      <span className="text-sky-600">
-                        {selectedVaccine.doses_received} dose(s) completed
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Additional Services Section */}
-        {selectedDate && appointmentType && selectedSlot && (
-          <div className="bg-white rounded-2xl p-4 shadow-lg border border-sky-100 hover:shadow-xl transition-all">
-            <div className="flex items-center gap-2 mb-3">
-              <ClipboardList className="text-sky-600" />
-              <h3 className="text-xl font-bold text-sky-800">
-                4. Additional Services (Optional)
-              </h3>
-            </div>
-            <p className="text-sm text-sky-600 mb-4">
-              You can add other services to your appointment. Select "None" if
-              you don't want any additional services.
-            </p>
-            <div className="space-y-3">
-              <label
-                className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                  additionalServices.length === 0
-                    ? "border-yellow-400 bg-yellow-50"
-                    : "border-sky-200 hover:border-sky-300 bg-white"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="additionalServices"
-                  checked={additionalServices.length === 0}
-                  onChange={handleSelectNone}
-                  className="w-5 h-5 text-yellow-400 border-sky-300 focus:ring-yellow-400"
-                />
-                <span className="flex-1 font-semibold text-sky-800">None</span>
-              </label>
-
-              {availableAdditionalServices.map((type) => {
-                const isSelected = additionalServices.includes(type);
-                return (
-                  <label
-                    key={type}
-                    className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                      isSelected
-                        ? "border-yellow-400 bg-yellow-50"
-                        : "border-sky-200 hover:border-sky-300 bg-white"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleAdditionalService(type)}
-                      className="w-5 h-5 text-yellow-400 border-sky-300 rounded focus:ring-yellow-400"
-                    />
-                    <span className="flex-1 font-semibold text-sky-800">
-                      {type}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-            {additionalServices.length > 0 && (
-              <div className="mt-4 p-3 bg-sky-50 rounded-lg border border-sky-200">
-                <p className="text-sm text-sky-700">
-                  <strong>Selected Additional Services:</strong>{" "}
-                  {additionalServices.join(", ")}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Patient Concerns */}
-        <div className="bg-white rounded-2xl p-4 shadow-lg border border-sky-100 hover:shadow-xl transition-all relative z-10">
-          <div className="flex items-center gap-2 mb-2">
-            <ClipboardList className="text-sky-600" />
-            <h3 className="text-xl font-bold text-sky-800">
-              {selectedDate && appointmentType && selectedSlot
-                ? "5. Patient Concerns"
-                : "4. Patient Concerns"}
-            </h3>
-          </div>
-          <textarea
-            value={patientConcerns}
-            onChange={(e) => setPatientConcerns(e.target.value)}
-            placeholder="Describe symptoms or reason for visit"
-            className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white resize-none
-          focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-            rows={3}
-          />
-          {patientConcerns.length > 0 && (
-            <p className="text-xs text-sky-600 mt-2">
-              {patientConcerns.length} characters
-            </p>
-          )}
-        </div>
-
-        {/* Book Button */}
-        <div className="text-center">
-          <button
-            onClick={() =>
-              handleBookAppointment(patientConcerns, vaccinationType)
-            }
-            className="inline-block bg-yellow-400 text-sky-900 px-10 py-4 rounded-full text-lg
-          font-bold shadow-md hover:bg-yellow-500 hover:scale-105 hover:shadow-lg transition-all"
-          >
-            Book Appointment
-          </button>
-        </div>
-        {/* Timeline Section */}
-        <div className="bg-white rounded-2xl shadow-lg border border-sky-100 overflow-hidden">
-          <div
-            onClick={() => setAppointmentsOpen(!appointmentsOpen)}
-            className="flex items-center justify-between p-4 bg-sky-100 cursor-pointer hover:bg-sky-200 transition-all"
-          >
-            <div className="flex items-center space-x-3">
-              <Calendar className="w-6 h-6 text-sky-600" />
-              <h3 className="text-xl font-bold text-sky-900">
-                My Appointments
-                {filteredAppointments.length > 0 && (
-                  <span className="ml-2 text-sm bg-yellow-400 text-sky-900 px-2 py-1 rounded-full">
-                    {filteredAppointments.length}
-                  </span>
-                )}
-              </h3>
-            </div>
-            <div className="flex items-center gap-3">
-              {appointmentsOpen && (
-                <select
-                  value={filterStatus}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    setFilterStatus(e.target.value);
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="border-2 border-sky-300 rounded-lg px-3 py-1.5 text-sm bg-white
-            focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-                >
-                  <option value="all">All</option>
-                  <option value="approved">Approved</option>
-                  <option value="completed">Completed</option>
-                  <option value="pending">Pending</option>
-                  <option value="canceled">Canceled</option>
-                </select>
-              )}
-              <ChevronDown
-                className={`w-5 h-5 text-sky-600 transform transition-transform duration-300 ${
-                  appointmentsOpen ? "rotate-180" : ""
-                }`}
-              />
-            </div>
-          </div>
-
-          {/* Folder Content - Expandable */}
-          {appointmentsOpen && (
-            <div className="p-4 bg-sky-50 transition-all duration-300 max-h-[40vh] overflow-auto">
-              {loading ? (
-                <p className="text-center text-sky-600 py-4">
-                  Loading appointments…
-                </p>
-              ) : filteredAppointments.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">
-                  No appointments found.
-                </p>
-              ) : (
-                <ol className="relative border-l-4 border-sky-300/50 space-y-4 pl-4">
-                  {filteredAppointments
-                    .sort(
-                      (a, b) =>
-                        new Date(a.appointment_date) -
-                        new Date(b.appointment_date)
-                    )
-                    .map((appt, index) => {
-                      const status = appt.status?.toLowerCase().trim();
-                      const date = formatDateDisplay(appt.appointment_date);
-
-                      let dot = "bg-yellow-400";
-                      let badge = "bg-yellow-100 text-yellow-700";
-                      if (status === "completed") {
-                        dot = "bg-green-400";
-                        badge = "bg-green-100 text-green-700";
-                      } else if (status === "approved") {
-                        dot = "bg-sky-400";
-                        badge = "bg-sky-100 text-sky-700";
-                      } else if (status === "canceled") {
-                        dot = "bg-red-400";
-                        badge = "bg-red-100 text-red-700";
-                      }
-
-                      return (
-                        <li key={index} className="ml-6">
-                          <span
-                            className={`absolute -left-3 flex items-center justify-center w-7 h-7 rounded-full ring-8 ring-white/60 ${dot}`}
-                          />
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-3 rounded-lg shadow-sm">
-                            <div>
-                              <h4 className="text-lg font-bold text-gray-800">
-                                {appt.appointment_type}
-                              </h4>
-                              <p className="text-gray-600 text-sm">
-                                {date} •{" "}
-                                {(() => {
-                                  const start =
-                                    appt.appointment_time?.substring(0, 5) ||
-                                    "N/A";
-                                  const end = appt.end_time?.substring(0, 5);
-
-                                  if (!end) return start;
-
-                                  // Convert to 12-hour format with AM/PM
-                                  const formatTime = (time24) => {
-                                    const [hours, minutes] = time24.split(":");
-                                    const hour = parseInt(hours);
-                                    const ampm = hour >= 12 ? "PM" : "AM";
-                                    const hour12 =
-                                      hour === 0
-                                        ? 12
-                                        : hour > 12
-                                        ? hour - 12
-                                        : hour;
-                                    return `${hour12}:${minutes} ${ampm}`;
-                                  };
-
-                                  return `${formatTime(start)} - ${formatTime(
-                                    end
-                                  )}`;
-                                })()}
-                              </p>
-
-                              {appt.appointment_type === "Vaccination" &&
-                                appt.vaccination_type && (
-                                  <p className="text-xs text-sky-600 mt-1">
-                                    <strong>Vaccine:</strong>{" "}
-                                    {appt.vaccination_type}
-                                  </p>
-                                )}
-
-                              {appt.additional_services &&
-                                appt.additional_services !== "None" && (
-                                  <p className="text-xs text-sky-600 mt-1">
-                                    <strong>Additional:</strong>{" "}
-                                    {appt.additional_services}
-                                    {String(appt.status || "")
-                                      .toLowerCase()
-                                      .trim() === "canceled" &&
-                                      appt.cancel_remarks && (
-                                        <span className="ml-2 text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded">
-                                          <strong>Reason:</strong>{" "}
-                                          {appt.cancel_remarks}
-                                        </span>
-                                      )}
-                                  </p>
-                                )}
-
-                              {status === "canceled" &&
-                                appt.cancel_remarks &&
-                                (!appt.additional_services ||
-                                  appt.additional_services === "None") && (
-                                  <p className="text-xs text-red-600 mt-2 bg-red-50 p-2 rounded-lg border border-red-200">
-                                    <strong>Reason:</strong>{" "}
-                                    {appt.cancel_remarks}
-                                  </p>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`px-3 py-1 text-sm rounded-full font-semibold capitalize ${badge}`}
-                              >
-                                {status}
-                              </span>
-                              {(status === "pending" ||
-                                status === "approved") && (
-                                <button
-                                  onClick={() =>
-                                    handleCancelAppointment(appt.appointment_id)
-                                  }
-                                  className="px-3 py-1 bg-red-500 text-white rounded-full font-semibold hover:bg-red-600 transition-all text-xs"
-                                >
-                                  Cancel
-                                </button>
-                              )}
-                              {appt.appointment_type === "Vaccination" &&
-                                status === "approved" && (
-                                  <button
-                                    onClick={() => handleAvailVaccine(appt)}
-                                    className="px-3 py-1 bg-purple-600 text-white rounded-full font-semibold hover:bg-purple-700 transition-all text-xs"
-                                  >
-                                    Avail Vaccine
-                                  </button>
-                                )}
-                            </div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                </ol>
-              )}
-            </div>
-          )}
-        </div>
+      <div>
         {/* ==================== MEDICAL RECORDS SECTION ==================== */}
-        <div className="bg-white rounded-2xl p-4 shadow-lg border border-sky-100 hover:shadow-xl transition-all mt-6">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-sky-200">
-            <h3 className="text-3xl font-extrabold text-sky-800 drop-shadow-sm flex items-center">
-              <User className="w-8 h-8 mr-3 text-yellow-500" />
-              My Medical Records
-            </h3>
-            <div className="flex items-center gap-3">
+        <div className="bg-gradient-to-br from-blue-100 to-yellow-50 rounded-3xl p-6 shadow-2xl border-2 border-blue-200 hover:shadow-2xl transition-all mt-14">
+          <div className="mb-3 pb-2 border-b border-blue-100">
+            <div className="flex items-center justify-between">
+              <h3 className="text-2xl font-extrabold text-blue-900 flex items-center gap-3">
+                <FileText className="w-7 h-7 text-yellow-500" />
+                Medical Records
+              </h3>
+            </div>
+
+            {/* compact blue bar holding Import / Refresh */}
+            <div className="mt-3 flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-md w-max">
               <button
                 type="button"
                 onClick={() => {
                   setShowImportModal(true);
                   setImportError(null);
                 }}
-                className="w-full sm:w-auto px-4 py-2 border-2 border-sky-300 text-sky-900 font-semibold rounded-lg shadow-sm bg-white hover:bg-sky-50 transition-colors text-sm"
+                className="px-3 py-1 text-xs bg-yellow-400 text-white border border-yellow-500 rounded hover:bg-yellow-500 flex items-center gap-2"
               >
-                Import Records
+                <FileText className="w-4 h-4 text-white" />
+                <span>Import</span>
               </button>
+
               <button
                 onClick={fetchPatientRecords}
-                className="px-4 py-2 bg-yellow-400 text-sky-900 font-semibold rounded-lg shadow hover:bg-yellow-500 transition-colors text-sm"
+                className="px-3 py-1 text-xs bg-blue-500 text-white border border-blue-600 rounded hover:bg-blue-600 flex items-center gap-2"
               >
-                Refresh
+                <RefreshCw className="w-4 h-4 text-white" />
+                <span>Refresh</span>
               </button>
             </div>
           </div>
-
           {medicalLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500 mx-auto mb-4"></div>
-              <p className="text-sky-600">Loading your medical records...</p>
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-400 mx-auto mb-6"></div>
+              <p className="text-blue-700 text-lg font-semibold">
+                Loading your medical records...
+              </p>
             </div>
           ) : medicalError ? (
-            <div className="text-center p-8 bg-red-50 rounded-lg border border-red-200">
-              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-red-800 mb-2">
+            <div className="text-center p-12 bg-red-50 rounded-2xl border-2 border-red-200">
+              <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-6" />
+              <h3 className="text-2xl font-bold text-red-800 mb-3">
                 Unable to Load Records
               </h3>
-              <p className="text-red-700 mb-4">{medicalError}</p>
+              <p className="text-red-700 mb-6">{medicalError}</p>
               <button
                 onClick={fetchPatientRecords}
-                className="px-4 py-2 bg-sky-600 text-white rounded hover:bg-sky-700"
+                className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors"
               >
-                Retry
+                <RefreshCw className="inline w-5 h-5 mr-2" /> Retry
               </button>
             </div>
           ) : medicalRecords.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-xl shadow-md border-l-4 border-yellow-400">
-              <FileText className="w-16 h-16 text-sky-300 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-sky-800 mb-2">
+            <div className="text-center py-20 bg-white rounded-2xl shadow-lg border-l-8 border-yellow-400">
+              <FileText className="w-20 h-20 text-blue-300 mx-auto mb-6" />
+              <h3 className="text-2xl font-bold text-blue-900 mb-3">
                 No Medical Records Found
               </h3>
-              <p className="text-sky-700 max-w-md mx-auto">
+              <p className="text-blue-700 max-w-lg mx-auto text-base">
                 Your medical records will appear here after your appointments
                 are completed and reviewed by the doctor.
               </p>
             </div>
           ) : (
-            <div className="space-y-6 max-h-[60vh] overflow-auto pr-2">
+            <div className="space-y-8 max-h-[60vh] overflow-auto pr-2">
               {Object.keys(groupedRecords).map((type) => (
                 <div
                   key={type}
-                  className="bg-white rounded-xl shadow-md border border-yellow-300 overflow-hidden"
+                  className="bg-gradient-to-br from-yellow-50 to-blue-50 rounded-2xl shadow-md border-2 border-yellow-300 overflow-hidden"
                 >
                   <div
                     onClick={() =>
                       setOpenFolder(openFolder === type ? null : type)
                     }
-                    className="flex items-center justify-between p-5 bg-yellow-100 cursor-pointer hover:bg-yellow-200 transition-all"
+                    className="flex items-center justify-between p-3 bg-yellow-100 cursor-pointer hover:bg-yellow-200 transition-all"
                   >
-                    <div className="flex items-center space-x-3">
-                      <FolderOpen className="w-6 h-6 text-yellow-600" />
-                      <h3 className="text-xl font-bold text-sky-900">{type}</h3>
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-5 h-5 text-yellow-600" />
+                      <h3 className="text-base font-semibold text-blue-900">
+                        {type}
+                      </h3>
                     </div>
                     <ChevronDown
-                      className={`w-5 h-5 text-sky-600 transform transition-transform duration-300 ${
+                      className={`w-5 h-5 text-blue-600 transform transition-transform duration-300 ${
                         openFolder === type ? "rotate-180" : ""
                       }`}
                     />
                   </div>
-
                   {openFolder === type && (
                     <div className="p-2 bg-yellow-50 transition-all duration-300">
                       <ul className="divide-y divide-yellow-100">
                         {groupedRecords[type].map((record) => (
                           <li
                             key={record.record_id || record.appointment_id}
-                            className="py-2 px-2 flex items-center justify-between cursor-pointer hover:bg-yellow-100 rounded"
+                            className="py-2 px-2 flex items-center justify-between cursor-pointer hover:bg-yellow-100"
                             onClick={() => openRecordDetail(record)}
                           >
                             <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-8 h-8 bg-yellow-200 rounded flex items-center justify-center text-yellow-700 text-sm font-semibold flex-shrink-0">
-                                {record.appointment_type
-                                  ? record.appointment_type.charAt(0)
-                                  : "R"}
+                              <div className="w-8 h-8 bg-yellow-200 rounded-full flex items-center justify-center text-yellow-700 text-sm flex-shrink-0">
+                                <FileText className="w-4 h-4" />
                               </div>
                               <div className="min-w-0">
-                                <div className="text-sm font-semibold text-sky-900 truncate">
+                                <div className="text-sm font-medium text-blue-900 truncate">
                                   {record.diagnosis || "General Checkup"}
                                 </div>
                               </div>
                             </div>
-
-                            <div className="flex items-center gap-3 ml-4">
-                              <div className="text-xs text-sky-600 text-right whitespace-nowrap">
+                            <div className="flex items-center gap-3 ml-4 text-sm text-blue-600 whitespace-nowrap">
+                              <div>
                                 {record.appointment_date}
                                 {record.appointment_time
                                   ? ` • ${record.appointment_time}`
                                   : ""}
                               </div>
-                              <Eye className="w-4 h-4 text-sky-400" />
+                              <Eye className="w-4 h-4 text-blue-400" />
                             </div>
                           </li>
                         ))}
@@ -2577,11 +1781,11 @@ function Patient() {
 
     if (loading) {
       return (
-        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-sky-50 to-blue-100">
+        <div className="h-screen flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-sky-500 mx-auto mb-4"></div>
-            <p className="text-sky-700 font-semibold">
-              Loading notifications...
+            <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-sky-500 mx-auto mb-3"></div>
+            <p className="text-sky-700 text-sm font-semibold">
+              Loading notifications…
             </p>
           </div>
         </div>
@@ -2590,16 +1794,16 @@ function Patient() {
 
     if (error) {
       return (
-        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-sky-50 to-blue-100 p-4">
-          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full border-t-4 border-red-500">
-            <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800 text-center mb-2">
-              Error Loading Notifications
+        <div className="h-screen flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full border-l-4 border-red-500">
+            <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
+            <h2 className="text-lg font-bold text-gray-800 text-center mb-2">
+              Error
             </h2>
-            <p className="text-gray-600 text-center mb-4">{error}</p>
+            <p className="text-gray-600 text-center text-sm mb-4">{error}</p>
             <button
               onClick={fetchNotifications}
-              className="w-full bg-sky-500 text-white py-2 rounded-lg font-semibold hover:bg-sky-600 transition-colors"
+              className="w-full bg-sky-500 text-white py-1 text-sm rounded hover:bg-sky-600 transition-colors"
             >
               Retry
             </button>
@@ -2609,136 +1813,140 @@ function Patient() {
     }
 
     return (
-      <div className="min-h-screen bg-transparent p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
+      <div className="h-screen bg-transparent p-6 md:p-14 flex items-start justify-center overflow-hidden">
+        <div className="w-full max-w-3xl flex flex-col h-full">
           {/* Header */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border-t-4 border-yellow-400">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-yellow-100 p-3 rounded-full">
-                  <Bell className="w-8 h-8 text-yellow-600" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-sky-900">
-                    My Notifications
-                  </h1>
-                  <p className="text-sky-600">
-                    {notifications.length} notification
-                    {notifications.length !== 1 ? "s" : ""} (last 7 days)
-                  </p>
-                </div>
+          <div className="mb-6 text-center flex-shrink-0">
+            <div className="inline-flex items-center gap-3 mb-3">
+              <div className="p-3 bg-gradient-to-br from-sky-100 to-blue-100 rounded-full">
+                <Bell className="w-6 h-6 text-sky-700" />
               </div>
-              <button
-                onClick={fetchNotifications}
-                className="px-4 py-2 bg-sky-500 text-white rounded-lg font-semibold hover:bg-sky-600 transition-colors"
-              >
-                Refresh
-              </button>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Notifications
+              </h1>
             </div>
+            <p className="text-sm text-gray-600">
+              You have{" "}
+              <span className="font-semibold text-sky-700">
+                {notifications.length}
+              </span>{" "}
+              notification{notifications.length !== 1 ? "s" : ""}
+            </p>
           </div>
 
-          {/* Notifications List */}
+          {/* Notifications Container */}
           {notifications.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-xl p-12 text-center border-l-4 border-green-500">
-              <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                All Caught Up! 🎉
+            <div className="bg-white rounded-2xl shadow-md p-12 text-center border border-sky-100">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">
+                All Caught Up!
               </h2>
-              <p className="text-gray-600">
-                No new notifications at the moment.
+              <p className="text-sm text-gray-600 mb-6">
+                You have no new notifications right now.
               </p>
+              <button
+                onClick={fetchNotifications}
+                className="px-4 py-2 bg-sky-500 text-white rounded-lg text-sm font-medium hover:bg-sky-600 transition-colors"
+              >
+                Check Again
+              </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              {notifications.map((notif) => {
-                const config = getStatusConfig(notif.status);
-
-                return (
-                  <div
-                    key={notif.appointment_id}
-                    className={`bg-white rounded-xl shadow-lg p-5 border-l-4 ${config.borderColor} hover:shadow-xl transition-all`}
-                  >
-                    <div className="flex items-start gap-4">
-                      {/* Left Side - Icon */}
-                      <div
-                        className={`${config.bgColor} p-3 rounded-full flex-shrink-0`}
-                      >
-                        {config.icon}
-                      </div>
-
-                      {/* Middle - Details */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-lg font-bold text-gray-900">
-                            {config.title}
-                          </h3>
-                          <span
-                            className={`px-2 py-1 text-xs font-semibold rounded-full ${config.badgeColor} capitalize`}
+            <>
+              <div className="flex-1 overflow-y-auto space-y-3 pr-2 mb-4">
+                {notifications.map((notif) => {
+                  const config = getStatusConfig(notif.status);
+                  return (
+                    <div
+                      key={notif.appointment_id}
+                      className="bg-white rounded-xl border border-sky-100 p-4 hover:shadow-lg transition-all hover:border-sky-300 cursor-default flex-shrink-0"
+                    >
+                      <div className="flex gap-4">
+                        {/* Status Icon */}
+                        <div className="flex-shrink-0">
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center ${config.bgColor}`}
                           >
-                            {notif.status}
-                          </span>
+                            {config.icon}
+                          </div>
                         </div>
 
-                        <p className="text-sky-600 font-semibold mb-2">
-                          {notif.appointment_type}
-                          {notif.vaccination_type && (
-                            <span className="text-sm text-gray-600 ml-2">
-                              ({notif.vaccination_type})
+                        {/* Main Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <h3 className="text-sm font-bold text-gray-900">
+                              {config.title}
+                            </h3>
+                            <span
+                              className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${config.badgeColor}`}
+                            >
+                              {notif.status}
                             </span>
-                          )}
-                        </p>
+                          </div>
 
-                        <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-2">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-sky-500" />
-                            <span>
+                          <p className="text-xs text-sky-600 font-medium mb-1">
+                            {notif.appointment_type}
+                            {notif.vaccination_type && (
+                              <span className="text-gray-600 ml-1">
+                                • {notif.vaccination_type}
+                              </span>
+                            )}
+                          </p>
+
+                          <div className="flex items-center gap-3 text-xs text-gray-600 mb-1">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5 text-sky-500" />
                               {new Date(
                                 notif.appointment_date
                               ).toLocaleDateString("en-US", {
-                                month: "long",
+                                month: "short",
                                 day: "numeric",
                                 year: "numeric",
                               })}
                             </span>
+                            <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-sky-500" />
+                              {notif.appointment_time}
+                            </span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-sky-500" />
-                            <span>{notif.appointment_time}</span>
-                          </div>
+
+                          {notif.status?.toLowerCase() === "canceled" &&
+                            notif.cancel_remarks && (
+                              <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-200">
+                                <p className="text-xs text-red-700">
+                                  <span className="font-semibold">Reason:</span>{" "}
+                                  {notif.cancel_remarks}
+                                </p>
+                              </div>
+                            )}
                         </div>
 
-                        {/* Show cancellation reason if canceled */}
-                        {notif.status?.toLowerCase() === "canceled" &&
-                          notif.cancel_remarks && (
-                            <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
-                              <p className="text-sm text-red-700">
-                                <strong>Reason for cancellation:</strong>{" "}
-                                {notif.cancel_remarks}
-                              </p>
-                            </div>
-                          )}
-
-                        {/* Show additional services */}
-                        {notif.additional_services &&
-                          notif.additional_services !== "None" && (
-                            <p className="text-xs text-gray-600 mt-2">
-                              <strong>Additional services:</strong>{" "}
-                              {notif.additional_services}
-                            </p>
-                          )}
-                      </div>
-
-                      {/* Right Side - Time Ago */}
-                      <div className="text-right flex-shrink-0">
-                        <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                          {formatDate(notif.updated_at || notif.created_at)}
-                        </span>
+                        {/* Time Ago */}
+                        <div className="flex-shrink-0 text-right">
+                          <span className="text-xs text-gray-500 block">
+                            {formatDate(notif.updated_at || notif.created_at)}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+
+              {/* Refresh Footer */}
+              <div className="text-center flex-shrink-0">
+                <button
+                  onClick={fetchNotifications}
+                  className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200 rounded-lg text-xs font-medium text-sky-700 hover:border-sky-400 hover:from-sky-100 hover:to-blue-100 transition-all"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh Notifications
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -2747,8 +1955,7 @@ function Patient() {
 
   const menuItems = [
     { id: "home", label: "Home", icon: Home },
-    { id: "appointments", label: "Appointments", icon: Calendar },
-    { id: "profile", label: "Profile", icon: User },
+    { id: "appointments", label: "Medical Records", icon: FileText },
   ];
   const renderContent = () => {
     switch (activePage) {
@@ -2786,84 +1993,24 @@ function Patient() {
         />
       )}
 
-      {/* Sidebar (Fixed) */}
-      <div
-        className={`fixed top-0 left-0 h-full w-64 sm:w-72 bg-gradient-to-b from-blue-600 to-blue-800 text-white shadow-xl z-50 transition-transform duration-300 ${
-          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0`}
-      >
-        <div className="p-4 sm:p-6">
-          {/* Logo + Branding */}
-          <div className="mb-6 sm:mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 sm:gap-3 flex-1">
-                {/* Logo in white circle */}
-                <div className="bg-white p-1.5 sm:p-2 rounded-full flex items-center justify-center shadow-md">
-                  <img
-                    src="/clinicsclogo.png"
-                    alt="Clinic Logo"
-                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover"
-                  />
-                </div>
-
-                {/* Text Branding */}
-                <div className="flex-1">
-                  <h2 className="text-xl sm:text-2xl font-bold">Castillo</h2>
-                  <p className="text-blue-200 text-xs sm:text-sm">
-                    Children Clinic
-                  </p>
-                </div>
-
-                {/* Notification Bell Icon */}
-                <button
-                  onClick={() => {
-                    setActivePage("notifications");
-                    localStorage.setItem(
-                      "lastNotificationView",
-                      new Date().toISOString()
-                    );
-                    setNotificationCount(0);
-                  }}
-                  className="relative p-2 hover:bg-white/10 rounded-lg transition-colors"
-                >
-                  <Bell className="w-6 h-6 text-white" />
-                  {notificationCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
-                      {notificationCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-
-              <button
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="md:hidden text-white hover:text-yellow-400 text-2xl transition-colors"
-                aria-label="Close menu"
-              >
-                ×
-              </button>
+      {/* Top Header (replaces sidebar) */}
+      <header className="fixed top-0 left-0 right-0 bg-blue-800/80 text-white backdrop-blur-sm border-b border-blue-900 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-white p-1.5 rounded-full">
+              <img
+                src="/clinicsclogo.png"
+                alt="Clinic Logo"
+                className="w-9 h-9 rounded-full object-cover"
+              />
             </div>
-
-            {/* Patient Info Card - Mobile Only */}
-            <div className="md:hidden bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-white/20 shadow-lg">
-              <div className="flex items-center gap-3">
-                <div className="bg-gradient-to-br from-yellow-400 to-yellow-500 p-2 sm:p-2.5 rounded-full shadow-md flex-shrink-0">
-                  <User className="w-5 h-5 sm:w-6 sm:h-6 text-blue-900" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-blue-200 font-medium mb-0.5">
-                    Logged in as
-                  </p>
-                  <p className="text-sm sm:text-base font-bold text-white truncate">
-                    {patientName}
-                  </p>
-                </div>
-              </div>
+            <div className="hidden sm:block">
+              <h2 className="text-sm font-bold text-white">Castillo</h2>
+              <p className="text-xs text-white/80">Children Clinic</p>
             </div>
           </div>
 
-          {/* Navigation Menu */}
-          <nav className="space-y-2">
+          <nav className="hidden md:flex items-center gap-6">
             {menuItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -2873,31 +2020,149 @@ function Patient() {
                     setActivePage(item.id);
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center p-2.5 sm:p-3 rounded-lg transition-all ${
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-md font-semibold transition ${
                     activePage === item.id
-                      ? "bg-yellow-400 text-sky-600 shadow-lg"
-                      : "hover:bg-yellow-400 hover:text-sky-600 text-sky-100"
+                      ? "bg-yellow-400 text-sky-900"
+                      : "text-white hover:bg-yellow-400 hover:text-sky-900"
                   }`}
                 >
-                  <Icon className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
-                  <span className="font-semibold">{item.label}</span>
+                  <Icon
+                    className={`w-4 h-4 ${
+                      activePage === item.id ? "text-sky-900" : "text-white"
+                    }`}
+                  />
+                  <span className="text-sm">{item.label}</span>
                 </button>
               );
             })}
           </nav>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setActivePage("notifications");
+                localStorage.setItem(
+                  "lastNotificationView",
+                  new Date().toISOString()
+                );
+                setNotificationCount(0);
+              }}
+              className="relative p-2 rounded-md hover:bg-sky-50"
+              aria-label="Notifications"
+            >
+              <Bell className="w-5 h-5 text-white" />
+              {notificationCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                  {notificationCount}
+                </span>
+              )}
+            </button>
+
+            <div className="relative">
+              <button
+                onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                className={`group flex items-center gap-2 px-3 py-1 rounded-md transition ${
+                  activePage === "profile"
+                    ? "bg-yellow-400 text-sky-900"
+                    : "hover:bg-yellow-400 hover:text-sky-900"
+                }`}
+              >
+                <User
+                  className={`w-5 h-5 ${
+                    activePage === "profile" ? "text-sky-900" : "text-white"
+                  } group-hover:text-sky-900`}
+                />
+                <span
+                  className={`text-sm font-semibold max-w-[10rem] truncate ${
+                    activePage === "profile" ? "text-sky-900" : "text-white"
+                  } group-hover:text-sky-900`}
+                >
+                  {patientName}
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 ${
+                    activePage === "profile" ? "text-sky-900" : "text-white"
+                  } group-hover:text-sky-900`}
+                />
+              </button>
+
+              {profileMenuOpen && (
+                <div className="absolute right-0 mt-2 w-44 bg-white border rounded-md shadow-md py-1">
+                  <button
+                    onClick={() => {
+                      setActivePage("profile");
+                      setProfileMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-sky-700 hover:bg-sky-50"
+                  >
+                    My Profile
+                  </button>
+                  <button
+                    onClick={() => handleLogout()}
+                    className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button
+              className="md:hidden p-2 rounded-md"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Toggle menu"
+            >
+              {isMobileMenuOpen ? (
+                <X className="w-6 h-6 text-sky-700" />
+              ) : (
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path d="M4 6h16M4 12h16M4 18h16"></path>
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
 
-        {/* Bottom section - Logout Only */}
-        <div className="absolute bottom-0 left-0 right-0 w-64 sm:w-72 p-4 sm:p-6 bg-blue-900/50 backdrop-blur-sm">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center px-3 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all shadow-lg hover:shadow-xl font-semibold text-sm sm:text-base"
-          >
-            <LogOut className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-            Logout
-          </button>
-        </div>
-      </div>
+        {/* Mobile slide-down menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden bg-white border-t border-sky-100">
+            <div className="px-4 py-3 space-y-2">
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActivePage(item.id);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md ${
+                      activePage === item.id
+                        ? "bg-yellow-400 text-sky-900"
+                        : "text-white hover:bg-yellow-400 hover:text-sky-900"
+                    }`}
+                  >
+                    <Icon
+                      className={`w-5 h-5 ${
+                        activePage === item.id ? "text-sky-900" : "text-white"
+                      }`}
+                    />
+                    <span className="font-medium">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </header>
 
       {/* Mobile Header with Hamburger */}
       <div className="md:hidden fixed top-0 left-0 right-0 bg-gradient-to-b from-blue-600 to-blue-800 text-white p-3 sm:p-4 flex items-center justify-between z-40 shadow-lg">
@@ -2965,7 +2230,7 @@ function Patient() {
 
       {/* Content Area */}
       <div
-        className="flex-1 md:ml-64 lg:ml-72 p-4 sm:p-6 md:p-8 bg-cover bg-center bg-fixed overflow-y-auto relative pt-28 sm:pt-24 md:pt-0"
+        className="flex-1 p-4 sm:p-6 md:p-8 bg-cover bg-center bg-fixed overflow-y-auto relative pt-24"
         style={{ backgroundImage: "url('/doctor.png')" }}
       >
         {renderContent()}

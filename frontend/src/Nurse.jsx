@@ -4293,11 +4293,11 @@ function Nurse() {
 
     if (loading) {
       return (
-        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-sky-50 to-blue-100">
+        <div className="h-screen flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-sky-500 mx-auto mb-4"></div>
-            <p className="text-sky-700 font-semibold">
-              Loading notifications...
+            <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-sky-500 mx-auto mb-3"></div>
+            <p className="text-sky-700 text-sm font-semibold">
+              Loading notifications…
             </p>
           </div>
         </div>
@@ -4306,16 +4306,16 @@ function Nurse() {
 
     if (error) {
       return (
-        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-sky-50 to-blue-100 p-4">
-          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full border-t-4 border-red-500">
-            <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800 text-center mb-2">
-              Error Loading Notifications
+        <div className="h-screen flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full border-l-4 border-red-500">
+            <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
+            <h2 className="text-lg font-bold text-gray-800 text-center mb-2">
+              Error
             </h2>
-            <p className="text-gray-600 text-center mb-4">{error}</p>
+            <p className="text-gray-600 text-center text-sm mb-4">{error}</p>
             <button
               onClick={fetchNotifications}
-              className="w-full bg-sky-500 text-white py-2 rounded-lg font-semibold hover:bg-sky-600 transition-colors"
+              className="w-full bg-sky-500 text-white py-1 text-sm rounded hover:bg-sky-600 transition-colors"
             >
               Retry
             </button>
@@ -4324,135 +4324,124 @@ function Nurse() {
       );
     }
 
-    // Helper function to format time range
-    const formatTimeRange = (startTime, endTime) => {
-      if (!startTime) return "N/A";
-
-      const start = startTime.substring(0, 5);
-      const end = endTime?.substring(0, 5);
-
-      if (!end) return start;
-
-      const formatTime = (time24) => {
-        const [hours, minutes] = time24.split(":");
-        const hour = parseInt(hours);
-        const ampm = hour >= 12 ? "PM" : "AM";
-        const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-        return `${hour12}:${minutes} ${ampm}`;
-      };
-
-      return `${formatTime(start)} - ${formatTime(end)}`;
-    };
-
     return (
-      <div className="min-h-screen bg-transparent p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
+      <div className="h-screen bg-transparent p-6 md:p-14 flex items-start justify-center overflow-hidden">
+        <div className="w-full max-w-3xl flex flex-col h-full">
           {/* Header */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border-t-4 border-yellow-400">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="bg-yellow-100 p-3 rounded-full">
-                  <Bell className="w-8 h-8 text-yellow-600" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-sky-900">
-                    Notifications
-                  </h1>
-                  <p className="text-sky-600">
-                    {notifications.length} pending appointment
-                    {notifications.length !== 1 ? "s" : ""}
-                  </p>
-                </div>
+          <div className="mb-6 text-center flex-shrink-0">
+            <div className="inline-flex items-center gap-3 mb-3">
+              <div className="p-3 bg-gradient-to-br from-sky-100 to-blue-100 rounded-full">
+                <Bell className="w-6 h-6 text-sky-700" />
               </div>
-              <button
-                onClick={fetchNotifications}
-                className="px-4 py-2 bg-sky-500 text-white rounded-lg font-semibold hover:bg-sky-600 transition-colors"
-              >
-                Refresh
-              </button>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Notifications
+              </h1>
             </div>
+            <p className="text-sm text-gray-600">
+              You have{" "}
+              <span className="font-semibold text-sky-700">
+                {notifications.length}
+              </span>{" "}
+              appointment{notifications.length !== 1 ? "s" : ""}
+            </p>
           </div>
 
-          {/* Notifications List */}
+          {/* Notifications Container */}
           {notifications.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-xl p-12 text-center border-l-4 border-green-500">
-              <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                All Caught Up! 🎉
+            <div className="bg-white rounded-2xl shadow-md p-12 text-center border border-sky-100">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">
+                All Caught Up!
               </h2>
-              <p className="text-gray-600">
-                No pending appointments at the moment.
+              <p className="text-sm text-gray-600 mb-6">
+                No pending appointments right now.
               </p>
+              <button
+                onClick={fetchNotifications}
+                className="px-4 py-2 bg-sky-500 text-white rounded-lg text-sm font-medium hover:bg-sky-600 transition-colors"
+              >
+                Check Again
+              </button>
             </div>
           ) : (
-            <div className="space-y-4">
-              {notifications.map((notif) => (
-                <div
-                  key={notif.appointment_id}
-                  className="bg-white rounded-xl shadow-lg p-5 border-l-4 border-yellow-400 hover:shadow-xl transition-all hover:scale-[1.02]"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    {/* Left Side - Icon & Details */}
-                    <div className="flex items-start gap-4 flex-1">
-                      <div className="bg-yellow-100 p-3 rounded-full flex-shrink-0">
-                        <User className="w-6 h-6 text-yellow-600" />
+            <>
+              <div className="flex-1 overflow-y-auto space-y-3 pr-2 mb-4">
+                {notifications.map((notif) => (
+                  <div
+                    key={notif.appointment_id}
+                    className="bg-white rounded-xl border border-sky-100 p-4 hover:shadow-lg transition-all hover:border-sky-300 cursor-default flex-shrink-0"
+                  >
+                    <div className="flex gap-4">
+                      {/* Status Icon */}
+                      <div className="flex-shrink-0">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-yellow-100">
+                          <User className="w-5 h-5 text-yellow-600" />
+                        </div>
                       </div>
 
-                      <div className="flex-1">
-                        {/* Patient Name & Type */}
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-lg font-bold text-gray-900">
+                      {/* Main Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <h3 className="text-sm font-bold text-gray-900">
                             {notif.patient_name}
                           </h3>
                           {notif.is_walkin && (
-                            <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">
+                            <span className="text-xs font-semibold px-2 py-1 rounded-full bg-purple-100 text-purple-700">
                               Walk-in
                             </span>
                           )}
                         </div>
 
-                        {/* Appointment Type */}
-                        <p className="text-sky-600 font-semibold mb-3">
+                        <p className="text-xs text-sky-600 font-medium mb-1">
                           {notif.appointment_type}
                         </p>
 
-                        {/* Date & Time */}
-                        <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-sky-500" />
-                            <span>
-                              {new Date(
-                                notif.appointment_date
-                              ).toLocaleDateString("en-US", {
-                                month: "long",
-                                day: "numeric",
-                                year: "numeric",
-                              })}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-sky-500" />
-                            <span>
-                              {formatTimeRange(
-                                notif.appointment_time,
-                                notif.end_time
-                              )}
-                            </span>
-                          </div>
+                        <div className="flex items-center gap-3 text-xs text-gray-600 mb-1">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-sky-500" />
+                            {new Date(
+                              notif.appointment_date
+                            ).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                          </span>
+                          <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-sky-500" />
+                            {formatTimeRange(
+                              notif.appointment_time,
+                              notif.end_time
+                            )}
+                          </span>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Right Side - Time Ago */}
-                    <div className="text-right flex-shrink-0">
-                      <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                        {formatDate(notif.created_at)}
-                      </span>
+                      {/* Time Ago */}
+                      <div className="flex-shrink-0 text-right">
+                        <span className="text-xs text-gray-500 block">
+                          {formatDate(notif.created_at)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+
+              {/* Refresh Footer */}
+              <div className="text-center flex-shrink-0">
+                <button
+                  onClick={fetchNotifications}
+                  className="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200 rounded-lg text-xs font-medium text-sky-700 hover:border-sky-400 hover:from-sky-100 hover:to-blue-100 transition-all"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh Notifications
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>

@@ -786,8 +786,8 @@ function PatientProfile() {
                                           {formatDate(s)}
                                         </span>
                                       ) : (
-                                        <span className="text-red-500 font-medium">
-                                          Not availed
+                                        <span className="text-gray-400 font-semibold">
+                                          ----
                                         </span>
                                       )}
                                     </td>
