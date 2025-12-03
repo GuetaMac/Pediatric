@@ -1468,12 +1468,7 @@ function Nurse() {
     };
 
     // 🆕 Calculate status counts
-    const getStatusCount = (status) => {
-      return appointments.filter(
-        (appt) =>
-          appt.status?.toLowerCase().trim() === status.toLowerCase().trim()
-      ).length;
-    };
+    // ✅ PALITAN NG ITO:
 
     // Filter logic (including month/year)
     const filteredAppointments = appointments.filter((appt) => {
@@ -1504,6 +1499,14 @@ function Nurse() {
       return dateB - dateA; // ← Descending (latest first)
     });
 
+    const getStatusCount = (status) => {
+      return filteredAppointments.filter(
+        (appt) =>
+          status === "All" ||
+          appt.status?.toLowerCase().trim() === status.toLowerCase().trim()
+      ).length;
+    };
+
     const statusOptions = [
       { key: "All", label: "All" },
       { key: "pending", label: "Pending" },
@@ -1528,8 +1531,20 @@ function Nurse() {
       "December",
     ];
 
-    const currentYear = new Date().getFullYear();
-    const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+    // ✅ PALITAN NG ITO:
+    const getAvailableYears = () => {
+      if (appointments.length === 0) {
+        return [new Date().getFullYear()];
+      }
+      const yearsSet = new Set(
+        appointments.map((appt) =>
+          new Date(appt.appointment_date).getFullYear()
+        )
+      );
+      return Array.from(yearsSet).sort((a, b) => b - a);
+    };
+
+    const years = getAvailableYears();
 
     return (
       <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
@@ -1618,7 +1633,9 @@ function Nurse() {
             <div className="inline-flex rounded-xl bg-gray-100 p-0.5 text-xs sm:text-sm shadow-inner flex-wrap gap-1">
               {statusOptions.map(({ key, label }) => {
                 const count =
-                  key === "All" ? appointments.length : getStatusCount(key);
+                  key === "All"
+                    ? filteredAppointments.length
+                    : getStatusCount(key);
                 return (
                   <button
                     key={key}
