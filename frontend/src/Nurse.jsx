@@ -32,6 +32,8 @@ import {
   Syringe,
   Bell,
   Plus,
+  PowerOff,
+  Power,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
@@ -1292,7 +1294,6 @@ function Nurse() {
     const [loading, setLoading] = useState(false);
     const [filter, setFilter] = useState("All");
     const [searchQuery, setSearchQuery] = useState("");
-    // 🔹 NEW: Track which appointments are expanded
     const [expandedIds, setExpandedIds] = useState([]);
     const [cancelModal, setCancelModal] = useState({
       show: false,
@@ -1301,6 +1302,10 @@ function Nurse() {
     const [cancelReason, setCancelReason] = useState("");
     const [selectedAppointments, setSelectedAppointments] = useState([]);
     const [bulkCancelModal, setBulkCancelModal] = useState(false);
+
+    // 🆕 Month/Year filter states
+    const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
     // Format date as "Month Day, Year"
     const formatDate = (dateStr) => {
@@ -1314,7 +1319,6 @@ function Nurse() {
     };
 
     // Fetch appointments
-    // Fetch appointments
     const fetchAppointments = async () => {
       try {
         setLoading(true);
@@ -1327,11 +1331,6 @@ function Nurse() {
           }
         );
         const data = await res.json();
-        // ✅ ADD THIS - check raw data
-        console.log("🔍 RAW DATA from API:", data[0]);
-        console.log("💉 Vaccination Type Field:", data[0]?.vaccination_type);
-        console.log("🔑 All Keys:", Object.keys(data[0] || {}));
-
         setAppointments(data);
       } catch (err) {
         console.error(err);
@@ -1371,7 +1370,6 @@ function Nurse() {
             )
           );
 
-          // 🔔 DAGDAG MO ITO - Refresh notification count
           window.dispatchEvent(new Event("refreshNotifications"));
         } else {
           alert(data.error || "Failed to update appointment status");
@@ -1411,39 +1409,22 @@ function Nurse() {
       }
     };
 
-    // 🔹 Toggle expand/collapse
     const toggleExpand = (id) => {
       setExpandedIds((prev) =>
         prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
       );
     };
 
-    // Toggle single appointment selection
     const toggleSelectAppointment = (id) => {
       setSelectedAppointments((prev) =>
         prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
       );
     };
 
-    // Select all by date
-    const selectAllByDate = (date) => {
-      const apptsByDate = sortedAppointments
-        .filter(
-          (appt) =>
-            appt.appointment_date === date &&
-            appt.status?.toLowerCase() !== "canceled" &&
-            appt.status?.toLowerCase() !== "completed"
-        )
-        .map((appt) => appt.appointment_id);
-      setSelectedAppointments(apptsByDate);
-    };
-
-    // Clear selection
     const clearSelection = () => {
       setSelectedAppointments([]);
     };
 
-    // Bulk cancel
     const handleBulkCancel = async () => {
       if (selectedAppointments.length === 0) {
         alert("No appointments selected!");
@@ -1456,7 +1437,6 @@ function Nurse() {
       }
 
       try {
-        // Cancel all selected appointments
         const promises = selectedAppointments.map((id) =>
           fetch(`${import.meta.env.VITE_API_URL}/appointments/${id}/status`, {
             method: "PUT",
@@ -1477,7 +1457,6 @@ function Nurse() {
           `${selectedAppointments.length} appointment(s) canceled successfully!`
         );
 
-        // Refresh appointments
         fetchAppointments();
         clearSelection();
         setBulkCancelModal(false);
@@ -1488,7 +1467,15 @@ function Nurse() {
       }
     };
 
-    // Filter logic
+    // 🆕 Calculate status counts
+    const getStatusCount = (status) => {
+      return appointments.filter(
+        (appt) =>
+          appt.status?.toLowerCase().trim() === status.toLowerCase().trim()
+      ).length;
+    };
+
+    // Filter logic (including month/year)
     const filteredAppointments = appointments.filter((appt) => {
       const matchesStatus =
         filter === "All" ||
@@ -1498,31 +1485,51 @@ function Nurse() {
         searchQuery === "" ||
         appt.full_name?.toLowerCase().includes(searchQuery.toLowerCase());
 
-      return matchesStatus && matchesSearch;
+      // 🆕 Month/Year filter
+      const apptDate = new Date(appt.appointment_date);
+      const matchesMonth = apptDate.getMonth() === selectedMonth;
+      const matchesYear = apptDate.getFullYear() === selectedYear;
+
+      return matchesStatus && matchesSearch && matchesMonth && matchesYear;
     });
 
-    // Sorting logic
+    // 🆕 Sort: LATEST FIRST (descending by date and time)
     const sortedAppointments = [...filteredAppointments].sort((a, b) => {
-      const dateA = new Date(`${a.appointment_date}T${a.appointment_time}`);
-      const dateB = new Date(`${b.appointment_date}T${b.appointment_time}`);
-
-      const today = new Date().toISOString().split("T")[0];
-      const isTodayA = a.appointment_date === today;
-      const isTodayB = b.appointment_date === today;
-
-      if (isTodayA && !isTodayB) return -1;
-      if (!isTodayA && isTodayB) return 1;
-
-      return dateA - dateB;
+      const dateA = new Date(
+        `${a.appointment_date}T${a.appointment_time || "00:00"}`
+      );
+      const dateB = new Date(
+        `${b.appointment_date}T${b.appointment_time || "00:00"}`
+      );
+      return dateB - dateA; // ← Descending (latest first)
     });
 
     const statusOptions = [
-      "All",
-      "pending",
-      "Approved",
-      "Completed",
-      "Canceled",
+      { key: "All", label: "All" },
+      { key: "pending", label: "Pending" },
+      { key: "Approved", label: "Approved" },
+      { key: "Completed", label: "Completed" },
+      { key: "Canceled", label: "Canceled" },
     ];
+
+    // Generate month and year options
+    const months = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+
+    const currentYear = new Date().getFullYear();
+    const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
     return (
       <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
@@ -1558,23 +1565,31 @@ function Nurse() {
                 </svg>
               </div>
 
-              {/* Filter and Refresh */}
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="inline-flex rounded-xl bg-gray-100 p-0.5 text-xs sm:text-sm shadow-inner">
-                  {statusOptions.map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => setFilter(status)}
-                      className={`px-3 py-1.5 font-semibold transition-all duration-200 ${
-                        filter === status
-                          ? "bg-blue-600 text-white shadow-lg shadow-blue-300/50 hover:bg-blue-700"
-                          : "text-gray-600 hover:bg-gray-200 hover:text-blue-600"
-                      } rounded-xl`}
-                    >
-                      {status}
-                    </button>
+              {/* 🆕 Month/Year Filter & Refresh */}
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                  className="px-3 py-1.5 border border-gray-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {months.map((month, idx) => (
+                    <option key={idx} value={idx}>
+                      {month}
+                    </option>
                   ))}
-                </div>
+                </select>
+
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  className="px-3 py-1.5 border border-gray-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {years.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
 
                 <button
                   onClick={fetchAppointments}
@@ -1598,37 +1613,40 @@ function Nurse() {
                 )}
               </div>
             </div>
+
+            {/* 🆕 Status Filter with Badge Counts */}
+            <div className="inline-flex rounded-xl bg-gray-100 p-0.5 text-xs sm:text-sm shadow-inner flex-wrap gap-1">
+              {statusOptions.map(({ key, label }) => {
+                const count =
+                  key === "All" ? appointments.length : getStatusCount(key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setFilter(key)}
+                    className={`px-3 py-1.5 font-semibold transition-all duration-200 rounded-xl flex items-center gap-2 ${
+                      filter === key
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-300/50 hover:bg-blue-700"
+                        : "text-gray-600 hover:bg-gray-200 hover:text-blue-600"
+                    }`}
+                  >
+                    {label}
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                        filter === key
+                          ? "bg-white/20 text-white"
+                          : "bg-gray-200 text-gray-700"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         {/* Appointment List */}
-        {/* Bulk Actions Bar */}
-        {sortedAppointments.length > 0 && (
-          <div className="bg-white p-4 rounded-xl shadow border border-gray-200 flex flex-wrap items-center gap-3">
-            <p className="text-sm text-gray-600 font-semibold">Quick Select:</p>
-            {Array.from(
-              new Set(sortedAppointments.map((a) => a.appointment_date))
-            )
-              .slice(0, 5)
-              .map((date) => (
-                <button
-                  key={date}
-                  onClick={() => selectAllByDate(date)}
-                  className="px-3 py-1.5 bg-sky-100 text-sky-700 rounded-lg text-sm font-semibold hover:bg-sky-200 transition"
-                >
-                  {formatDate(date)}
-                </button>
-              ))}
-            {selectedAppointments.length > 0 && (
-              <button
-                onClick={clearSelection}
-                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition"
-              >
-                Clear Selection
-              </button>
-            )}
-          </div>
-        )}
         {loading ? (
           <div className="flex items-center justify-center p-6">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -1640,7 +1658,9 @@ function Nurse() {
               ? `No results found for "${searchQuery}"`
               : `No ${
                   filter !== "All" ? filter.toLowerCase() : ""
-                } appointments found.`}
+                } appointments found for ${
+                  months[selectedMonth]
+                } ${selectedYear}.`}
           </p>
         ) : (
           <div className="space-y-2">
@@ -1652,7 +1672,7 @@ function Nurse() {
                   key={appt.appointment_id}
                   className="bg-white border rounded-xl shadow hover:shadow-lg transition overflow-hidden"
                 >
-                  {/* 🔹 COLLAPSED VIEW - Clickable header */}
+                  {/* COLLAPSED VIEW */}
                   <button
                     onClick={() => toggleExpand(appt.appointment_id)}
                     className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition text-left"
@@ -1715,40 +1735,20 @@ function Nurse() {
                     </div>
                   </button>
 
-                  {/* 🔹 EXPANDED VIEW - Full details */}
+                  {/* EXPANDED VIEW */}
                   {isExpanded && (
                     <div className="px-4 pb-4 pt-2 border-t bg-gray-50">
-                      {/* Patient Info */}
                       <div className="mb-3">
                         <p className="text-xs sm:text-sm text-gray-500">
                           {appt.email}
                         </p>
                       </div>
 
-                      {/* Appointment Details */}
                       <div className="text-sm space-y-1 mb-3">
                         <p className="font-semibold">
                           <span className="text-gray-700">Date:</span>{" "}
                           {formatDate(appt.appointment_date)} -{" "}
-                          {(() => {
-                            const start =
-                              appt.appointment_time?.substring(0, 5) || "N/A";
-                            const end = appt.end_time?.substring(0, 5);
-
-                            if (!end) return start;
-
-                            // Convert to 12-hour format with AM/PM
-                            const formatTime = (time24) => {
-                              const [hours, minutes] = time24.split(":");
-                              const hour = parseInt(hours);
-                              const ampm = hour >= 12 ? "PM" : "AM";
-                              const hour12 =
-                                hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-                              return `${hour12}:${minutes} ${ampm}`;
-                            };
-
-                            return `${formatTime(start)} - ${formatTime(end)}`;
-                          })()}
+                          {appt.appointment_time || "N/A"}
                         </p>
                         <p>
                           <b>Type:</b> {appt.appointment_type}
@@ -1766,7 +1766,6 @@ function Nurse() {
                           <b>Additional Services:</b>{" "}
                           {appt.additional_services || "None"}
                         </p>
-                        {/* ✅ Cancel Remarks & Phone Number for Canceled Appointments */}
                         {appt.status?.toLowerCase() === "canceled" && (
                           <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg space-y-1">
                             {appt.cancel_remarks && (
@@ -1783,6 +1782,7 @@ function Nurse() {
                           </div>
                         )}
                       </div>
+
                       {/* Action Buttons */}
                       <div className="flex flex-wrap gap-2 pt-2 border-t">
                         {appt.status?.toLowerCase() === "pending" && (
@@ -1851,109 +1851,109 @@ function Nurse() {
                       </div>
                     </div>
                   )}
-                  {/* 👇 LAGAY MO DITO YUNG MODAL */}
-                  {cancelModal.show && (
-                    <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50 p-4">
-                      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-                        <h3 className="text-xl font-bold text-gray-800 mb-4">
-                          Cancel Appointment
-                        </h3>
-
-                        <textarea
-                          value={cancelReason}
-                          onChange={(e) => setCancelReason(e.target.value)}
-                          placeholder="Reason for cancellation..."
-                          className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 mb-4"
-                          rows="4"
-                        />
-
-                        <div className="flex gap-3">
-                          <button
-                            onClick={() => {
-                              if (!cancelReason.trim()) {
-                                alert("Please provide a reason!");
-                                return;
-                              }
-                              updateStatus(
-                                cancelModal.appointmentId,
-                                "Canceled",
-                                cancelReason
-                              );
-                              setCancelModal({
-                                show: false,
-                                appointmentId: null,
-                              });
-                            }}
-                            className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-semibold"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() =>
-                              setCancelModal({
-                                show: false,
-                                appointmentId: null,
-                              })
-                            }
-                            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold"
-                          >
-                            Back
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {/* Bulk Cancel Modal */}
-                  {bulkCancelModal && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-                        <h3 className="text-xl font-bold text-gray-800 mb-4">
-                          Cancel {selectedAppointments.length} Appointment(s)
-                        </h3>
-
-                        <p className="text-sm text-gray-600 mb-3">
-                          You are about to cancel{" "}
-                          <b>{selectedAppointments.length}</b> appointment(s).
-                          Please provide a reason:
-                        </p>
-
-                        <textarea
-                          value={cancelReason}
-                          onChange={(e) => setCancelReason(e.target.value)}
-                          placeholder="Reason for bulk cancellation..."
-                          className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 mb-4"
-                          rows="4"
-                        />
-
-                        <div className="flex gap-3">
-                          <button
-                            onClick={handleBulkCancel}
-                            className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-semibold"
-                          >
-                            Confirm Cancel All
-                          </button>
-                          <button
-                            onClick={() => {
-                              setBulkCancelModal(false);
-                              setCancelReason("");
-                            }}
-                            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold"
-                          >
-                            Back
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })}
           </div>
         )}
+
+        {/* Cancel Modal */}
+        {cancelModal.show && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">
+                Cancel Appointment
+              </h3>
+
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Reason for cancellation..."
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 mb-4"
+                rows="4"
+              />
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    if (!cancelReason.trim()) {
+                      alert("Please provide a reason!");
+                      return;
+                    }
+                    updateStatus(
+                      cancelModal.appointmentId,
+                      "Canceled",
+                      cancelReason
+                    );
+                    setCancelModal({
+                      show: false,
+                      appointmentId: null,
+                    });
+                  }}
+                  className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-semibold"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() =>
+                    setCancelModal({
+                      show: false,
+                      appointmentId: null,
+                    })
+                  }
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold"
+                >
+                  Back
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Cancel Modal */}
+        {bulkCancelModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">
+                Cancel {selectedAppointments.length} Appointment(s)
+              </h3>
+
+              <p className="text-sm text-gray-600 mb-3">
+                You are about to cancel <b>{selectedAppointments.length}</b>{" "}
+                appointment(s). Please provide a reason:
+              </p>
+
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Reason for bulk cancellation..."
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 mb-4"
+                rows="4"
+              />
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleBulkCancel}
+                  className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-semibold"
+                >
+                  Confirm Cancel All
+                </button>
+                <button
+                  onClick={() => {
+                    setBulkCancelModal(false);
+                    setCancelReason("");
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold"
+                >
+                  Back
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
-
   // PATIENTS PAGE - Patient Account Management
   const PatientsPage = () => {
     const [patients, setPatients] = useState([]);
@@ -4236,6 +4236,32 @@ function Nurse() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // 🆕 ADD THIS HELPER FUNCTION
+    const formatTimeRange = (startTime, endTime) => {
+      if (!startTime) return "N/A";
+
+      const formatTime12Hour = (time24) => {
+        if (!time24) return "N/A";
+        const [hours, minutes] = time24.split(":");
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        return `${hour12}:${minutes} ${ampm}`;
+      };
+
+      // If end_time is null, calculate it (add 1 hour)
+      let calculatedEndTime = endTime;
+      if (!endTime || endTime === "N/A") {
+        const [hours, minutes] = startTime.split(":");
+        const endHour = parseInt(hours) + 1;
+        calculatedEndTime = `${String(endHour).padStart(2, "0")}:${minutes}:00`;
+      }
+
+      return `${formatTime12Hour(startTime)} - ${formatTime12Hour(
+        calculatedEndTime
+      )}`;
+    };
+
     // Fetch notifications
     const fetchNotifications = async () => {
       try {
@@ -5210,23 +5236,26 @@ function Nurse() {
   const ManageSchedules = () => {
     const [schedules, setSchedules] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [selectedDate, setSelectedDate] = useState(null);
-    const [selectedTimeSlots, setSelectedTimeSlots] = useState([]);
     const [filterDate, setFilterDate] = useState(null);
+    const [generating, setGenerating] = useState(false);
+    // Bulk Create states
+    const [bulkStartDate, setBulkStartDate] = useState(null);
+    const [bulkEndDate, setBulkEndDate] = useState(null);
+    const [selectedDays, setSelectedDays] = useState([1, 2, 3, 4, 5, 6]); // Mon-Sat default
+    const [startTime, setStartTime] = useState("09:00");
+    const [endTime, setEndTime] = useState("16:00");
+    const [hasBreak, setHasBreak] = useState(true);
+    const [breakStart, setBreakStart] = useState("12:00");
+    const [breakEnd, setBreakEnd] = useState("13:00");
+    const [slotsPerHour, setSlotsPerHour] = useState(2);
 
-    // Predefined time slots (8 AM to 5 PM, hourly)
-    // Predefined time slots (8 AM to 5 PM, hourly) with time ranges
-    const timeSlots = [
-      { start: "08:00", end: "09:00", label: "8:00 - 9:00 AM" },
-      { start: "09:00", end: "10:00", label: "9:00 - 10:00 AM" },
-      { start: "10:00", end: "11:00", label: "10:00 - 11:00 AM" },
-      { start: "11:00", end: "12:00", label: "11:00 AM - 12:00 PM" },
-      { start: "13:00", end: "14:00", label: "1:00 - 2:00 PM" },
-      { start: "14:00", end: "15:00", label: "2:00 - 3:00 PM" },
-      { start: "15:00", end: "16:00", label: "3:00 - 4:00 PM" },
-      { start: "16:00", end: "17:00", label: "4:00 - 5:00 PM" },
-      { start: "17:00", end: "18:00", label: "5:00 - 6:00 PM" },
-    ];
+    // Helper: Format date to YYYY-MM-DD in local timezone
+    const formatDateLocal = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
 
     // Fetch all schedules
     const fetchSchedules = async () => {
@@ -5255,50 +5284,63 @@ function Nurse() {
       fetchSchedules();
     }, []);
 
-    // Toggle time slot selection
-    const toggleTimeSlot = (startTime) => {
-      if (selectedTimeSlots.includes(startTime)) {
-        setSelectedTimeSlots(selectedTimeSlots.filter((t) => t !== startTime));
-      } else {
-        setSelectedTimeSlots([...selectedTimeSlots, startTime]);
-      }
-    };
-    // Create schedules
-    const handleCreateSchedules = async () => {
-      if (!selectedDate) {
+    // Auto-generate schedules
+    // Bulk Create schedules
+    const handleBulkCreate = async () => {
+      if (!bulkStartDate || !bulkEndDate) {
         Swal.fire({
-          icon: "warning",
-          title: "Select Date",
-          text: "Please select a date first",
-          confirmButtonColor: "#0ea5e9",
-        });
-        return;
-      }
-      // Check if selected date is Sunday
-      if (selectedDate.getDay() === 0) {
-        Swal.fire({
-          icon: "warning",
-          title: "Invalid Date",
-          text: "Cannot create schedules on Sundays. The clinic is closed.",
+          icon: "error",
+          title: "Missing Dates",
+          text: "Please select both start and end dates",
           confirmButtonColor: "#0ea5e9",
         });
         return;
       }
 
-      if (selectedTimeSlots.length === 0) {
+      if (selectedDays.length === 0) {
         Swal.fire({
-          icon: "warning",
-          title: "Select Time Slots",
-          text: "Please select at least one time slot",
+          icon: "error",
+          title: "No Days Selected",
+          text: "Please select at least one working day",
           confirmButtonColor: "#0ea5e9",
         });
         return;
       }
+
+      const result = await Swal.fire({
+        title: "Create Schedules?",
+        html: `
+      <div style="text-align: left;">
+        <p><strong>Date Range:</strong> ${bulkStartDate.toLocaleDateString()} - ${bulkEndDate.toLocaleDateString()}</p>
+        <p><strong>Working Days:</strong> ${selectedDays
+          .map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d])
+          .join(", ")}</p>
+        <p><strong>Time:</strong> ${startTime} - ${endTime}</p>
+        ${
+          hasBreak
+            ? `<p><strong>Break:</strong> ${breakStart} - ${breakEnd}</p>`
+            : ""
+        }
+        <p><strong>Slots per hour:</strong> ${slotsPerHour}</p>
+        <p style="margin-top: 10px; color: #666;">Existing slots will not be duplicated.</p>
+      </div>
+    `,
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonColor: "#0EA5E9",
+        cancelButtonColor: "#6B7280",
+        confirmButtonText: "Yes, create schedules",
+        cancelButtonText: "Cancel",
+      });
+
+      if (!result.isConfirmed) return;
 
       try {
+        setGenerating(true);
         const token = localStorage.getItem("token");
+
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/nurse/schedules`,
+          `${import.meta.env.VITE_API_URL}/nurse/schedules/bulk-create`,
           {
             method: "POST",
             headers: {
@@ -5306,13 +5348,14 @@ function Nurse() {
               Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({
-              schedule_date: `${selectedDate.getFullYear()}-${String(
-                selectedDate.getMonth() + 1
-              ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(
-                2,
-                "0"
-              )}`,
-              time_slots: selectedTimeSlots,
+              startDate: formatDateLocal(bulkStartDate),
+              endDate: formatDateLocal(bulkEndDate),
+              selectedDays,
+              startTime,
+              endTime,
+              breakStart: hasBreak ? breakStart : null,
+              breakEnd: hasBreak ? breakEnd : null,
+              slotsPerHour,
             }),
           }
         );
@@ -5326,11 +5369,10 @@ function Nurse() {
             text: data.message,
             confirmButtonColor: "#0ea5e9",
           });
-
-          // Reset form
-          setSelectedDate(null);
-          setSelectedTimeSlots([]);
           fetchSchedules();
+          // Reset form
+          setBulkStartDate(null);
+          setBulkEndDate(null);
         } else {
           Swal.fire({
             icon: "error",
@@ -5347,19 +5389,23 @@ function Nurse() {
           text: "Failed to create schedules",
           confirmButtonColor: "#0ea5e9",
         });
+      } finally {
+        setGenerating(false);
       }
     };
 
-    // Delete schedule
-    const handleDeleteSchedule = async (scheduleId) => {
+    // Toggle schedule status (enable/disable)
+    const handleToggleSchedule = async (scheduleId, currentStatus) => {
+      const action = currentStatus === "active" ? "disable" : "enable";
+
       const result = await Swal.fire({
-        title: "Delete Schedule?",
-        text: "This will delete the schedule slot permanently",
+        title: `${action === "disable" ? "Disable" : "Enable"} Schedule?`,
+        text: `This will ${action} this time slot`,
         icon: "warning",
         showCancelButton: true,
-        confirmButtonColor: "#EF4444",
-        cancelButtonColor: "#0EA5E9",
-        confirmButtonText: "Yes, delete it",
+        confirmButtonColor: action === "disable" ? "#EF4444" : "#10B981",
+        cancelButtonColor: "#6B7280",
+        confirmButtonText: `Yes, ${action} it`,
         cancelButtonText: "Cancel",
       });
 
@@ -5368,9 +5414,11 @@ function Nurse() {
       try {
         const token = localStorage.getItem("token");
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/nurse/schedules/${scheduleId}`,
+          `${
+            import.meta.env.VITE_API_URL
+          }/nurse/schedules/${scheduleId}/toggle`,
           {
-            method: "DELETE",
+            method: "PATCH",
             headers: { Authorization: `Bearer ${token}` },
           }
         );
@@ -5380,7 +5428,7 @@ function Nurse() {
         if (response.ok) {
           await Swal.fire({
             icon: "success",
-            title: "Deleted!",
+            title: "Updated!",
             text: data.message,
             confirmButtonColor: "#0ea5e9",
           });
@@ -5389,30 +5437,27 @@ function Nurse() {
           Swal.fire({
             icon: "error",
             title: "Failed",
-            text: data.error || "Failed to delete schedule",
+            text: data.error || "Failed to update schedule",
             confirmButtonColor: "#0ea5e9",
           });
         }
       } catch (error) {
-        console.error("Error deleting schedule:", error);
+        console.error("Error toggling schedule:", error);
         Swal.fire({
           icon: "error",
           title: "Error",
-          text: "Failed to delete schedule",
+          text: "Failed to update schedule",
           confirmButtonColor: "#0ea5e9",
         });
       }
     };
 
     // Filter schedules by date
+    // Filter schedules by date
     const filteredSchedules = filterDate
       ? schedules.filter((s) => {
-          const schedDate = new Date(s.schedule_date);
-          return (
-            schedDate.getFullYear() === filterDate.getFullYear() &&
-            schedDate.getMonth() === filterDate.getMonth() &&
-            schedDate.getDate() === filterDate.getDate()
-          );
+          const filterDateStr = formatDateLocal(filterDate);
+          return s.schedule_date === filterDateStr;
         })
       : schedules;
 
@@ -5424,6 +5469,33 @@ function Nurse() {
       return groups;
     }, {});
 
+    const formatTime12Hour = (time24) => {
+      if (!time24) return "N/A";
+      const [hours, minutes] = time24.split(":");
+      const hour = parseInt(hours);
+      const ampm = hour >= 12 ? "PM" : "AM";
+      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+      return `${hour12}:${minutes} ${ampm}`;
+    };
+
+    useEffect(() => {
+      const style = document.createElement("style");
+      style.innerHTML = `
+      .react-datepicker__day--outside-month {
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
+      .react-datepicker__day--disabled.react-datepicker__day--outside-month {
+        visibility: hidden !important;
+      }
+    `;
+      document.head.appendChild(style);
+
+      return () => {
+        document.head.removeChild(style);
+      };
+    }, []);
+
     return (
       <div className="bg-white rounded-3xl p-6 md:p-10 space-y-6 shadow-lg">
         {/* Header */}
@@ -5434,7 +5506,7 @@ function Nurse() {
               Manage Clinic Schedules
             </h2>
             <p className="text-sky-600 mt-1">
-              Create time slots for patient appointments
+              Automatically generate and manage time slots
             </p>
           </div>
           <button
@@ -5446,70 +5518,209 @@ function Nurse() {
           </button>
         </div>
 
-        {/* Create Schedule Form */}
+        {/* Bulk Create Section */}
         <div className="bg-gradient-to-br from-yellow-50 to-sky-50 rounded-2xl p-6 border-2 border-yellow-200">
           <h3 className="text-xl font-bold text-sky-800 mb-4 flex items-center gap-2">
             <Plus className="w-6 h-6 text-yellow-500" />
-            Create New Schedule Slots
+            Bulk Create Schedules
           </h3>
 
           <div className="space-y-4">
-            {/* Date Picker */}
-            <div>
-              <label className="block text-sm font-semibold text-sky-800 mb-2">
-                Select Date
-              </label>
-              <DatePicker
-                selected={selectedDate}
-                onChange={setSelectedDate}
-                minDate={new Date()}
-                filterDate={(date) => date.getDay() !== 0} // ← ADD THIS LINE
-                dateFormat="MMMM d, yyyy"
-                className="w-full border-2 border-sky-300 rounded-xl px-4 py-3 text-lg bg-white
-                focus:ring-2 focus:ring-yellow-400 focus:outline-none"
-                placeholderText="Choose a date"
-              />
+            {/* Date Range */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-lg p-4 border border-sky-200">
+                <label className="block text-sm font-semibold text-sky-800 mb-2">
+                  Start Date
+                </label>
+                <DatePicker
+                  selected={bulkStartDate}
+                  onChange={setBulkStartDate}
+                  dateFormat="MMMM d, yyyy"
+                  minDate={new Date()}
+                  className="w-full border-2 border-sky-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                  placeholderText="Select start date"
+                  peekNextMonth={false}
+                  filterDate={(date) => date.getDay() !== 0}
+                />
+              </div>
+              <div className="bg-white rounded-lg p-4 border border-sky-200">
+                <label className="block text-sm font-semibold text-sky-800 mb-2">
+                  End Date
+                </label>
+                <DatePicker
+                  selected={bulkEndDate}
+                  onChange={setBulkEndDate}
+                  dateFormat="MMMM d, yyyy"
+                  minDate={bulkStartDate || new Date()}
+                  className="w-full border-2 border-sky-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                  placeholderText="Select end date"
+                  peekNextMonth={false}
+                  filterDate={(date) => date.getDay() !== 0}
+                />
+              </div>
             </div>
 
-            {/* Time Slots Selection */}
-            <div>
-              <label className="block text-sm font-semibold text-sky-800 mb-2">
-                Select Time Slots (2 slots per hour)
+            {/* Working Days */}
+            <div className="bg-white rounded-lg p-4 border border-sky-200">
+              <label className="block text-sm font-semibold text-sky-800 mb-3">
+                Select Working Days
               </label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {timeSlots.map((slot) => {
-                  const isSelected = selectedTimeSlots.includes(slot.start);
-                  return (
-                    <button
-                      key={slot.start}
-                      onClick={() => toggleTimeSlot(slot.start)}
-                      className={`px-3 py-3 rounded-lg font-semibold transition-all text-sm ${
-                        isSelected
-                          ? "bg-yellow-400 text-sky-900 border-2 border-yellow-500"
-                          : "bg-white text-sky-700 border-2 border-sky-200 hover:border-sky-400"
-                      }`}
-                    >
-                      <Clock className="w-4 h-4 mx-auto mb-1" />
-                      {slot.label}
-                    </button>
-                  );
-                })}
+              <div className="flex flex-wrap gap-2">
+                {[
+                  "Monday",
+                  "Tuesday",
+                  "Wednesday",
+                  "Thursday",
+                  "Friday",
+                  "Saturday",
+                ].map((day, index) => (
+                  <button
+                    key={day}
+                    onClick={() => {
+                      setSelectedDays((prev) =>
+                        prev.includes(index + 1)
+                          ? prev.filter((d) => d !== index + 1)
+                          : [...prev, index + 1]
+                      );
+                    }}
+                    className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                      selectedDays.includes(index + 1)
+                        ? "bg-sky-500 text-white shadow-md"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    {day.slice(0, 3)}
+                  </button>
+                ))}
               </div>
-              {selectedTimeSlots.length > 0 && (
-                <p className="text-sm text-sky-600 mt-2">
-                  ✓ {selectedTimeSlots.length} time slot(s) selected
-                </p>
+            </div>
+
+            {/* Time Range */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-lg p-4 border border-sky-200">
+                <label className="block text-sm font-semibold text-sky-800 mb-2">
+                  Start Time
+                </label>
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full border-2 border-sky-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                />
+              </div>
+              <div className="bg-white rounded-lg p-4 border border-sky-200">
+                <label className="block text-sm font-semibold text-sky-800 mb-2">
+                  End Time
+                </label>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="w-full border-2 border-sky-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Break Time (Optional) */}
+            <div className="bg-white rounded-lg p-4 border border-sky-200">
+              <label className="flex items-center gap-2 text-sm font-semibold text-sky-800 mb-3">
+                <input
+                  type="checkbox"
+                  checked={hasBreak}
+                  onChange={(e) => setHasBreak(e.target.checked)}
+                  className="w-4 h-4 text-sky-500 rounded focus:ring-2 focus:ring-yellow-400"
+                />
+                Has Break Time?
+              </label>
+              {hasBreak && (
+                <div className="grid grid-cols-2 gap-4 mt-3">
+                  <div>
+                    <label className="block text-xs text-sky-600 mb-1">
+                      Break Start
+                    </label>
+                    <input
+                      type="time"
+                      value={breakStart}
+                      onChange={(e) => setBreakStart(e.target.value)}
+                      className="w-full border-2 border-sky-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-sky-600 mb-1">
+                      Break End
+                    </label>
+                    <input
+                      type="time"
+                      value={breakEnd}
+                      onChange={(e) => setBreakEnd(e.target.value)}
+                      className="w-full border-2 border-sky-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                    />
+                  </div>
+                </div>
               )}
+            </div>
+
+            {/* Slots Per Hour */}
+            <div className="bg-white rounded-lg p-4 border border-sky-200">
+              <label className="block text-sm font-semibold text-sky-800 mb-2">
+                Slots Per Hour (Max: 5)
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="5"
+                value={slotsPerHour}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Allow empty input while typing
+                  if (value === "") {
+                    setSlotsPerHour("");
+                    return;
+                  }
+                  const num = parseInt(value);
+                  if (!isNaN(num)) {
+                    setSlotsPerHour(Math.min(5, Math.max(1, num)));
+                  }
+                }}
+                onBlur={(e) => {
+                  // On blur, ensure valid number
+                  if (
+                    e.target.value === "" ||
+                    isNaN(parseInt(e.target.value))
+                  ) {
+                    setSlotsPerHour(2); // Default to 2
+                  }
+                }}
+                className="w-full border-2 border-sky-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+              />
+              <p className="text-xs text-sky-600 mt-2">
+                This creates {slotsPerHour} patient slot(s) for each hour
+              </p>
             </div>
 
             {/* Create Button */}
             <button
-              onClick={handleCreateSchedules}
+              onClick={handleBulkCreate}
+              disabled={
+                generating ||
+                !bulkStartDate ||
+                !bulkEndDate ||
+                selectedDays.length === 0
+              }
               className="w-full bg-yellow-400 text-sky-900 px-6 py-4 rounded-xl text-lg font-bold
-              hover:bg-yellow-500 hover:scale-105 transition-all shadow-md"
+        hover:bg-yellow-500 hover:scale-105 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Plus className="w-5 h-5 inline mr-2" />
-              Create Schedule Slots
+              {generating ? (
+                <>
+                  <RefreshCw className="w-5 h-5 inline mr-2 animate-spin" />
+                  Creating Schedules...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-5 h-5 inline mr-2" />
+                  Create Schedules
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -5527,13 +5738,16 @@ function Nurse() {
               className="flex-1 border-2 border-sky-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-yellow-400 focus:outline-none"
               placeholderText="All dates"
               isClearable
+              peekNextMonth={false}
+              filterDate={(date) => date.getDay() !== 0}
             />
           </div>
         </div>
 
         {/* Schedules List */}
+        {/* Schedules List with TABS */}
         <div className="space-y-4">
-          <h3 className="text-xl font-bold text-sky-800">
+          <h3 className="text-xl font-bold text-sky-800 mb-4">
             Existing Schedules ({filteredSchedules.length})
           </h3>
 
@@ -5548,99 +5762,206 @@ function Nurse() {
               <p className="text-sky-600">No schedules found</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {Object.entries(groupedSchedules)
-                .sort(([dateA], [dateB]) => new Date(dateA) - new Date(dateB))
-                .map(([date, dateSchedules]) => (
-                  <div
-                    key={date}
-                    className="bg-white rounded-xl border-2 border-sky-200 overflow-hidden shadow-sm"
-                  >
-                    {/* Date Header */}
-                    <div className="bg-gradient-to-r from-sky-500 to-blue-500 px-6 py-4">
-                      <h4 className="text-xl font-bold text-white">
-                        📅{" "}
-                        {(() => {
-                          // date format: "2025-12-04"
-                          const parts = date.split("-");
-                          const year = parseInt(parts[0]);
-                          const month = parseInt(parts[1]) - 1; // 0-indexed
-                          const day = parseInt(parts[2]);
-                          const dateObj = new Date(year, month, day);
+            <div>
+              {/* DATE TABS - Horizontal Scrollable */}
+              <div className="flex overflow-x-auto gap-2 pb-4 mb-6 border-b-2 border-sky-200 scrollbar-thin scrollbar-thumb-sky-300 scrollbar-track-sky-50">
+                {Object.keys(groupedSchedules)
+                  .sort((a, b) => new Date(a) - new Date(b))
+                  .map((date) => {
+                    // Use UTC to avoid timezone issues
+                    const dateObj = new Date(date + "T00:00:00");
 
-                          return dateObj.toLocaleDateString("en-US", {
-                            weekday: "long",
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          });
-                        })()}
-                      </h4>
-                    </div>
+                    // ✅ FIXED: Compare using formatDateLocal instead of toISOString
+                    const isSelected =
+                      filterDate && formatDateLocal(filterDate) === date;
 
-                    {/* Time Slots */}
-                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {dateSchedules
-                        .sort((a, b) =>
-                          a.start_time.localeCompare(b.start_time)
-                        )
-                        .map((schedule) => (
+                    return (
+                      <button
+                        key={date}
+                        onClick={() => {
+                          // Create date object properly
+                          const newDate = new Date(date + "T00:00:00");
+                          setFilterDate(isSelected ? null : newDate);
+                        }}
+                        className={`flex-shrink-0 px-6 py-4 rounded-xl font-semibold transition-all ${
+                          isSelected
+                            ? "bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg scale-105"
+                            : "bg-white text-sky-700 border-2 border-sky-200 hover:border-sky-400 hover:shadow-md"
+                        }`}
+                      >
+                        <div className="text-left">
                           <div
-                            key={schedule.schedule_id}
-                            className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-lg p-4 border-2 border-sky-200 hover:shadow-md transition-shadow"
+                            className={`text-xs font-medium ${
+                              isSelected ? "text-sky-100" : "text-sky-500"
+                            }`}
                           >
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-5 h-5 text-sky-600" />
-                                <span className="text-lg font-bold text-sky-900">
-                                  {schedule.start_time.substring(0, 5)} -{" "}
-                                  {schedule.end_time?.substring(0, 5) || "N/A"}
-                                </span>
-                              </div>
-                              <button
-                                onClick={() =>
-                                  handleDeleteSchedule(schedule.schedule_id)
-                                }
-                                className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-sky-700">
-                                  Available Slots:
-                                </span>
-                                <span
-                                  className={`text-lg font-bold ${
-                                    schedule.available_slots > 0
-                                      ? "text-green-600"
-                                      : "text-red-600"
-                                  }`}
-                                >
-                                  {schedule.available_slots} /{" "}
-                                  {schedule.total_slots}
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                    schedule.status === "active"
-                                      ? "bg-green-100 text-green-700"
-                                      : "bg-gray-100 text-gray-600"
-                                  }`}
-                                >
-                                  {schedule.status.toUpperCase()}
-                                </span>
-                              </div>
-                            </div>
+                            {dateObj.toLocaleDateString("en-US", {
+                              weekday: "short",
+                            })}
                           </div>
-                        ))}
+                          <div className="text-base font-bold mt-1">
+                            {dateObj.toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </div>
+                          <div
+                            className={`text-xs ${
+                              isSelected ? "text-sky-100" : "text-sky-400"
+                            }`}
+                          >
+                            {dateObj.getFullYear()}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+
+              {/* SCHEDULES CONTENT - Only show if a date is selected */}
+              {filterDate ? (
+                Object.entries(groupedSchedules)
+                  .filter(([date]) => {
+                    // ✅ FIXED: Use formatDateLocal for comparison
+                    return formatDateLocal(filterDate) === date;
+                  })
+                  .map(([date, dateSchedules]) => (
+                    <div
+                      key={date}
+                      className="bg-white rounded-xl border-2 border-sky-200 overflow-hidden shadow-sm"
+                    >
+                      {/* Date Header */}
+                      <div className="bg-gradient-to-r from-sky-500 to-blue-500 px-6 py-4">
+                        <h4 className="text-2xl font-bold text-white">
+                          📅{" "}
+                          {(() => {
+                            // FIXED: Use UTC date
+                            const dateObj = new Date(date + "T00:00:00");
+                            return dateObj.toLocaleDateString("en-US", {
+                              weekday: "long",
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            });
+                          })()}
+                        </h4>
+                      </div>
+
+                      {/* Time Slots Grid */}
+                      <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {dateSchedules
+                          .sort((a, b) =>
+                            a.start_time.localeCompare(b.start_time)
+                          )
+                          .map((schedule) => {
+                            const isActive = schedule.status === "active";
+                            return (
+                              <div
+                                key={schedule.schedule_id}
+                                className={`rounded-xl p-5 border-2 hover:shadow-lg transition-all ${
+                                  isActive
+                                    ? "bg-gradient-to-br from-sky-50 to-blue-50 border-sky-200"
+                                    : "bg-gray-50 border-gray-300 opacity-60"
+                                }`}
+                              >
+                                <div className="flex items-start justify-between mb-4">
+                                  <div className="flex items-center gap-2">
+                                    <Clock
+                                      className={`w-5 h-5 ${
+                                        isActive
+                                          ? "text-sky-600"
+                                          : "text-gray-400"
+                                      }`}
+                                    />
+                                    <span
+                                      className={`text-lg font-bold ${
+                                        isActive
+                                          ? "text-sky-900"
+                                          : "text-gray-500"
+                                      }`}
+                                    >
+                                      {formatTime12Hour(schedule.start_time)} -{" "}
+                                      {formatTime12Hour(schedule.end_time)}
+                                    </span>
+                                  </div>
+                                  <button
+                                    onClick={() =>
+                                      handleToggleSchedule(
+                                        schedule.schedule_id,
+                                        schedule.status
+                                      )
+                                    }
+                                    className={`p-2 rounded-lg transition-colors ${
+                                      isActive
+                                        ? "bg-red-100 text-red-600 hover:bg-red-200"
+                                        : "bg-green-100 text-green-600 hover:bg-green-200"
+                                    }`}
+                                    title={
+                                      isActive ? "Disable slot" : "Enable slot"
+                                    }
+                                  >
+                                    {isActive ? (
+                                      <PowerOff className="w-4 h-4" />
+                                    ) : (
+                                      <Power className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <span
+                                      className={`text-sm font-medium ${
+                                        isActive
+                                          ? "text-sky-700"
+                                          : "text-gray-500"
+                                      }`}
+                                    >
+                                      Available Slots:
+                                    </span>
+                                    <span
+                                      className={`text-xl font-bold ${
+                                        isActive
+                                          ? schedule.available_slots > 0
+                                            ? "text-green-600"
+                                            : "text-red-600"
+                                          : "text-gray-400"
+                                      }`}
+                                    >
+                                      {schedule.available_slots} /{" "}
+                                      {schedule.total_slots}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                        isActive
+                                          ? "bg-green-100 text-green-700"
+                                          : "bg-gray-200 text-gray-600"
+                                      }`}
+                                    >
+                                      {isActive ? "ACTIVE" : "INACTIVE"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+              ) : (
+                <div className="text-center py-16 bg-sky-50 rounded-xl border-2 border-dashed border-sky-300">
+                  <Calendar className="w-16 h-16 text-sky-300 mx-auto mb-4" />
+                  <p className="text-lg font-semibold text-sky-600">
+                    Select a date from the tabs above
+                  </p>
+                  <p className="text-sm text-sky-500 mt-2">
+                    Click on any date to view its schedule slots
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

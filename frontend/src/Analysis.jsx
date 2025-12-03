@@ -296,16 +296,25 @@ function PatientDashboard({ onNavigateToAppointments }) {
       day: "numeric",
     });
   };
-
   const fetchMonthSlots = async (month) => {
     if (!appointmentType) return;
     try {
       setLoadingCalendar(true);
       const token = localStorage.getItem("token");
-      const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
-      const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0);
-      const startDate = firstDay.toISOString().split("T")[0];
-      const endDate = lastDay.toISOString().split("T")[0];
+
+      // Create dates in local timezone to avoid UTC conversion issues
+      const year = month.getFullYear();
+      const monthIndex = month.getMonth();
+
+      const firstDay = new Date(year, monthIndex, 1);
+      const lastDay = new Date(year, monthIndex + 1, 0);
+
+      // Format dates manually to avoid timezone issues
+      const startDate = `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`;
+      const endDate = `${year}-${String(monthIndex + 1).padStart(
+        2,
+        "0"
+      )}-${String(lastDay.getDate()).padStart(2, "0")}`;
 
       const response = await fetch(
         `${
@@ -575,6 +584,33 @@ function PatientDashboard({ onNavigateToAppointments }) {
     }
   };
 
+  // Add this with other helper functions
+  const formatTime12Hour = (time24) => {
+    if (!time24) return "N/A";
+    const [hours, minutes] = time24.split(":");
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${hour12}:${minutes} ${ampm}`;
+  };
+
+  // ADD THIS NEW HELPER FUNCTION
+  const formatTimeRange = (startTime, endTime) => {
+    if (!startTime) return "N/A";
+
+    // If end_time is null, calculate it (add 1 hour)
+    let calculatedEndTime = endTime;
+    if (!endTime || endTime === "N/A") {
+      const [hours, minutes] = startTime.split(":");
+      const endHour = parseInt(hours) + 1;
+      calculatedEndTime = `${String(endHour).padStart(2, "0")}:${minutes}:00`;
+    }
+
+    return `${formatTime12Hour(startTime)} - ${formatTime12Hour(
+      calculatedEndTime
+    )}`;
+  };
+
   return (
     <div>
       {/* Greeting Section - Hidden on mobile */}
@@ -601,6 +637,21 @@ function PatientDashboard({ onNavigateToAppointments }) {
 
         {appointment ? (
           <div className="space-y-2">
+            <div className="bg-gradient-to-r from-sky-50 to-blue-50 border-l-4 border-sky-400 rounded-lg p-2 shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="bg-sky-400 p-1 rounded-full">
+                  <CalendarDays className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs text-sky-600 uppercase font-semibold">
+                    Appointment ID
+                  </p>
+                  <p className="text-sm font-bold text-sky-900 tracking-wider">
+                    {appointment.appointment_reference || "N/A"}
+                  </p>
+                </div>
+              </div>
+            </div>
             {/* Patient Name Card (smaller) */}
             <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border-l-4 border-yellow-400 rounded-lg p-2 shadow-sm">
               <div className="flex items-center gap-2">
@@ -644,7 +695,7 @@ function PatientDashboard({ onNavigateToAppointments }) {
                   <div>
                     <p className="text-[11px] text-gray-500 uppercase">Time</p>
                     <p className="text-sm text-gray-800">
-                      {appointment.appointment_time}
+                      {appointment.appointment_time || "N/A"}
                     </p>
                   </div>
                 </div>
@@ -776,6 +827,9 @@ function PatientDashboard({ onNavigateToAppointments }) {
                   <thead>
                     <tr>
                       <th className="px-3 py-2 text-left text-xs font-semibold text-sky-700">
+                        ID {/* 🆕 ADD THIS COLUMN */}
+                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-sky-700">
                         Date
                       </th>
                       <th className="px-3 py-2 text-left text-xs font-semibold text-sky-700">
@@ -796,7 +850,7 @@ function PatientDashboard({ onNavigateToAppointments }) {
                     {filteredAppointments.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={5}
+                          colSpan={6}
                           className="px-3 py-6 text-center text-sm text-gray-500"
                         >
                           No records match the selected filter.
@@ -808,6 +862,11 @@ function PatientDashboard({ onNavigateToAppointments }) {
                           key={appt.appointment_id || idx}
                           className="hover:bg-sky-50 transition"
                         >
+                          {/* 🆕 ADD REFERENCE ID COLUMN */}
+                          <td className="px-3 py-2 whitespace-nowrap text-xs font-mono text-sky-700 font-semibold">
+                            {appt.appointment_reference || "-"}
+                          </td>
+
                           <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-800">
                             {appt.appointment_date
                               ? new Date(
@@ -1148,8 +1207,10 @@ function PatientDashboard({ onNavigateToAppointments }) {
                                   <div className="flex items-center justify-center gap-2 mb-1">
                                     <Clock className="w-4 h-4" />
                                     <span className="font-bold text-sm">
-                                      {slot.start_time.substring(0, 5)} -{" "}
-                                      {slot.end_time?.substring(0, 5) || "N/A"}
+                                      {formatTimeRange(
+                                        slot.start_time,
+                                        slot.end_time
+                                      )}
                                     </span>
                                   </div>
                                   <div
@@ -1423,9 +1484,10 @@ function PatientDashboard({ onNavigateToAppointments }) {
                     </p>
                     <p className="text-lg font-bold text-sky-900">
                       {selectedSlot
-                        ? `${selectedSlot.start_time.substring(0, 5)} - ${
-                            selectedSlot.end_time?.substring(0, 5) || "N/A"
-                          }`
+                        ? formatTimeRange(
+                            selectedSlot.start_time,
+                            selectedSlot.end_time
+                          )
                         : "—"}
                     </p>
                   </div>

@@ -732,7 +732,7 @@ app.put("/users/:user_id", async (req, res) => {
 app.post("/appointments", auth, async (req, res) => {
   try {
     const {
-      schedule_id, // NEW: instead of date/time
+      schedule_id,
       type,
       concerns,
       additional_services,
@@ -748,7 +748,7 @@ app.post("/appointments", auth, async (req, res) => {
 
     // Check if schedule exists and has available slots
     const scheduleCheck = await pool.query(
-      `SELECT schedule_date, start_time, available_slots 
+      `SELECT schedule_date, start_time, end_time, available_slots 
        FROM clinic_schedules 
        WHERE schedule_id = $1 AND status = 'active' AND available_slots > 0`,
       [schedule_id]
@@ -758,9 +758,40 @@ app.post("/appointments", auth, async (req, res) => {
       return res.status(400).json({ error: "Schedule is no longer available" });
     }
 
-    const { schedule_date, start_time } = scheduleCheck.rows[0];
+    const { schedule_date, start_time, end_time } = scheduleCheck.rows[0];
 
-    // Vaccination validation (keep your existing code)
+    // 🆕 GENERATE UNIQUE REFERENCE ID
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2); // "25"
+    const month = String(now.getMonth() + 1).padStart(2, "0"); // "12"
+    const day = String(now.getDate()).padStart(2, "0"); // "03"
+
+    // Convert to 12-hour format
+    let hours = now.getHours();
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12; // Convert 0 to 12, 13-23 to 1-11
+    const hoursStr = String(hours).padStart(2, "0"); // "02" for 2 AM/PM
+    const minutes = String(now.getMinutes()).padStart(2, "0"); // "30"
+
+    // 🔥 COUNT ONLY TODAY'S REFERENCE IDs (NOT created_at!)
+    // This counts appointments that have reference IDs starting with today's date
+    const todayPrefix = `${year}-${month}${day}-`; // "25-1203-"
+
+    const sequenceResult = await pool.query(
+      `SELECT COUNT(*) as count 
+       FROM appointments 
+       WHERE appointment_reference LIKE $1 || '%'`,
+      [todayPrefix]
+    );
+
+    const sequence = String(
+      parseInt(sequenceResult.rows[0].count) + 1
+    ).padStart(4, "0");
+
+    const appointmentReference = `${todayPrefix}${hoursStr}${minutes}${ampm}-${sequence}`;
+    // Example: "25-1203-0230PM-0001" or "25-1203-1130AM-0001"
+
+    // Vaccination validation
     if (type === "Vaccination") {
       if (!vaccination_type) {
         return res.status(400).json({
@@ -768,7 +799,6 @@ app.post("/appointments", auth, async (req, res) => {
         });
       }
 
-      // Check if vaccine is available for this user
       const userResult = await pool.query(
         "SELECT birth_date FROM users WHERE user_id = $1",
         [userId]
@@ -788,14 +818,11 @@ app.post("/appointments", auth, async (req, res) => {
 
       const ageInMonths = calculateAgeInMonths(birthDate);
 
-      // Check vaccine eligibility
       const vaccineCheck = await pool.query(
-        `
-        SELECT * FROM vaccine_definitions 
-        WHERE vaccine_name = $1 
-          AND min_age_months <= $2 
-          AND (max_age_months IS NULL OR max_age_months >= $2)
-      `,
+        `SELECT * FROM vaccine_definitions 
+         WHERE vaccine_name = $1 
+           AND min_age_months <= $2 
+           AND (max_age_months IS NULL OR max_age_months >= $2)`,
         [vaccination_type, ageInMonths]
       );
 
@@ -807,34 +834,27 @@ app.post("/appointments", auth, async (req, res) => {
 
       const vaccine = vaccineCheck.rows[0];
 
-      // Check vaccination history for cooldown
       const historyCheck = await pool.query(
-        `
-        SELECT vaccine_name, dose_number, vaccination_date, next_due_date
-        FROM vaccine_history
-        WHERE user_id = $1 AND vaccine_name = $2
-        ORDER BY vaccination_date DESC
-        LIMIT 1
-      `,
+        `SELECT vaccine_name, dose_number, vaccination_date, next_due_date
+         FROM vaccine_history
+         WHERE user_id = $1 AND vaccine_name = $2
+         ORDER BY vaccination_date DESC
+         LIMIT 1`,
         [userId, vaccination_type]
       );
 
       if (historyCheck.rows.length > 0) {
         const lastVaccination = historyCheck.rows[0];
 
-        // Count total doses received
         const doseCountResult = await pool.query(
-          `
-          SELECT COUNT(*) as count
-          FROM vaccine_history
-          WHERE user_id = $1 AND vaccine_name = $2
-        `,
+          `SELECT COUNT(*) as count
+           FROM vaccine_history
+           WHERE user_id = $1 AND vaccine_name = $2`,
           [userId, vaccination_type]
         );
 
         const dosesReceived = parseInt(doseCountResult.rows[0].count);
 
-        // Check if all doses completed (excluding boosters)
         if (
           dosesReceived >= vaccine.total_doses &&
           !vaccine.booster_interval_days
@@ -844,10 +864,9 @@ app.post("/appointments", auth, async (req, res) => {
           });
         }
 
-        // Check cooldown period
         if (lastVaccination.next_due_date) {
           const nextDueDate = new Date(lastVaccination.next_due_date);
-          const appointmentDate = new Date(schedule_date); // ← FIXED: was "date"
+          const appointmentDate = new Date(schedule_date);
 
           if (appointmentDate < nextDueDate) {
             const daysRemaining = Math.ceil(
@@ -863,28 +882,45 @@ app.post("/appointments", auth, async (req, res) => {
 
     const additionalServicesValue = additional_services || "None";
 
+    // Format time to 12-hour with AM/PM
+    const formatTime12Hour = (time24) => {
+      if (!time24) return "N/A";
+      const [hours, minutes] = time24.split(":");
+      const hour = parseInt(hours);
+      const ampm = hour >= 12 ? "PM" : "AM";
+      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+      return `${hour12}:${minutes} ${ampm}`;
+    };
+
+    // Create formatted time range
+    const appointmentTime = `${formatTime12Hour(
+      start_time
+    )} - ${formatTime12Hour(end_time)}`;
+
     // Start transaction
     await pool.query("BEGIN");
 
     try {
-      // Insert appointment
-      // Insert appointment - use ::date to prevent timezone issues
+      // INSERT WITH REFERENCE ID
       const result = await pool.query(
         `INSERT INTO appointments 
-   (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, vaccination_type, schedule_id)
-   VALUES ($1, $2::date, $3, $4, 'pending', $5, $6, $7, $8)
-   RETURNING appointment_id`,
+         (user_id, appointment_date, appointment_time, appointment_type, status, 
+          concerns, additional_services, vaccination_type, schedule_id, appointment_reference)
+         VALUES ($1, $2::date, $3, $4, 'pending', $5, $6, $7, $8, $9)
+         RETURNING appointment_id, appointment_reference`,
         [
           userId,
           schedule_date,
-          start_time,
+          appointmentTime,
           type,
           concerns || "",
           additionalServicesValue,
           vaccination_type || null,
           schedule_id,
+          appointmentReference,
         ]
       );
+
       // Decrease available slots
       await pool.query(
         `UPDATE clinic_schedules 
@@ -898,6 +934,7 @@ app.post("/appointments", auth, async (req, res) => {
       res.json({
         message: "Appointment booked successfully!",
         appointment_id: result.rows[0].appointment_id,
+        appointment_reference: result.rows[0].appointment_reference,
       });
     } catch (error) {
       await pool.query("ROLLBACK");
@@ -1008,19 +1045,25 @@ app.patch("/appointments/:id/cancel", auth, async (req, res) => {
     });
   }
 });
-// GET appointments for logged-in user
 app.get("/get/appointments", auth, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await pool.query(
       `SELECT 
-    a.appointment_id,
-    a.user_id,
-    a.schedule_id,
-    TO_CHAR(a.appointment_date, 'YYYY-MM-DD') as appointment_date,
-    a.appointment_time,
-    cs.end_time,
-    a.appointment_type,
+        a.appointment_id,
+        a.user_id,
+        a.schedule_id,
+        a.appointment_reference, -- 🆕 ADD THIS
+        TO_CHAR(a.appointment_date, 'YYYY-MM-DD') as appointment_date,
+        COALESCE(
+          a.appointment_time,
+          CONCAT(
+            TO_CHAR(cs.start_time, 'HH12:MI AM'),
+            ' - ',
+            TO_CHAR(cs.end_time, 'HH12:MI AM')
+          )
+        ) as appointment_time,
+        a.appointment_type,
         a.concerns,
         a.additional_services,
         a.vaccination_type,
@@ -1028,11 +1071,13 @@ app.get("/get/appointments", auth, async (req, res) => {
         a.cancel_remarks,
         a.created_at,
         cs.available_slots,
-        cs.total_slots
+        cs.total_slots,
+        cs.start_time,
+        cs.end_time
       FROM appointments a
       LEFT JOIN clinic_schedules cs ON a.schedule_id = cs.schedule_id
       WHERE a.user_id = $1 
-      ORDER BY a.appointment_date, a.appointment_time`,
+      ORDER BY a.appointment_date, cs.start_time`,
       [userId]
     );
     res.json(result.rows);
@@ -1596,6 +1641,7 @@ app.get("/appointments/latest-approved", auth, async (req, res) => {
       `
       SELECT 
         a.appointment_id,
+        a.appointment_reference,
         a.appointment_date::text AS appointment_date,
         a.appointment_time::text AS appointment_time,
         cs.end_time::text AS end_time,
@@ -1623,29 +1669,40 @@ app.get("/appointments/latest-approved", auth, async (req, res) => {
 
     const appointment = result.rows[0];
 
-    // Format time range
-    const formatTimeRange = (startTime, endTime) => {
-      const formatSingleTime = (timeStr) => {
-        const [hours, minutes] = timeStr.split(":");
-        const hour = parseInt(hours);
-        const ampm = hour >= 12 ? "PM" : "AM";
-        const hour12 = hour % 12 || 12;
-        return `${hour12}:${minutes} ${ampm}`;
+    // ✅ Check if appointment_time is already formatted (contains "AM" or "PM")
+    let appointmentTime = appointment.appointment_time;
+
+    // If it's NOT formatted (raw time like "13:00:00"), format it
+    if (
+      appointmentTime &&
+      !appointmentTime.includes("AM") &&
+      !appointmentTime.includes("PM")
+    ) {
+      const formatTimeRange = (startTime, endTime) => {
+        const formatSingleTime = (timeStr) => {
+          const [hours, minutes] = timeStr.split(":");
+          const hour = parseInt(hours);
+          const ampm = hour >= 12 ? "PM" : "AM";
+          const hour12 = hour % 12 || 12;
+          return `${hour12}:${minutes} ${ampm}`;
+        };
+
+        if (endTime) {
+          return `${formatSingleTime(startTime)} - ${formatSingleTime(
+            endTime
+          )}`;
+        }
+        return formatSingleTime(startTime);
       };
 
-      if (endTime) {
-        return `${formatSingleTime(startTime)} - ${formatSingleTime(endTime)}`;
-      }
-      return formatSingleTime(startTime);
-    };
+      appointmentTime = formatTimeRange(appointmentTime, appointment.end_time);
+    }
 
     const formatted = {
       appointment_id: appointment.appointment_id,
+      appointment_reference: appointment.appointment_reference,
       appointment_date: appointment.appointment_date.split("T")[0],
-      appointment_time: formatTimeRange(
-        appointment.appointment_time,
-        appointment.end_time
-      ),
+      appointment_time: appointmentTime, // ✅ Use formatted or as-is
       appointment_type: appointment.appointment_type,
       concerns: appointment.concerns,
       status: appointment.status,
@@ -1659,7 +1716,6 @@ app.get("/appointments/latest-approved", auth, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 app.post("/patients/add", auth, async (req, res) => {
   const {
     full_name,
@@ -3945,6 +4001,138 @@ app.delete("/nurse/schedules/:schedule_id", auth, async (req, res) => {
     res.json({ message: "Schedule deleted successfully" });
   } catch (error) {
     console.error("Error deleting schedule:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ==================== BULK CREATE SCHEDULES ====================
+// ==================== BULK CREATE SCHEDULES ====================
+app.post("/nurse/schedules/bulk-create", auth, async (req, res) => {
+  try {
+    const {
+      startDate,
+      endDate,
+      selectedDays,
+      startTime,
+      endTime,
+      breakStart,
+      breakEnd,
+      slotsPerHour = 2,
+    } = req.body;
+
+    const userId = req.user.id;
+
+    // Validation
+    if (!startDate || !endDate || !selectedDays || selectedDays.length === 0) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    if (slotsPerHour < 1 || slotsPerHour > 5) {
+      return res
+        .status(400)
+        .json({ error: "Slots per hour must be between 1-5" });
+    }
+
+    // Generate time slots
+    const timeSlots = [];
+    const start = parseInt(startTime.split(":")[0]);
+    const end = parseInt(endTime.split(":")[0]);
+
+    for (let hour = start; hour < end; hour++) {
+      const slotStart = `${String(hour).padStart(2, "0")}:00`;
+      const slotEnd = `${String(hour + 1).padStart(2, "0")}:00`;
+
+      // Skip break time if specified
+      if (breakStart && breakEnd) {
+        const breakHour = parseInt(breakStart.split(":")[0]);
+        if (hour === breakHour) continue;
+      }
+
+      timeSlots.push({ start: slotStart, end: slotEnd });
+    }
+
+    const created = [];
+
+    // ✅ FIXED: Parse dates without timezone conversion
+    const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
+    const [endYear, endMonth, endDay] = endDate.split("-").map(Number);
+
+    const start_date = new Date(startYear, startMonth - 1, startDay);
+    const end_date = new Date(endYear, endMonth - 1, endDay);
+
+    // Loop through dates
+    for (
+      let d = new Date(start_date);
+      d <= end_date;
+      d.setDate(d.getDate() + 1)
+    ) {
+      const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay();
+
+      // Skip if not in selected days
+      if (!selectedDays.includes(dayOfWeek)) continue;
+
+      // ✅ FIXED: Format date without timezone issues
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const dateStr = `${year}-${month}-${day}`;
+
+      // Create slots for this date
+      for (const slot of timeSlots) {
+        try {
+          const result = await pool.query(
+            `INSERT INTO clinic_schedules 
+             (schedule_date, start_time, end_time, total_slots, available_slots, created_by, status)
+             VALUES ($1::date, $2, $3, $4, $4, $5, 'active')
+             ON CONFLICT (schedule_date, start_time) DO NOTHING
+             RETURNING schedule_id`,
+            [dateStr, slot.start, slot.end, slotsPerHour, userId]
+          );
+
+          if (result.rows.length > 0) {
+            created.push(result.rows[0]);
+          }
+        } catch (err) {
+          console.error(`Error creating ${dateStr} ${slot.start}:`, err);
+        }
+      }
+    }
+
+    res.json({
+      message: `Successfully created ${created.length} schedule slots`,
+      created: created.length,
+    });
+  } catch (error) {
+    console.error("Error bulk creating schedules:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+// ==================== TOGGLE SCHEDULE STATUS ====================
+// Enable/Disable a schedule slot
+app.patch("/nurse/schedules/:schedule_id/toggle", auth, async (req, res) => {
+  try {
+    const { schedule_id } = req.params;
+
+    const result = await pool.query(
+      `UPDATE clinic_schedules 
+       SET status = CASE WHEN status = 'active' THEN 'inactive' ELSE 'active' END
+       WHERE schedule_id = $1
+       RETURNING schedule_id, status`,
+      [schedule_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Schedule not found" });
+    }
+
+    res.json({
+      message: `Schedule ${
+        result.rows[0].status === "active" ? "enabled" : "disabled"
+      }`,
+      schedule: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error toggling schedule:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
