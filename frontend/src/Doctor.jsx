@@ -211,29 +211,29 @@ function Doctor() {
           {
             label: "Today's Patients",
             value: stats.todaysPatients,
-            icon: <Baby className="w-12 h-12 text-pink-500" />,
+            icon: <Baby className="w-10 h-10 text-pink-500" />,
             gradient: "from-pink-100 to-pink-200 text-pink-800",
           },
           {
             label: "Total Patients",
             value: stats.totalPatients,
-            icon: <Users className="w-12 h-12 text-blue-500" />,
+            icon: <Users className="w-10 h-10 text-blue-500" />,
             gradient: "from-blue-100 to-blue-200 text-blue-800",
           },
           {
             label: "Nurse Accounts",
             value: stats.nurseAccounts,
-            icon: <User className="w-12 h-12 text-green-500" />,
+            icon: <User className="w-10 h-10 text-green-500" />,
             gradient: "from-green-100 to-green-200 text-green-800",
           },
         ].map((card, i) => (
           <div
             key={i}
             className={`rounded-2xl shadow-md bg-gradient-to-br ${card.gradient} 
-                  flex flex-col items-center justify-center p-6 text-center`}
+                  flex flex-col items-center justify-center p-4 text-center`}
           >
-            <div className="mb-3">{card.icon}</div>
-            <p className="text-4xl font-extrabold">{card.value}</p>
+            <div className="mb-2">{card.icon}</div>
+            <p className="text-3xl font-extrabold">{card.value}</p>
             <p className="text-sm font-medium mt-1">{card.label}</p>
           </div>
         ))}
@@ -697,19 +697,19 @@ function Doctor() {
     };
 
     return (
-      <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 mt-2 sm:mt-0">
-        {/* ---------- Cohesive Header Bar for Patient Management ---------- */}
-        <div className="p-3 sm:p-4 md:p-6 bg-white/95 border-b border-gray-200 rounded-xl shadow-lg overflow-hidden">
+      <div className="h-screen flex flex-col bg-white rounded-xl shadow-lg overflow-hidden">
+        {/* Header Bar - Fixed */}
+        <div className="flex-shrink-0 p-3 sm:p-4 md:p-6 bg-white border-b border-gray-200">
           <div className="flex flex-col gap-3 sm:gap-4 w-full">
             {/* Title */}
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 flex items-center flex-wrap gap-2">
+            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-gray-800 flex items-center">
               <Users className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8 text-blue-500 flex-shrink-0" />
               <span className="break-words">Patient Management</span>
             </h1>
 
-            {/* Search and Action Buttons - Stack on mobile, side by side on larger screens */}
+            {/* Search and Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full">
-              {/* Search Input with Icon */}
+              {/* Search Input */}
               <div className="relative flex-1 w-full min-w-0 sm:min-w-[200px]">
                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-pink-400 z-10 pointer-events-none" />
                 <input
@@ -717,146 +717,131 @@ function Doctor() {
                   placeholder="Search patient..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-2.5 md:py-3 rounded-full border-2 border-pink-300 bg-pink-50 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400 shadow-md text-sm sm:text-base placeholder-pink-300 transition-all duration-150 min-h-[44px]"
+                  className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 rounded-lg border border-pink-300 bg-pink-50 focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-pink-400 text-sm sm:text-base placeholder-pink-300"
                 />
               </div>
 
-              {/* Add Patient Button - Full width on mobile, auto on larger screens */}
+              {/* Add Patient Button */}
               <button
                 onClick={() => setIsAddModalOpen(true)}
-                className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-4 sm:px-5 md:px-6 py-2.5 sm:py-2.5 md:py-3 rounded-full hover:from-pink-600 hover:to-pink-700 active:from-pink-700 active:to-pink-800 transition-all duration-200 shadow-lg flex items-center justify-center text-sm sm:text-base font-medium whitespace-nowrap w-full sm:w-auto sm:flex-shrink-0 min-h-[44px] touch-manipulation"
+                className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-4 sm:px-5 py-2 rounded-lg hover:from-pink-600 hover:to-pink-700 transition flex items-center justify-center text-sm sm:text-base font-medium whitespace-nowrap"
                 type="button"
               >
-                <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" />
-                <span className="hidden sm:inline">Add New Patient</span>
-                <span className="sm:hidden">Add Patient</span>
+                <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 flex-shrink-0" />
+                <span className="hidden sm:inline">Add Patient</span>
+                <span className="sm:hidden">Add</span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* Table + List */}
-        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8 overflow-x-auto">
-          {loading ? (
-            <p className="text-gray-500">Loading patients...</p>
-          ) : filteredPatients.length === 0 ? (
-            <div className="text-center py-16">
-              <Baby className="w-20 h-20 mx-auto text-gray-300 mb-4" />
-              <h3 className="text-xl font-semibold text-gray-600 mb-2">
-                No Patients Found
-              </h3>
-              <p className="text-gray-500 mb-6">
-                Start by adding your first patient to the system
-              </p>
-              <button
-                onClick={() => setIsAddModalOpen(true)}
-                className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-8 py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition-all duration-200 shadow-md"
+        {/* Patient List - Scrollable */}
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-gray-500 text-sm sm:text-base">
+              Loading patients...
+            </p>
+          </div>
+        ) : filteredPatients.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <Baby className="w-16 h-16 sm:w-20 sm:h-20 text-gray-300 mb-3 sm:mb-4" />
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-2">
+              No Patients Found
+            </h3>
+            <p className="text-gray-500 mb-4 sm:mb-6 text-sm sm:text-base">
+              Start by adding your first patient to the system
+            </p>
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="bg-gradient-to-r from-pink-500 to-pink-600 text-white px-6 sm:px-8 py-2 rounded-lg hover:from-pink-600 hover:to-pink-700 transition text-sm sm:text-base"
+            >
+              Add Patient
+            </button>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto pr-2">
+            {filteredPatients.map((patient) => (
+              <div
+                key={patient.user_id}
+                className="border-b border-gray-200 hover:bg-blue-50 transition"
               >
-                Add Patient
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Desktop Table */}
-              <div className="hidden md:block overflow-hidden rounded-lg border border-gray-200 shadow-md">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-gradient-to-r from-blue-50 to-blue-100 text-gray-700 uppercase text-sm font-semibold">
-                    <tr>
-                      <th className="px-4 lg:px-6 py-3">Full Name</th>
-                      <th className="px-4 lg:px-6 py-3">Email</th>
-                      <th className="px-4 lg:px-6 py-3 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {filteredPatients.map((patient) => (
-                      <tr
-                        key={patient.user_id}
-                        className="odd:bg-white even:bg-gray-50 hover:bg-blue-50 transition"
-                      >
-                        <td className="px-4 lg:px-6 py-4 font-medium text-gray-900">
-                          {patient.full_name}
-                        </td>
-                        <td className="px-4 lg:px-6 py-4 text-gray-700">
-                          {patient.email}
-                        </td>
-                        <td className="px-4 lg:px-6 py-4 text-center space-x-3">
-                          <button
-                            className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-                            onClick={() => handleView(patient)}
-                          >
-                            View
-                          </button>
-                          <button
-                            className="text-red-600 hover:text-red-800 font-medium text-sm"
-                            onClick={() => handleDeletePatient(patient.user_id)}
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                {/* Compact List Item */}
+                <button
+                  onClick={() => handleView(patient)}
+                  className="w-full flex items-center justify-between p-3 text-left"
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {/* User Icon */}
+                    <div className="flex-shrink-0 w-8 h-8 bg-pink-600 text-white rounded-full flex items-center justify-center font-bold text-xs">
+                      {patient.full_name.charAt(0).toUpperCase()}
+                    </div>
 
-              {/* Mobile Card View */}
-              <div className="md:hidden space-y-4">
-                {filteredPatients.map((patient) => (
-                  <div
-                    key={patient.user_id}
-                    className="bg-white rounded-lg border border-gray-200 shadow-md p-4"
-                  >
-                    <div className="mb-3">
-                      <h3 className="font-semibold text-gray-900 text-lg">
-                        {patient.full_name}
-                      </h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {patient.email}
-                      </p>
-                    </div>
-                    <div className="flex gap-3 pt-3 border-t border-gray-200">
-                      <button
-                        className="flex-1 text-blue-600 hover:text-blue-800 font-medium py-2 px-4 border border-blue-600 rounded-lg hover:bg-blue-50 transition text-sm"
-                        onClick={() => handleView(patient)}
-                      >
-                        View
-                      </button>
-                      <button
-                        className="flex-1 text-red-600 hover:text-red-800 font-medium py-2 px-4 border border-red-600 rounded-lg hover:bg-red-50 transition text-sm"
-                        onClick={() => handleDeletePatient(patient.user_id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    {/* Patient Name */}
+                    <p className="font-semibold text-sm text-gray-800 truncate">
+                      {patient.full_name}
+                    </p>
+
+                    {/* Email - hidden on mobile */}
+                    <span className="hidden md:inline text-xs text-gray-500 ml-2 truncate">
+                      {patient.email}
+                    </span>
                   </div>
-                ))}
+
+                  {/* Actions - Compact */}
+                  <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleView(patient);
+                      }}
+                      className="px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-100 rounded transition"
+                      title="View details"
+                    >
+                      View
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeletePatient(patient.user_id);
+                      }}
+                      className="px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 rounded transition"
+                      title="Delete patient"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </button>
               </div>
-            </>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* 🧠 Add Patient Modal */}
         {isAddModalOpen && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md p-2 sm:p-4 overflow-y-auto"
             onClick={() => setIsAddModalOpen(false)}
           >
             <div
-              className="bg-white rounded-xl sm:rounded-2xl shadow-2xl border border-gray-200 w-full max-w-lg p-6 relative overflow-y-auto max-h-[90vh]"
+              className="bg-white rounded-xl sm:rounded-2xl shadow-2xl border border-gray-200 w-full max-w-lg p-4 sm:p-6 relative my-auto max-h-[95vh] sm:max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <button
-                className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 transition"
+                className="absolute top-2 right-2 sm:top-3 sm:right-3 text-gray-400 hover:text-gray-700 transition z-10 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-gray-100"
                 onClick={() => setIsAddModalOpen(false)}
+                aria-label="Close"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
 
-              <h2 className="text-xl font-bold text-pink-600 mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-pink-600 mb-3 sm:mb-4 pr-8">
                 Add New Patient
               </h2>
 
-              <form onSubmit={handleAddPatient} className="space-y-3">
+              <form
+                onSubmit={handleAddPatient}
+                className="space-y-2 sm:space-y-3"
+              >
                 {/* USER FIELDS */}
                 <input
                   type="text"
@@ -865,7 +850,7 @@ function Doctor() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, full_name: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                   required
                 />
                 <input
@@ -875,7 +860,7 @@ function Doctor() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, email: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                   required
                 />
                 <input
@@ -885,7 +870,7 @@ function Doctor() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, password: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                   required
                 />
                 <input
@@ -894,7 +879,7 @@ function Doctor() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, birth_date: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                   required
                 />
                 <select
@@ -902,7 +887,7 @@ function Doctor() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, gender: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px] bg-white"
                   required
                 >
                   <option value="">Select Gender</option>
@@ -918,7 +903,7 @@ function Doctor() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, guardian: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                 />
                 <input
                   type="text"
@@ -930,7 +915,7 @@ function Doctor() {
                       guardian_number: e.target.value,
                     })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                 />
                 <input
                   type="text"
@@ -942,7 +927,7 @@ function Doctor() {
                       phone_number: e.target.value,
                     })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                 />
                 <textarea
                   placeholder="Address"
@@ -950,7 +935,8 @@ function Doctor() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, address: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  rows={2}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition resize-y min-h-[80px]"
                 />
 
                 <select
@@ -958,7 +944,7 @@ function Doctor() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, blood_type: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px] bg-white"
                 >
                   <option value="">Select Blood Type</option>
                   <option value="A+">A+</option>
@@ -977,7 +963,8 @@ function Doctor() {
                   onChange={(e) =>
                     setNewPatient({ ...newPatient, allergies: e.target.value })
                   }
-                  className="w-full border rounded-lg p-2"
+                  rows={2}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition resize-y min-h-[80px]"
                 />
                 <textarea
                   placeholder="Chronic Conditions (if any)"
@@ -988,7 +975,8 @@ function Doctor() {
                       chronic_conditions: e.target.value,
                     })
                   }
-                  className="w-full border rounded-lg p-2"
+                  rows={2}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition resize-y min-h-[80px]"
                 />
 
                 <input
@@ -1001,7 +989,7 @@ function Doctor() {
                       mother_name: e.target.value,
                     })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                 />
                 <input
                   type="text"
@@ -1013,12 +1001,12 @@ function Doctor() {
                       father_name: e.target.value,
                     })
                   }
-                  className="w-full border rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-3 text-sm sm:text-base focus:ring-2 focus:ring-pink-400 focus:border-pink-400 outline-none transition min-h-[44px]"
                 />
 
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-pink-500 to-pink-600 text-white py-2 rounded-lg hover:from-pink-600 hover:to-pink-700 transition"
+                  className="w-full bg-gradient-to-r from-pink-500 to-pink-600 text-white py-2.5 sm:py-3 rounded-lg hover:from-pink-600 hover:to-pink-700 transition font-semibold text-sm sm:text-base shadow-lg min-h-[44px] mt-2"
                 >
                   Save Patient
                 </button>
@@ -1027,7 +1015,7 @@ function Doctor() {
           </div>
         )}
 
-        {/* Updated Modal with Edit Functionality */}
+        {/* Updated Modal */}
         {isModalOpen && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md transition-all duration-300 p-2 sm:p-4 overflow-y-auto"
@@ -1038,7 +1026,7 @@ function Doctor() {
               onClick={(e) => e.stopPropagation()}
             >
               <button
-                className="absolute top-2 right-2 sm:top-3 sm:right-3 text-gray-400 hover:text-gray-700 transition z-10 w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-gray-100"
+                className="absolute top-2 right-2 sm:top-3 sm:right-4 text-gray-400 hover:text-gray-700 transition-colors w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full hover:bg-gray-100 z-10"
                 onClick={closeModal}
                 aria-label="Close"
               >
@@ -2040,117 +2028,131 @@ function Doctor() {
     }
 
     return (
-      <div className="min-h-screen bg-transparent p-4 sm:p-6 md:p-8">
-        <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 border-t-4 sm:border-t-8 border-blue-500">
-          {/* Header */}
-          <h1 className="text-2xl sm:text-3xl font-extrabold mb-4 sm:mb-6 md:mb-8 flex items-center gap-2 sm:gap-3 text-blue-700">
-            <FileText className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-yellow-400" />
-            Patient Medical Records
-          </h1>
-
-          {/* Outer Search Bar */}
+      <div className="h-screen flex flex-col overflow-hidden bg-white">
+        {/* Fixed Header */}
+        <div className="flex-shrink-0 border-b border-gray-200 p-3 sm:p-4 bg-white">
+          <div className="flex items-center gap-2 mb-3">
+            <FileText className="w-5 h-5 text-blue-600" />
+            <h1 className="text-lg sm:text-xl font-bold text-gray-800">
+              Patient Medical Records
+            </h1>
+          </div>
           {patients.length > 0 && (
-            <div className="mb-6">
-              <div className="relative">
-                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Search patient by name..."
-                  value={patientSearch}
-                  onChange={(e) => setPatientSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm sm:text-base"
-                />
-              </div>
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search patient by name..."
+                value={patientSearch}
+                onChange={(e) => setPatientSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 text-sm"
+              />
             </div>
           )}
+        </div>
 
-          {/* No Records */}
-          {patients.length === 0 ? (
-            <div className="text-center py-16">
-              <FileText className="w-16 h-16 text-blue-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-blue-700 mb-2">
+        {/* Scrollable Content */}
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600 text-sm">Loading records...</p>
+            </div>
+          </div>
+        ) : error ? (
+          <div className="flex-1 flex items-center justify-center p-4">
+            <div className="text-center p-6 bg-red-50 rounded-lg border border-red-200 max-w-sm">
+              <div className="text-red-600 text-lg mb-2">⚠️ Error</div>
+              <p className="text-red-700 text-sm mb-4">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-3 py-1.5 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : patients.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+              <h3 className="text-sm font-semibold text-gray-600 mb-1">
                 No completed appointments
               </h3>
-              <p className="text-blue-500">
+              <p className="text-xs text-gray-500">
                 Medical records will appear here once appointments are
                 completed.
               </p>
             </div>
-          ) : filteredGroupedPatients.length === 0 ? (
-            <div className="text-center py-16">
-              <FileText className="w-16 h-16 text-blue-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-blue-700 mb-2">
+          </div>
+        ) : filteredGroupedPatients.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+              <h3 className="text-sm font-semibold text-gray-600 mb-1">
                 No patients found
               </h3>
-              <p className="text-blue-500">
+              <p className="text-xs text-gray-500">
                 No patient folders match your search.
               </p>
             </div>
-          ) : (
-            <div className="space-y-6">
-              {filteredGroupedPatients.map(([patientName, records]) => {
-                const filteredRecords = filterRecords(
-                  records,
-                  recordSearch[patientName] || ""
-                );
-                return (
-                  <div
-                    key={patientName}
-                    className="bg-white border border-blue-200 rounded-xl shadow-md hover:shadow-lg transition-all"
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto pr-2">
+            {/* Patient Folders */}
+            {filteredGroupedPatients.map(([patientName, records]) => {
+              const filteredRecords = filterRecords(
+                records,
+                recordSearch[patientName] || ""
+              );
+              return (
+                <div key={patientName} className="border-b border-gray-200">
+                  {/* Patient Folder Header */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenFolders((prev) => ({
+                        ...prev,
+                        [patientName]: !prev[patientName],
+                      }))
+                    }
+                    className="w-full flex items-center justify-between p-3 hover:bg-blue-50/50 transition-colors text-left"
                   >
-                    {/* Folder Header */}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setOpenFolders((prev) => ({
-                          ...prev,
-                          [patientName]: !prev[patientName],
-                        }))
-                      }
-                      className="w-full flex items-center justify-between p-6 hover:bg-blue-50 rounded-xl transition-colors"
-                    >
-                      <div className="flex items-center gap-4 text-left">
-                        <Folder
-                          className={`w-10 h-10 ${
-                            openFolders[patientName]
-                              ? "text-yellow-500"
-                              : "text-yellow-400"
-                          }`}
-                        />
-                        <div>
-                          <h3 className="text-lg font-bold text-blue-800">
-                            {patientName}
-                          </h3>
-                          <p className="text-sm text-blue-600">
-                            {records.length}{" "}
-                            {records.length > 1 ? "records" : "record"}
-                            {filteredRecords.length !== records.length && (
-                              <span className="text-blue-500">
-                                {" "}
-                                ({filteredRecords.length} shown)
-                              </span>
-                            )}
-                          </p>
-                        </div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Folder className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate">
+                          {patientName}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {records.length}{" "}
+                          {records.length > 1 ? "records" : "record"}
+                          {filteredRecords.length !== records.length && (
+                            <span className="ml-1">
+                              ({filteredRecords.length} shown)
+                            </span>
+                          )}
+                        </p>
                       </div>
+                    </div>
+                    {openFolders[patientName] ? (
+                      <ChevronUp className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    )}
+                  </button>
 
-                      {openFolders[patientName] ? (
-                        <ChevronUp className="text-blue-500 w-6 h-6" />
-                      ) : (
-                        <ChevronDown className="text-blue-500 w-6 h-6" />
-                      )}
-                    </button>
-
-                    {/* Folder Body */}
-                    {openFolders[patientName] && (
-                      <div className="p-6 border-t border-blue-200 bg-blue-50/40 rounded-b-xl space-y-6">
-                        {/* Inner Search Bar */}
-                        <div className="mb-4">
+                  {/* Patient Records */}
+                  {openFolders[patientName] && (
+                    <div className="bg-gray-50/30">
+                      {/* Record Search */}
+                      {records.length > 0 && (
+                        <div className="p-2 px-3 border-b border-gray-100">
                           <div className="relative">
-                            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                            <Filter className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
                             <input
                               type="text"
-                              placeholder="Search records by date or appointment type..."
+                              placeholder="Search records..."
                               value={recordSearch[patientName] || ""}
                               onChange={(e) =>
                                 setRecordSearch((prev) => ({
@@ -2158,209 +2160,218 @@ function Doctor() {
                                   [patientName]: e.target.value,
                                 }))
                               }
-                              className="w-full pl-9 pr-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm"
+                              className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
                             />
                           </div>
                         </div>
+                      )}
 
-                        {filteredRecords.length === 0 ? (
-                          <div className="text-center py-8 text-gray-500">
-                            <p>No records match your search.</p>
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {filteredRecords.map((p) => {
-                              const recordKey = `${patientName}-${p.appointment_id}`;
-                              const isOpen = openRecords[recordKey];
+                      {filteredRecords.length === 0 ? (
+                        <div className="text-center py-3 px-3 text-xs text-gray-500">
+                          No records match your search.
+                        </div>
+                      ) : (
+                        <div>
+                          {filteredRecords.map((p) => {
+                            const recordKey = `${patientName}-${p.appointment_id}`;
+                            const isOpen = openRecords[recordKey];
 
-                              return (
-                                <div
-                                  key={p.appointment_id}
-                                  className="border border-blue-200 rounded-lg bg-white shadow-sm overflow-hidden"
+                            return (
+                              <div
+                                key={p.appointment_id}
+                                className={`border-b border-gray-200 border-l-4 ${
+                                  isOpen
+                                    ? "border-blue-300 bg-blue-50/30"
+                                    : "border-blue-100"
+                                }`}
+                              >
+                                {/* Record Header */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setOpenRecords((prev) => ({
+                                      ...prev,
+                                      [recordKey]: !prev[recordKey],
+                                    }))
+                                  }
+                                  className="w-full flex items-center justify-between p-2.5 px-4 hover:bg-blue-100/40 transition-colors text-left"
                                 >
-                                  {/* 📋 CLICKABLE HEADER */}
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setOpenRecords((prev) => ({
-                                        ...prev,
-                                        [recordKey]: !prev[recordKey],
-                                      }))
-                                    }
-                                    className="w-full flex items-center justify-between p-4 hover:bg-blue-50 transition-colors text-left"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <Calendar className="w-5 h-5 text-blue-500" />
-                                      <div>
-                                        <p className="font-semibold text-blue-800">
-                                          {p.appointment_date} -{" "}
-                                          {p.appointment_type}
-                                        </p>
-                                        <p className="text-xs text-gray-500">
-                                          {p.diagnosis
-                                            ? "✓ Has medical record"
-                                            : "○ No record yet"}
-                                        </p>
-                                      </div>
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <Calendar className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-medium text-gray-800 truncate">
+                                        {p.appointment_date} •{" "}
+                                        {p.appointment_type}
+                                      </p>
+                                      <p className="text-xs text-gray-500">
+                                        {p.diagnosis
+                                          ? "✓ Has record"
+                                          : "○ No record"}
+                                      </p>
                                     </div>
-                                    {isOpen ? (
-                                      <ChevronUp className="w-5 h-5 text-blue-500" />
-                                    ) : (
-                                      <ChevronDown className="w-5 h-5 text-blue-500" />
-                                    )}
-                                  </button>
+                                  </div>
+                                  {isOpen ? (
+                                    <ChevronUp className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                  ) : (
+                                    <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                  )}
+                                </button>
 
-                                  {/* 📝 EXPANDABLE CONTENT */}
-                                  {isOpen && (
-                                    <div className="p-5 border-t border-blue-100 bg-blue-50/30">
-                                      {/* Editable Inputs */}
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
-                                        {[
-                                          "weight",
-                                          "height",
-                                          "temperature",
-                                          "pulse_rate",
-                                          "diagnosis",
-                                        ].map((field) => (
-                                          <div key={field}>
-                                            <label className="block text-xs sm:text-sm font-medium text-blue-700 mb-1 capitalize">
-                                              {field.replace("_", " ")}
-                                            </label>
-                                            <input
-                                              type={
-                                                ["diagnosis"].includes(field)
-                                                  ? "text"
-                                                  : "number"
-                                              }
-                                              value={p[field] ?? ""}
-                                              onChange={(e) =>
-                                                handleChange(
-                                                  e,
-                                                  p.appointment_id
-                                                )
-                                              }
-                                              name={field}
-                                              placeholder={`Enter ${field}`}
-                                              className="w-full border border-blue-300 p-2 sm:p-3 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm sm:text-base"
-                                            />
-                                          </div>
-                                        ))}
-
-                                        {/* Age */}
-                                        <div>
-                                          <label className="block text-sm font-medium text-blue-700 mb-1">
-                                            Age (at appointment)
+                                {/* Record Details */}
+                                {isOpen && (
+                                  <div className="p-3 px-4 bg-blue-50/20 border-t border-gray-100 space-y-2">
+                                    {/* Compact Input Grid */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                      {[
+                                        "weight",
+                                        "height",
+                                        "temperature",
+                                        "pulse_rate",
+                                      ].map((field) => (
+                                        <div key={field}>
+                                          <label className="block text-xs font-medium text-gray-700 mb-0.5 capitalize">
+                                            {field.replace("_", " ")}
                                           </label>
-                                          <p className="border border-blue-200 p-3 rounded-lg bg-gray-50">
-                                            {p.birth_date && p.appointment_date
-                                              ? (() => {
-                                                  const birth = new Date(
-                                                    p.birth_date
-                                                  );
-                                                  const appointmentDate =
-                                                    new Date(
-                                                      p.appointment_date
-                                                    );
-                                                  let age =
-                                                    appointmentDate.getFullYear() -
-                                                    birth.getFullYear();
-                                                  const m =
-                                                    appointmentDate.getMonth() -
-                                                    birth.getMonth();
-                                                  if (
-                                                    m < 0 ||
-                                                    (m === 0 &&
-                                                      appointmentDate.getDate() <
-                                                        birth.getDate())
-                                                  ) {
-                                                    age--;
-                                                  }
-                                                  return `${age} yrs`;
-                                                })()
-                                              : "Not recorded"}
-                                          </p>
+                                          <input
+                                            type={
+                                              ["diagnosis"].includes(field)
+                                                ? "text"
+                                                : "number"
+                                            }
+                                            value={p[field] ?? ""}
+                                            onChange={(e) =>
+                                              handleChange(e, p.appointment_id)
+                                            }
+                                            name={field}
+                                            className="w-full border border-gray-300 px-2 py-1 rounded text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                                          />
+                                        </div>
+                                      ))}
+
+                                      {/* Age - Read-only */}
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                                          Age
+                                        </label>
+                                        <div className="border border-gray-300 px-2 py-1 rounded bg-gray-50 text-xs text-gray-600 flex items-center">
+                                          {p.birth_date && p.appointment_date
+                                            ? (() => {
+                                                const birth = new Date(
+                                                  p.birth_date
+                                                );
+                                                const appointmentDate =
+                                                  new Date(p.appointment_date);
+                                                let age =
+                                                  appointmentDate.getFullYear() -
+                                                  birth.getFullYear();
+                                                const m =
+                                                  appointmentDate.getMonth() -
+                                                  birth.getMonth();
+                                                if (
+                                                  m < 0 ||
+                                                  (m === 0 &&
+                                                    appointmentDate.getDate() <
+                                                      birth.getDate())
+                                                ) {
+                                                  age--;
+                                                }
+                                                return `${age} yrs`;
+                                              })()
+                                            : "N/A"}
                                         </div>
                                       </div>
 
-                                      {/* Remarks */}
-                                      <div className="mb-6">
-                                        <label className="block text-sm font-medium text-blue-700 mb-1">
-                                          Remarks / Treatments
+                                      {/* Diagnosis */}
+                                      <div>
+                                        <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                                          Diagnosis
                                         </label>
-                                        <textarea
-                                          name="remarks"
-                                          value={p.remarks ?? ""}
+                                        <input
+                                          type="text"
+                                          value={p.diagnosis ?? ""}
                                           onChange={(e) =>
                                             handleChange(e, p.appointment_id)
                                           }
-                                          placeholder="Enter remarks and treatments"
-                                          rows="4"
-                                          className="w-full border border-blue-300 p-3 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
+                                          name="diagnosis"
+                                          className="w-full border border-gray-300 px-2 py-1 rounded text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
                                         />
                                       </div>
-
-                                      {/* Buttons */}
-                                      <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setOpenRecords((prev) => ({
-                                              ...prev,
-                                              [recordKey]: false,
-                                            }))
-                                          }
-                                          className="px-4 sm:px-6 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm sm:text-base"
-                                        >
-                                          Close
-                                        </button>
-
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            saveRecord(p.appointment_id)
-                                          }
-                                          className="px-4 sm:px-6 py-2 bg-yellow-400 text-blue-900 font-semibold rounded-lg hover:bg-yellow-500 transition-colors text-sm sm:text-base"
-                                        >
-                                          {p.diagnosis ? "Update" : "Add"}{" "}
-                                          Record
-                                        </button>
-
-                                        <button
-                                          type="button"
-                                          onClick={() => printRecord(p)}
-                                          className="px-4 sm:px-6 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors text-sm sm:text-base"
-                                        >
-                                          Print Record
-                                        </button>
-                                      </div>
                                     </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+
+                                    {/* Remarks */}
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-0.5">
+                                        Remarks
+                                      </label>
+                                      <textarea
+                                        name="remarks"
+                                        value={p.remarks ?? ""}
+                                        onChange={(e) =>
+                                          handleChange(e, p.appointment_id)
+                                        }
+                                        rows="2"
+                                        className="w-full border border-gray-300 px-2 py-1 rounded text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 resize-none"
+                                      />
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex gap-1.5 pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          saveRecord(p.appointment_id)
+                                        }
+                                        className="flex-1 px-2 py-1 bg-blue-500 text-white rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+                                      >
+                                        {p.diagnosis ? "Update" : "Add"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => printRecord(p)}
+                                        className="flex-1 px-2 py-1 bg-green-500 text-white rounded text-xs font-medium hover:bg-green-600 transition-colors"
+                                      >
+                                        Print
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setOpenRecords((prev) => ({
+                                            ...prev,
+                                            [recordKey]: false,
+                                          }))
+                                        }
+                                        className="flex-1 px-2 py-1 bg-gray-300 text-gray-700 rounded text-xs font-medium hover:bg-gray-400 transition-colors"
+                                      >
+                                        Close
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Success Modal */}
         {showModal && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
-            <div className="bg-white p-6 rounded-xl shadow-lg border-t-4 border-green-500 text-center">
-              <h2 className="text-lg font-semibold text-green-600 mb-2">
-                ✅ Record Saved Successfully!
+            <div className="bg-white p-4 rounded-lg shadow-lg border-t-4 border-green-500 text-center">
+              <h2 className="text-sm font-semibold text-green-600 mb-1">
+                ✅ Record Saved!
               </h2>
-              <p className="text-gray-600">
+              <p className="text-xs text-gray-600 mb-3">
                 The medical record has been updated.
               </p>
               <button
-                className="mt-4 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+                className="px-3 py-1.5 bg-green-500 text-white rounded text-xs font-medium hover:bg-green-600"
                 onClick={() => setShowModal(false)}
               >
                 OK
@@ -2371,7 +2382,6 @@ function Doctor() {
       </div>
     );
   };
-
   const AnalyticsPage = () => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -2386,6 +2396,9 @@ function Doctor() {
     const [availableDiagnoses, setAvailableDiagnoses] = useState([]);
     const [availableYears, setAvailableYears] = useState([]);
     const [availableMonths, setAvailableMonths] = useState([]);
+
+    // Tab state for graph navigation
+    const [activeTab, setActiveTab] = useState("appointments");
 
     // AI Insights states
     const [insights, setInsights] = useState({});
@@ -2549,13 +2562,13 @@ function Doctor() {
       icon: Icon,
       gradient,
     }) => (
-      <div
-        className={`bg-white rounded-2xl shadow-xl p-6 border-2 ${gradient} hover:shadow-2xl transition-shadow`}
-      >
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-2">
-            {Icon && <Icon className="w-7 h-7 text-blue-600" />}
-            {title}
+      <div className="p-2 sm:p-3 md:p-4 lg:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2 md:gap-3 mb-2 sm:mb-3 md:mb-4 lg:mb-6">
+          <h2 className="text-sm sm:text-base md:text-xl lg:text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-0.5 sm:gap-1 md:gap-2 min-w-0">
+            {Icon && (
+              <Icon className="w-3.5 sm:w-4 md:w-5 lg:w-7 h-3.5 sm:h-4 md:h-5 lg:h-7 text-blue-600 flex-shrink-0" />
+            )}
+            <span className="truncate">{title}</span>
           </h2>
 
           <button
@@ -2565,54 +2578,66 @@ function Doctor() {
             disabled={
               loadingInsights[chartId] || !chartData || chartData.length === 0
             }
-            className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold shadow-lg"
+            className="flex items-center justify-center gap-0.5 sm:gap-1 md:gap-1.5 px-2 sm:px-2.5 md:px-3 lg:px-4 py-1 sm:py-1.5 md:py-1.5 lg:py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded text-xs sm:text-xs md:text-sm lg:text-sm font-semibold shadow-lg hover:from-purple-600 hover:to-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex-shrink-0"
           >
             {loadingInsights[chartId] ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>Generating...</span>
+                <div className="animate-spin rounded-full h-2 sm:h-2.5 md:h-3 w-2 sm:w-2.5 md:w-3 border-b-2 border-white"></div>
+                <span className="hidden lg:inline">Generating...</span>
               </>
             ) : (
               <>
-                <Sparkles className="w-4 h-4" />
-                <span>Generate AI Insights</span>
+                <Sparkles className="w-2.5 sm:w-3 md:w-3 lg:w-4 h-2.5 sm:h-3 md:h-3 lg:h-4" />
+                <span className="hidden lg:inline">Generate AI Insights</span>
+                <span className="lg:hidden">AI</span>
               </>
             )}
           </button>
         </div>
 
         {children}
-
-        {/* insights are shown in a popup modal when generated */}
       </div>
     );
 
     const CustomTooltip = ({ active, payload, label, type = "default" }) => {
+      // Show only the total of all displayed values when hovering.
+      // If a specific year is selected (selectedYear !== 'all') and the
+      // month filter is set to 'all', hide the label (month/number) above the total.
       if (active && payload && payload.length) {
+        const total = payload.reduce((sum, p) => {
+          const v = Number(p.value);
+          return sum + (isNaN(v) ? 0 : v);
+        }, 0);
+
+        const formatNumber = (n) => {
+          try {
+            return n.toLocaleString();
+          } catch (e) {
+            return String(n);
+          }
+        };
+
+        const hideLabel = selectedYear !== "all" && selectedMonth === "all";
+
         return (
-          <div className="bg-white p-4 rounded-xl shadow-2xl border-2 border-blue-200">
-            <p className="font-bold text-gray-800 text-lg mb-2">{label}</p>
-            {payload.map((entry, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: entry.color }}
-                />
-                <span className="font-semibold" style={{ color: entry.color }}>
-                  {entry.name}:
-                </span>
-                <span className="text-gray-700 font-medium">{entry.value}</span>
-              </div>
-            ))}
+          <div className="bg-white p-3 rounded-xl shadow-2xl border-2 border-blue-200">
+            {!hideLabel && (
+              <p className="font-bold text-gray-800 text-sm mb-1">{label}</p>
+            )}
+            <div className="text-gray-700 font-semibold text-lg">
+              Total: {formatNumber(total)}
+            </div>
           </div>
         );
       }
+
       return null;
     };
 
-    const filteredMonths = months.filter(
-      (m) => m.value === "all" || availableMonths.includes(parseInt(m.value))
-    );
+    // Always show All Months followed by every month (Jan-Dec) in the dropdown.
+    // Previously we filtered by `availableMonths` which hid months without data.
+    // The user requested the dropdown always display all months.
+    const filteredMonths = months;
 
     // Derived chart data: when All Years is selected, prefer per-year aggregates
     const appointmentChartData =
@@ -2675,7 +2700,7 @@ function Doctor() {
             <h3 className="text-xl font-bold text-red-800 mb-2">
               Unable to Load Analytics
             </h3>
-            <p className="text-red-600 mb-6">{error}</p>
+            <p className="text-red-600 mb-4">{error}</p>
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => (window.location.href = "/")}
@@ -2715,93 +2740,160 @@ function Doctor() {
       );
     }
 
+    // Define tabs for analytics
+    const tabs = [
+      { id: "appointments", label: "📊 Appointments Trend", icon: TrendingUp },
+      {
+        id: "diagnosis",
+        label: "🩺 Diagnosis Distribution",
+        icon: Stethoscope,
+      },
+      { id: "types", label: "📋 Appointment Types", icon: Calendar },
+      { id: "inventory", label: "📦 Inventory Usage", icon: ClipboardList },
+    ];
+
     return (
-      <div className="min-h-screen bg-transparent p-3 sm:p-4 md:p-6">
-        <div className="max-w-6xl mx-auto space-y-3">
-          {/* Compact Header with Filters */}
-          <div className="bg-white rounded-lg shadow-sm p-3 flex items-center justify-between gap-3 border">
-            <div className="flex items-center gap-3">
-              <Activity className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-800">Analytics</h2>
-              <div className="text-xs text-gray-500 ml-2">
-                {selectedYear === "all"
-                  ? selectedMonth === "all"
-                    ? "All Years"
-                    : `${
-                        months.find((m) => m.value === selectedMonth)?.label
-                      } All Years`
-                  : selectedMonth === "all"
-                  ? `Year ${selectedYear}`
-                  : `${
-                      months.find((m) => m.value === selectedMonth)?.label
-                    } ${selectedYear}`}
+      <div className="min-h-screen bg-transparent pt-0 sm:pt-0 px-2 sm:px-3 md:px-4 lg:px-6 pb-6">
+        <div className="max-w-7xl mx-auto space-y-1.5 sm:space-y-2 md:space-y-2.5 lg:space-y-3">
+          {/* Header with Filters */}
+          <div className="bg-white rounded-lg sm:rounded-lg shadow-sm p-2.5 sm:p-3 md:p-4 border border-gray-100">
+            <div className="flex flex-col gap-2.5 sm:gap-3 md:gap-4">
+              <div className="flex items-center gap-2 sm:gap-2.5 md:gap-3 min-w-0">
+                <div className="p-1.5 sm:p-1.5 md:p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex-shrink-0">
+                  <Activity className="w-4 sm:w-5 md:w-6 h-4 sm:h-5 md:h-6 text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-base sm:text-lg md:text-2xl font-bold text-gray-800 truncate">
+                    Analytics
+                  </h1>
+                  <p className="text-xs text-gray-500 truncate line-clamp-1">
+                    {selectedYear === "all"
+                      ? selectedMonth === "all"
+                        ? "All Years"
+                        : `${
+                            months.find((m) => m.value === selectedMonth)?.label
+                          }`
+                      : selectedMonth === "all"
+                      ? `${selectedYear}`
+                      : `${
+                          months.find((m) => m.value === selectedMonth)?.label
+                        } ${selectedYear}`}
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-                className="bg-transparent border px-2 py-1 rounded text-sm"
-              >
-                <option value="all">All Years</option>
-                {availableYears.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="bg-transparent border px-2 py-1 rounded text-sm"
-              >
-                {filteredMonths.map((month) => (
-                  <option key={month.value} value={month.value}>
-                    {month.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={fetchData}
-                className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
-              >
-                Refresh
-              </button>
-            </div>
-          </div>
-          {/* KPI row with overall patients card */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
-              <div className="text-xs text-gray-500">Total Appointments</div>
-              <div className="text-2xl font-bold text-gray-800">
-                {data.totalAppointments || 0}
-              </div>
-            </div>
-            <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
-              <div className="text-xs text-gray-500">Overall Patients</div>
-              <div className="text-2xl font-bold text-green-700">
-                {data.overallPatients || 0}
-              </div>
-            </div>
-            <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
-              <div className="text-xs text-gray-500">Top Diagnosis</div>
-              <div className="text-lg font-semibold text-gray-800 truncate">
-                {data.commonDiagnosis || "N/A"}
-              </div>
-            </div>
-            <div className="bg-white rounded-lg p-3 border shadow-sm flex flex-col">
-              <div className="text-xs text-gray-500">Top Visit Reason</div>
-              <div className="text-lg font-semibold text-gray-800 truncate">
-                {data.commonAppointmentType || "N/A"}
+              <div className="grid grid-cols-3 gap-1 sm:gap-1.5 md:flex md:gap-2 md:justify-end">
+                <select
+                  value={selectedYear}
+                  onChange={(e) =>
+                    setSelectedYear(
+                      e.target.value === "all"
+                        ? "all"
+                        : parseInt(e.target.value)
+                    )
+                  }
+                  className="px-1.5 sm:px-2 md:px-3 py-1 sm:py-1.5 md:py-2 border border-gray-200 rounded text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium"
+                >
+                  <option value="all">All Yrs</option>
+                  {availableYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="px-1.5 sm:px-2 md:px-3 py-1 sm:py-1.5 md:py-2 border border-gray-200 rounded text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium"
+                >
+                  {filteredMonths.map((month) => (
+                    <option key={month.value} value={month.value}>
+                      {month.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={fetchData}
+                  className="px-1.5 sm:px-2 md:px-4 py-1 sm:py-1.5 md:py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded text-xs sm:text-sm font-medium shadow-md hover:from-blue-700 hover:to-blue-800 transition-all duration-300 whitespace-nowrap flex items-center justify-center gap-0.5 sm:gap-1 md:gap-2"
+                >
+                  <RefreshCw className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4" />
+                  <span className="hidden md:inline">Refresh</span>
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Charts in compact cards (preserve logic) */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-2 md:gap-3">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded p-2 sm:rounded-lg sm:p-2.5 md:rounded-lg md:p-3 lg:p-4 border border-blue-200 shadow-sm">
+              <div className="flex flex-col h-full">
+                <div className="text-xs sm:text-xs md:text-sm font-medium text-blue-600 truncate">
+                  Total Appts
+                </div>
+                <div className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-blue-900 mt-1">
+                  {data.totalAppointments || 0}
+                </div>
+                <Calendar className="w-6 sm:w-8 md:w-10 lg:w-12 h-6 sm:h-8 md:h-10 lg:h-12 text-blue-300 opacity-50 mt-auto" />
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded p-2 sm:rounded-lg sm:p-2.5 md:rounded-lg md:p-3 lg:p-4 border border-green-200 shadow-sm">
+              <div className="flex flex-col h-full">
+                <div className="text-xs sm:text-xs md:text-sm font-medium text-green-600 truncate">
+                  Patients
+                </div>
+                <div className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-green-900 mt-1">
+                  {data.overallPatients || 0}
+                </div>
+                <Users className="w-6 sm:w-8 md:w-10 lg:w-12 h-6 sm:h-8 md:h-10 lg:h-12 text-green-300 opacity-50 mt-auto" />
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded p-2 sm:rounded-lg sm:p-2.5 md:rounded-lg md:p-3 lg:p-4 border border-purple-200 shadow-sm">
+              <div className="flex flex-col h-full">
+                <div className="text-xs sm:text-xs md:text-sm font-medium text-purple-600 truncate">
+                  Diagnosis
+                </div>
+                <div className="text-xs sm:text-sm md:text-base lg:text-lg font-bold text-purple-900 mt-1 truncate line-clamp-2">
+                  {data.commonDiagnosis || "N/A"}
+                </div>
+                <Stethoscope className="w-6 sm:w-8 md:w-10 lg:w-12 h-6 sm:h-8 md:h-10 lg:h-12 text-purple-300 opacity-50 mt-auto" />
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded p-2 sm:rounded-lg sm:p-2.5 md:rounded-lg md:p-3 lg:p-4 border border-amber-200 shadow-sm">
+              <div className="flex flex-col h-full">
+                <div className="text-xs sm:text-xs md:text-sm font-medium text-amber-600 truncate">
+                  Appointment Type
+                </div>
+                <div className="text-xs sm:text-sm md:text-base lg:text-lg font-bold text-amber-900 mt-1 truncate line-clamp-2">
+                  {data.commonAppointmentType || "N/A"}
+                </div>
+                <Heart className="w-6 sm:w-8 md:w-10 lg:w-12 h-6 sm:h-8 md:h-10 lg:h-12 text-amber-300 opacity-50 mt-auto" />
+              </div>
+            </div>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-1 sm:p-1.5 overflow-x-auto">
+            <div className="flex gap-0.5 sm:gap-1 flex-nowrap min-w-min">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-1.5 sm:px-2.5 md:px-4 py-1 sm:py-1.5 md:py-2.5 rounded text-xs sm:text-xs md:text-sm font-medium transition-all duration-300 whitespace-nowrap flex-shrink-0 ${
+                    activeTab === tab.id
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Chart Display Area */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden mt-2 sm:mt-3 md:mt-4">
+            {activeTab === "appointments" && (
               <ChartContainer
-                title="Monthly Appointments Trend"
+                title="📊 Monthly Appointments Trend"
                 chartId="monthly-trend"
                 chartType="Monthly Appointment Trend"
                 chartData={appointmentChartData}
@@ -2809,7 +2901,7 @@ function Doctor() {
                 icon={TrendingUp}
                 gradient="border-purple-100"
               >
-                <div className="h-56">
+                <div className="h-48 sm:h-64 md:h-80 lg:h-96">
                   {appointmentChartData?.length ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={appointmentChartData}>
@@ -2854,9 +2946,11 @@ function Doctor() {
                   )}
                 </div>
               </ChartContainer>
+            )}
 
+            {activeTab === "diagnosis" && (
               <ChartContainer
-                title="Diagnosis Distribution"
+                title="🩺 Diagnosis Distribution"
                 chartId="diagnosis-trend"
                 chartType="Monthly Diagnosis Distribution"
                 chartData={diagnosisChartData}
@@ -2864,7 +2958,7 @@ function Doctor() {
                 icon={Stethoscope}
                 gradient="border-blue-100"
               >
-                <div className="h-56">
+                <div className="h-48 sm:h-64 md:h-80 lg:h-96">
                   {diagnosisChartData?.length ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={diagnosisChartData}>
@@ -2918,11 +3012,11 @@ function Doctor() {
                   )}
                 </div>
               </ChartContainer>
-            </div>
+            )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {activeTab === "types" && (
               <ChartContainer
-                title="Appointment Type Distribution"
+                title="📋 Appointment Type Distribution"
                 chartId="appointment-type-trend"
                 chartType="Appointment Type Distribution"
                 chartData={appointmentTypeChartData}
@@ -2930,7 +3024,7 @@ function Doctor() {
                 icon={Calendar}
                 gradient="border-green-100"
               >
-                <div className="h-56">
+                <div className="h-48 sm:h-64 md:h-80 lg:h-96">
                   {appointmentTypeChartData?.length ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={appointmentTypeChartData}>
@@ -2984,9 +3078,11 @@ function Doctor() {
                   )}
                 </div>
               </ChartContainer>
+            )}
 
+            {activeTab === "inventory" && (
               <ChartContainer
-                title="Top Inventory Items Used"
+                title="📦 Top Inventory Items Used"
                 chartId="inventory-usage"
                 chartType="Inventory Usage Analysis"
                 chartData={data.inventoryUsage}
@@ -2994,7 +3090,7 @@ function Doctor() {
                 icon={ClipboardList}
                 gradient="border-amber-100"
               >
-                <div className="h-56">
+                <div className="h-48 sm:h-64 md:h-80 lg:h-96">
                   {data.inventoryUsage?.length ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={data.inventoryUsage}>
@@ -3046,7 +3142,7 @@ function Doctor() {
                   )}
                 </div>
               </ChartContainer>
-            </div>
+            )}
           </div>
 
           {/* Insights Modal (popup) */}
@@ -3056,34 +3152,34 @@ function Doctor() {
                 className="absolute inset-0 bg-black/50"
                 onClick={() => setInsightsModalOpen(false)}
               />
-              <div className="relative bg-white rounded-xl shadow-2xl p-6 max-w-2xl w-full mx-4 z-10">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <h3 className="text-lg font-bold text-gray-800 truncate">
+              <div className="relative bg-white rounded-lg sm:rounded-xl shadow-2xl p-3 sm:p-4 md:p-6 max-w-2xl w-full mx-2 sm:mx-4 z-10">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3 md:gap-4">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-800 truncate">
                       {insightsModalTitle}
                     </h3>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1">
                       AI-generated insights
                     </p>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-700">
+                    <div className="mt-2 sm:mt-3 flex flex-wrap gap-1 sm:gap-2">
+                      <span className="text-xs bg-gray-100 px-2 py-0.5 sm:py-1 rounded-full text-gray-700">
                         Year: {selectedYear}
                       </span>
-                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-700">
+                      <span className="text-xs bg-gray-100 px-2 py-0.5 sm:py-1 rounded-full text-gray-700">
                         Month:{" "}
                         {selectedMonth === "all"
                           ? "All"
                           : months.find((m) => m.value === selectedMonth)
                               ?.label}
                       </span>
-                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-700">
+                      <span className="text-xs bg-gray-100 px-2 py-0.5 sm:py-1 rounded-full text-gray-700">
                         Diagnosis:{" "}
                         {selectedDiagnosis === "all"
                           ? "All"
                           : selectedDiagnosis}
                       </span>
-                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-700">
+                      <span className="text-xs bg-gray-100 px-2 py-0.5 sm:py-1 rounded-full text-gray-700">
                         Scope:{" "}
                         {patientScope === "overall"
                           ? "Overall"
@@ -3092,16 +3188,16 @@ function Doctor() {
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-2">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       onClick={handleCopyInsights}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                      className="inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-gray-100 text-gray-700 rounded text-xs sm:text-sm hover:bg-gray-200"
                     >
                       Copy
                     </button>
                     <button
                       onClick={() => setInsightsModalOpen(false)}
-                      className="text-gray-500 hover:text-gray-700 ml-2"
+                      className="text-gray-500 hover:text-gray-700 p-1"
                       aria-label="Close insights"
                     >
                       ×
@@ -3109,14 +3205,14 @@ function Doctor() {
                   </div>
                 </div>
 
-                <div className="mt-4 text-sm text-gray-700 whitespace-pre-line leading-relaxed max-h-[44vh] overflow-y-auto">
+                <div className="mt-2 sm:mt-3 md:mt-4 text-xs sm:text-sm text-gray-700 whitespace-pre-line leading-relaxed max-h-[40vh] sm:max-h-[50vh] overflow-y-auto">
                   {insightsModalContent}
                 </div>
 
-                <div className="mt-6 text-right">
+                <div className="mt-4 sm:mt-5 md:mt-6 text-right">
                   <button
                     onClick={() => setInsightsModalOpen(false)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded text-xs sm:text-sm font-medium hover:bg-blue-700"
                   >
                     Close
                   </button>
@@ -3147,160 +3243,128 @@ function Doctor() {
   };
 
   return (
-    <div className="min-h-screen flex bg-gradient-to-br from-blue-50 to-pink-50">
-      {/* Mobile Menu Overlay */}
-      {isMobileMenuOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* Sidebar (Fixed) */}
-      <div
-        className={`fixed top-0 left-0 h-full w-64 sm:w-72 bg-gradient-to-b from-blue-600 to-blue-800 text-white shadow-xl z-50 transition-transform duration-300 ${
-          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0`}
-      >
-        <div className="p-4 sm:p-6">
-          {/* Logo + Branding */}
-          <div className="flex items-center justify-between mb-6 sm:mb-8">
-            <div className="flex items-center gap-3">
-              {/* Logo inside white circle */}
-              <div className="bg-white p-1.5 sm:p-2 rounded-full flex items-center justify-center shadow-md">
-                <img
-                  src="/clinicsclogo.png"
-                  alt="Clinic Logo"
-                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover"
-                />
-              </div>
-
-              {/* Text Branding */}
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold">Castillo</h2>
-                <p className="text-blue-200 text-xs sm:text-sm">
-                  Children Clinic
-                </p>
-              </div>
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-50 to-pink-50">
+      {/* Top Header - Logo Section */}
+      <header className="fixed top-0 left-0 right-0 bg-blue-800/80 text-white backdrop-blur-sm border-b border-blue-900 z-50">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-white p-1.5 rounded-full">
+              <img
+                src="/clinicsclogo.png"
+                alt="Clinic Logo"
+                className="w-9 h-9 rounded-full object-cover"
+              />
             </div>
+            <div className="hidden sm:block">
+              <h2 className="text-sm font-bold text-white">Castillo</h2>
+              <p className="text-xs text-white/80">Children Clinic</p>
+            </div>
+          </div>
 
+          <div className="flex items-center gap-3 md:hidden">
             <button
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="md:hidden text-white hover:text-yellow-400 text-2xl"
-              aria-label="Close menu"
+              className="p-2 rounded-md"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              aria-label="Toggle menu"
             >
-              ×
+              {isMobileMenuOpen ? (
+                <X className="w-6 h-6 text-white" />
+              ) : (
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path d="M4 6h16M4 12h16M4 18h16"></path>
+                </svg>
+              )}
             </button>
           </div>
-
-          {/* Menu */}
-          <nav className="space-y-2">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setActivePage(item.id);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center p-2.5 sm:p-3 rounded-lg sm:rounded-xl transition-all duration-200 text-sm sm:text-base ${
-                    activePage === item.id
-                      ? "bg-yellow-400 text-blue-600 shadow-lg"
-                      : "hover:bg-yellow-400 hover:text-blue-600 text-blue-100"
-                  }`}
-                >
-                  <Icon className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
-                  <span className="font-semibold">{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
         </div>
 
-        {/* Bottom section */}
-        <div className="absolute bottom-0 left-0 right-0 w-64 sm:w-72 p-4 sm:p-6 bg-blue-800 bg-opacity-50">
-          <div className="flex items-center mb-3 sm:mb-4">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-pink-500 rounded-full flex items-center justify-center mr-2 sm:mr-3">
-              <Stethoscope className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-white" />
-            </div>
-            <div>
-              <p className="font-semibold text-sm sm:text-base">
-                Dr. Pediatrician
-              </p>
-              <p className="text-blue-200 text-xs sm:text-sm">
-                Pediatric Specialist
-              </p>
-            </div>
-          </div>
+        {/* Navigation Tabs Section */}
+        <nav className="hidden md:flex border-t border-blue-900/50 px-4">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActivePage(item.id)}
+                className={`inline-flex items-center gap-2 px-4 py-3 font-semibold transition border-b-2 ${
+                  activePage === item.id
+                    ? "border-yellow-400 text-yellow-400"
+                    : "border-transparent text-white hover:text-yellow-400"
+                }`}
+              >
+                <Icon
+                  className={`w-4 h-4 ${
+                    activePage === item.id ? "text-yellow-400" : "text-white"
+                  }`}
+                />
+                <span className="text-sm">{item.label}</span>
+              </button>
+            );
+          })}
+          <div className="flex-1"></div>
           <button
             onClick={() => {
               localStorage.removeItem("token");
               window.location.href = "/";
             }}
-            className="w-full flex items-center justify-center px-3 sm:px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm sm:text-base"
+            className="flex items-center gap-2 px-4 py-3 bg-red-600 text-white rounded-none hover:bg-red-700 transition text-sm"
           >
-            <LogOut className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-            Logout
+            <LogOut className="w-4 h-4" />
+            <span>Logout</span>
           </button>
-        </div>
-      </div>
+        </nav>
 
-      {/* Mobile Header with Hamburger */}
-      <div className="md:hidden fixed top-0 left-0 right-0 bg-gradient-to-b from-blue-600 to-blue-800 text-white p-3 sm:p-4 flex items-center justify-between z-40 shadow-lg">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="bg-white bg-opacity-20 p-1.5 sm:p-2 rounded-full flex items-center justify-center shadow-md">
-            <img
-              src="/clinicsclogo.png"
-              alt="Clinic Logo"
-              className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover"
-            />
+        {/* Mobile slide-down menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden bg-white border-t border-sky-100">
+            <div className="px-4 py-3 space-y-2">
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActivePage(item.id);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition ${
+                      activePage === item.id
+                        ? "bg-blue-100 text-blue-600 font-semibold"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => {
+                  localStorage.removeItem("token");
+                  window.location.href = "/";
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-red-600 hover:bg-red-50 transition"
+              >
+                <LogOut className="w-5 h-5" />
+                <span className="font-medium">Logout</span>
+              </button>
+            </div>
           </div>
-          <div>
-            <h2 className="text-base sm:text-lg font-bold">Castillo</h2>
-            <p className="text-blue-200 text-xs">Children Clinic</p>
-          </div>
-        </div>
-        <button
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 rounded-lg hover:bg-blue-700 transition"
-          aria-label="Toggle menu"
-        >
-          {isMobileMenuOpen ? (
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          ) : (
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path d="M4 6h16M4 12h16M4 18h16"></path>
-            </svg>
-          )}
-        </button>
-      </div>
+        )}
+      </header>
 
       {/* Content Area */}
       <div
-        className="flex-1 md:ml-64 lg:ml-72 p-4 sm:p-6 md:p-8 bg-cover bg-center bg-fixed overflow-y-auto relative pt-28 sm:pt-24 md:pt-0"
-        style={{
-          backgroundImage: "url('/Sunny1.png')",
-          scrollbarGutter: "stable overlay",
-        }}
+        className="flex-1 p-4 sm:p-6 md:p-8 bg-cover bg-center bg-fixed overflow-y-auto relative pt-24 md:pt-40"
+        style={{ backgroundImage: "url('/Sunny1.png')" }}
       >
         {renderContent()}
       </div>

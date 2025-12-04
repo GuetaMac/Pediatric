@@ -1092,6 +1092,8 @@ app.get("/appointments/nurse", async (req, res) => {
   SELECT 
     a.appointment_id,
     a.user_id,
+    a.appointment_reference, -- ✅ SIGURADUHIN NA NANDITO
+    a.schedule_id,
     a.full_name as walk_in_name,
     u.full_name as user_full_name,
     COALESCE(a.full_name, u.full_name) as full_name,
@@ -3356,9 +3358,12 @@ app.post("/patients/:patient_id/vitals", async (req, res) => {
     if (!appointmentIdToUse) {
       // Create a walk-in appointment. Use a consistent appointment_type so
       // medical records group under "WalkIn" instead of creating a "Vitals" folder.
-      // Get current time in HH:MM:SS format to ensure correct time recording
-      const now = new Date();
-      const currentTime = now.toLocaleTimeString("en-US", {
+      // Get current date/time in Philippine timezone (Asia/Manila)
+      const manilaDate = new Date().toLocaleDateString("en-CA", {
+        timeZone: "Asia/Manila",
+      }); // YYYY-MM-DD
+      const currentTime = new Date().toLocaleTimeString("en-GB", {
+        timeZone: "Asia/Manila",
         hour12: false,
         hour: "2-digit",
         minute: "2-digit",
@@ -3368,9 +3373,9 @@ app.post("/patients/:patient_id/vitals", async (req, res) => {
       const appt = await client.query(
         `INSERT INTO appointments
            (user_id, appointment_date, appointment_time, appointment_type, status, concerns, additional_services, created_at)
-        VALUES ($1, NOW()::date, $2::time, 'WalkIn', 'Approved', '', 'None', NOW())
+        VALUES ($1, $3::date, $2::time, 'WalkIn', 'Approved', '', 'None', NOW())
          RETURNING appointment_id`,
-        [pid, currentTime]
+        [pid, currentTime, manilaDate]
       );
       appointmentIdToUse = appt.rows[0].appointment_id;
       createdAppointment = true;
@@ -3497,13 +3502,55 @@ app.post("/appointments/walkin", auth, async (req, res) => {
         .json({ error: "Patient name and appointment type are required" });
     }
 
-    // Get current date and time in Philippine timezone
-    const now = new Date();
-    const phTime = new Date(
-      now.toLocaleString("en-US", { timeZone: "Asia/Manila" })
+    // Get current date and time in Philippine timezone (Asia/Manila)
+    const date = new Date().toLocaleDateString("en-CA", {
+      timeZone: "Asia/Manila",
+    }); // YYYY-MM-DD
+    const time = new Date().toLocaleTimeString("en-GB", {
+      timeZone: "Asia/Manila",
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+    }); // HH:MM
+
+    // First: check if the entered full name corresponds to an existing user account
+    // Try to find a matching user account. Prefer exact case-insensitive match,
+    // otherwise fall back to partial matches.
+    let matchedUserId = null;
+
+    const exactMatch = await pool.query(
+      `SELECT user_id FROM users WHERE LOWER(full_name) = LOWER($1) LIMIT 1`,
+      [full_name.trim()]
     );
-    const date = phTime.toISOString().split("T")[0]; // YYYY-MM-DD
-    const time = phTime.toTimeString().split(" ")[0].substring(0, 5); // HH:MM
+
+    if (exactMatch.rows.length > 0) {
+      matchedUserId = exactMatch.rows[0].user_id;
+    } else {
+      const userLookup = await pool.query(
+        `SELECT user_id, full_name FROM users WHERE full_name ILIKE $1`,
+        [`%${full_name.trim()}%`]
+      );
+      if (userLookup.rows.length === 1) {
+        matchedUserId = userLookup.rows[0].user_id;
+      }
+    }
+
+    if (matchedUserId) {
+      // Check if this user has an Approved or pending appointment today
+      const conflict = await pool.query(
+        `SELECT COUNT(*) as count FROM appointments
+         WHERE user_id = $1
+         AND appointment_date = $2
+         AND (status = 'Approved' OR status = 'pending')`,
+        [matchedUserId, date]
+      );
+
+      if (parseInt(conflict.rows[0].count, 10) > 0) {
+        return res.status(409).json({
+          error: `${full_name} already has an appointment scheduled for today. This patient cannot be added as a walk-in.`,
+        });
+      }
+    }
 
     console.log("🚶 Adding walk-in:", {
       full_name,
@@ -3518,7 +3565,7 @@ app.post("/appointments/walkin", auth, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, 'Approved', $6, $7, $8, true, NOW())
        RETURNING *`,
       [
-        null,
+        matchedUserId || null,
         full_name,
         date,
         time,
