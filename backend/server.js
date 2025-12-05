@@ -4184,6 +4184,43 @@ app.patch("/nurse/schedules/:schedule_id/toggle", auth, async (req, res) => {
   }
 });
 
+// ==================== BULK TOGGLE SCHEDULES ====================
+app.patch("/nurse/schedules/bulk-toggle", auth, async (req, res) => {
+  try {
+    const { schedule_ids, action } = req.body;
+
+    if (
+      !schedule_ids ||
+      !Array.isArray(schedule_ids) ||
+      schedule_ids.length === 0
+    ) {
+      return res.status(400).json({ error: "Invalid schedule IDs" });
+    }
+
+    if (action !== "enable" && action !== "disable") {
+      return res.status(400).json({ error: "Invalid action" });
+    }
+
+    const newStatus = action === "enable" ? "active" : "inactive";
+
+    const result = await pool.query(
+      `UPDATE clinic_schedules 
+       SET status = $1
+       WHERE schedule_id = ANY($2)
+       RETURNING schedule_id, status`,
+      [newStatus, schedule_ids]
+    );
+
+    res.json({
+      message: `Successfully ${action}d ${result.rows.length} schedule(s)`,
+      updated: result.rows,
+    });
+  } catch (error) {
+    console.error("Error bulk toggling schedules:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ==================== PATIENT: Get Available Slots ====================
 
 // Get available slots for a specific date

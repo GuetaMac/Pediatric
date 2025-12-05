@@ -5646,6 +5646,8 @@ function Nurse() {
     const [breakStart, setBreakStart] = useState("12:00");
     const [breakEnd, setBreakEnd] = useState("13:00");
     const [slotsPerHour, setSlotsPerHour] = useState(2);
+    const [selectedSchedules, setSelectedSchedules] = useState([]);
+    const [bulkAction, setBulkAction] = useState(null); // 'enable' or 'disable'
 
     // Helper: Format date to YYYY-MM-DD in local timezone
     const formatDateLocal = (date) => {
@@ -5847,6 +5849,113 @@ function Nurse() {
           text: "Failed to update schedule",
           confirmButtonColor: "#0ea5e9",
         });
+      }
+    };
+
+    // Select all schedules for filtered date
+    const handleSelectAll = () => {
+      if (!filterDate) return;
+
+      const dateStr = formatDateLocal(filterDate);
+      const dateSchedules = groupedSchedules[dateStr] || [];
+      const scheduleIds = dateSchedules.map((s) => s.schedule_id);
+
+      // If all are already selected, deselect all
+      const allSelected = scheduleIds.every((id) =>
+        selectedSchedules.includes(id)
+      );
+
+      if (allSelected) {
+        setSelectedSchedules([]);
+      } else {
+        setSelectedSchedules(scheduleIds);
+      }
+    };
+
+    // Toggle individual schedule selection
+    const handleToggleSelect = (scheduleId) => {
+      setSelectedSchedules((prev) =>
+        prev.includes(scheduleId)
+          ? prev.filter((id) => id !== scheduleId)
+          : [...prev, scheduleId]
+      );
+    };
+
+    // Bulk enable/disable selected schedules
+    const handleBulkToggle = async (action) => {
+      if (selectedSchedules.length === 0) {
+        Swal.fire({
+          icon: "warning",
+          title: "No Schedules Selected",
+          text: "Please select at least one schedule",
+          confirmButtonColor: "#0ea5e9",
+        });
+        return;
+      }
+
+      const result = await Swal.fire({
+        title: `${
+          action === "disable" ? "Disable" : "Enable"
+        } Selected Schedules?`,
+        text: `This will ${action} ${selectedSchedules.length} schedule(s)`,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: action === "disable" ? "#EF4444" : "#10B981",
+        cancelButtonColor: "#6B7280",
+        confirmButtonText: `Yes, ${action} them`,
+        cancelButtonText: "Cancel",
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+        setBulkAction(action);
+        const token = localStorage.getItem("token");
+
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/nurse/schedules/bulk-toggle`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              schedule_ids: selectedSchedules,
+              action: action,
+            }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          await Swal.fire({
+            icon: "success",
+            title: "Updated!",
+            text: data.message,
+            confirmButtonColor: "#0ea5e9",
+          });
+          setSelectedSchedules([]);
+          fetchSchedules();
+        } else {
+          Swal.fire({
+            icon: "error",
+            title: "Failed",
+            text: data.error || "Failed to update schedules",
+            confirmButtonColor: "#0ea5e9",
+          });
+        }
+      } catch (error) {
+        console.error("Error bulk toggling schedules:", error);
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to update schedules",
+          confirmButtonColor: "#0ea5e9",
+        });
+      } finally {
+        setBulkAction(null);
       }
     };
 
@@ -6219,136 +6328,200 @@ function Nurse() {
               {/* SCHEDULES CONTENT - Only show if a date is selected */}
               {filterDate ? (
                 Object.entries(groupedSchedules)
-                  .filter(([date]) => {
-                    // ✅ FIXED: Use formatDateLocal for comparison
-                    return formatDateLocal(filterDate) === date;
-                  })
-                  .map(([date, dateSchedules]) => (
-                    <div
-                      key={date}
-                      className="bg-white rounded-xl border-2 border-sky-200 overflow-hidden shadow-sm"
-                    >
-                      {/* Date Header */}
-                      <div className="bg-gradient-to-r from-sky-500 to-blue-500 px-6 py-4">
-                        <h4 className="text-2xl font-bold text-white">
-                          📅{" "}
-                          {(() => {
-                            // FIXED: Use UTC date
-                            const dateObj = new Date(date + "T00:00:00");
-                            return dateObj.toLocaleDateString("en-US", {
-                              weekday: "long",
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            });
-                          })()}
-                        </h4>
-                      </div>
+                  .filter(([date]) => formatDateLocal(filterDate) === date)
+                  .map(([date, dateSchedules]) => {
+                    const dateStr = formatDateLocal(filterDate);
+                    const allScheduleIds = dateSchedules.map(
+                      (s) => s.schedule_id
+                    );
+                    const allSelected =
+                      allScheduleIds.length > 0 &&
+                      allScheduleIds.every((id) =>
+                        selectedSchedules.includes(id)
+                      );
+                    const someSelected = selectedSchedules.length > 0;
 
-                      {/* Time Slots Grid */}
-                      <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {dateSchedules
-                          .sort((a, b) =>
-                            a.start_time.localeCompare(b.start_time)
-                          )
-                          .map((schedule) => {
-                            const isActive = schedule.status === "active";
-                            return (
-                              <div
-                                key={schedule.schedule_id}
-                                className={`rounded-xl p-5 border-2 hover:shadow-lg transition-all ${
-                                  isActive
-                                    ? "bg-gradient-to-br from-sky-50 to-blue-50 border-sky-200"
-                                    : "bg-gray-50 border-gray-300 opacity-60"
-                                }`}
-                              >
-                                <div className="flex items-start justify-between mb-4">
-                                  <div className="flex items-center gap-2">
-                                    <Clock
-                                      className={`w-5 h-5 ${
-                                        isActive
-                                          ? "text-sky-600"
-                                          : "text-gray-400"
-                                      }`}
-                                    />
-                                    <span
-                                      className={`text-lg font-bold ${
-                                        isActive
-                                          ? "text-sky-900"
-                                          : "text-gray-500"
-                                      }`}
-                                    >
-                                      {formatTime12Hour(schedule.start_time)} -{" "}
-                                      {formatTime12Hour(schedule.end_time)}
-                                    </span>
-                                  </div>
+                    return (
+                      <div
+                        key={date}
+                        className="bg-white rounded-xl border-2 border-sky-200 overflow-hidden shadow-sm"
+                      >
+                        {/* Date Header with Bulk Actions */}
+                        <div className="bg-gradient-to-r from-sky-500 to-blue-500 px-6 py-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-2xl font-bold text-white">
+                              📅{" "}
+                              {(() => {
+                                const dateObj = new Date(date + "T00:00:00");
+                                return dateObj.toLocaleDateString("en-US", {
+                                  weekday: "long",
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                });
+                              })()}
+                            </h4>
+
+                            {/* Bulk Action Buttons */}
+                            <div className="flex items-center gap-3">
+                              <label className="flex items-center gap-2 text-white font-semibold cursor-pointer hover:text-yellow-200 transition-colors">
+                                <input
+                                  type="checkbox"
+                                  checked={allSelected}
+                                  onChange={handleSelectAll}
+                                  className="w-5 h-5 text-yellow-400 rounded focus:ring-2 focus:ring-yellow-400"
+                                />
+                                <span>Select All</span>
+                              </label>
+
+                              {someSelected && (
+                                <div className="flex gap-2">
                                   <button
-                                    onClick={() =>
-                                      handleToggleSchedule(
-                                        schedule.schedule_id,
-                                        schedule.status
-                                      )
-                                    }
-                                    className={`p-2 rounded-lg transition-colors ${
-                                      isActive
-                                        ? "bg-red-100 text-red-600 hover:bg-red-200"
-                                        : "bg-green-100 text-green-600 hover:bg-green-200"
-                                    }`}
-                                    title={
-                                      isActive ? "Disable slot" : "Enable slot"
-                                    }
+                                    onClick={() => handleBulkToggle("disable")}
+                                    disabled={bulkAction !== null}
+                                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2 font-semibold disabled:opacity-50"
                                   >
-                                    {isActive ? (
-                                      <PowerOff className="w-4 h-4" />
-                                    ) : (
-                                      <Power className="w-4 h-4" />
-                                    )}
+                                    <PowerOff className="w-4 h-4" />
+                                    Disable ({selectedSchedules.length})
+                                  </button>
+                                  <button
+                                    onClick={() => handleBulkToggle("enable")}
+                                    disabled={bulkAction !== null}
+                                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 font-semibold disabled:opacity-50"
+                                  >
+                                    <Power className="w-4 h-4" />
+                                    Enable ({selectedSchedules.length})
                                   </button>
                                 </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
 
-                                <div className="space-y-3">
-                                  <div className="flex items-center justify-between">
-                                    <span
-                                      className={`text-sm font-medium ${
+                        {/* Time Slots Grid */}
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {dateSchedules
+                            .sort((a, b) =>
+                              a.start_time.localeCompare(b.start_time)
+                            )
+                            .map((schedule) => {
+                              const isActive = schedule.status === "active";
+                              const isSelected = selectedSchedules.includes(
+                                schedule.schedule_id
+                              );
+
+                              return (
+                                <div
+                                  key={schedule.schedule_id}
+                                  className={`rounded-xl p-5 border-2 transition-all ${
+                                    isSelected
+                                      ? "border-yellow-400 bg-yellow-50 shadow-lg ring-2 ring-yellow-300"
+                                      : isActive
+                                      ? "bg-gradient-to-br from-sky-50 to-blue-50 border-sky-200 hover:shadow-lg"
+                                      : "bg-gray-50 border-gray-300 opacity-60"
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                      {/* Checkbox for selection */}
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() =>
+                                          handleToggleSelect(
+                                            schedule.schedule_id
+                                          )
+                                        }
+                                        className="w-5 h-5 text-yellow-400 rounded focus:ring-2 focus:ring-yellow-400"
+                                      />
+                                      <Clock
+                                        className={`w-5 h-5 ${
+                                          isActive
+                                            ? "text-sky-600"
+                                            : "text-gray-400"
+                                        }`}
+                                      />
+                                      <span
+                                        className={`text-lg font-bold ${
+                                          isActive
+                                            ? "text-sky-900"
+                                            : "text-gray-500"
+                                        }`}
+                                      >
+                                        {formatTime12Hour(schedule.start_time)}{" "}
+                                        - {formatTime12Hour(schedule.end_time)}
+                                      </span>
+                                    </div>
+                                    <button
+                                      onClick={() =>
+                                        handleToggleSchedule(
+                                          schedule.schedule_id,
+                                          schedule.status
+                                        )
+                                      }
+                                      className={`p-2 rounded-lg transition-colors ${
                                         isActive
-                                          ? "text-sky-700"
-                                          : "text-gray-500"
+                                          ? "bg-red-100 text-red-600 hover:bg-red-200"
+                                          : "bg-green-100 text-green-600 hover:bg-green-200"
                                       }`}
-                                    >
-                                      Available Slots:
-                                    </span>
-                                    <span
-                                      className={`text-xl font-bold ${
+                                      title={
                                         isActive
-                                          ? schedule.available_slots > 0
-                                            ? "text-green-600"
-                                            : "text-red-600"
-                                          : "text-gray-400"
-                                      }`}
+                                          ? "Disable slot"
+                                          : "Enable slot"
+                                      }
                                     >
-                                      {schedule.available_slots} /{" "}
-                                      {schedule.total_slots}
-                                    </span>
+                                      {isActive ? (
+                                        <PowerOff className="w-4 h-4" />
+                                      ) : (
+                                        <Power className="w-4 h-4" />
+                                      )}
+                                    </button>
                                   </div>
 
-                                  <div className="flex items-center gap-2">
-                                    <span
-                                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                        isActive
-                                          ? "bg-green-100 text-green-700"
-                                          : "bg-gray-200 text-gray-600"
-                                      }`}
-                                    >
-                                      {isActive ? "ACTIVE" : "INACTIVE"}
-                                    </span>
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <span
+                                        className={`text-sm font-medium ${
+                                          isActive
+                                            ? "text-sky-700"
+                                            : "text-gray-500"
+                                        }`}
+                                      >
+                                        Available Slots:
+                                      </span>
+                                      <span
+                                        className={`text-xl font-bold ${
+                                          isActive
+                                            ? schedule.available_slots > 0
+                                              ? "text-green-600"
+                                              : "text-red-600"
+                                            : "text-gray-400"
+                                        }`}
+                                      >
+                                        {schedule.available_slots} /{" "}
+                                        {schedule.total_slots}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <span
+                                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                          isActive
+                                            ? "bg-green-100 text-green-700"
+                                            : "bg-gray-200 text-gray-600"
+                                        }`}
+                                      >
+                                        {isActive ? "ACTIVE" : "INACTIVE"}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
               ) : (
                 <div className="text-center py-16 bg-sky-50 rounded-xl border-2 border-dashed border-sky-300">
                   <Calendar className="w-16 h-16 text-sky-300 mx-auto mb-4" />
