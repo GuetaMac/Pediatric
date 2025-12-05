@@ -1372,7 +1372,10 @@ function PatientDashboard({ onNavigateToAppointments }) {
                             </span>
                           </label>
                           {Object.keys(appointmentTypesMap)
-                            .filter((t) => t !== appointmentType)
+                            .filter(
+                              (t) =>
+                                t !== appointmentType && t !== "Vaccination"
+                            )
                             .map((type) => {
                               const isSelected =
                                 additionalServices.includes(type);
