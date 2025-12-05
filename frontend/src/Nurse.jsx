@@ -2438,56 +2438,6 @@ function Nurse() {
       setEditedPatient({ ...selectedPatient, password: "" });
     };
 
-    const handleDeletePatient = async (user_id) => {
-      const result = await Swal.fire({
-        icon: "warning",
-        title: "Delete Patient Account?",
-        text: "This action cannot be undone!",
-        showCancelButton: true,
-        confirmButtonColor: "#ef4444",
-        cancelButtonColor: "#6b7280",
-        confirmButtonText: "Yes, delete it!",
-        cancelButtonText: "Cancel",
-      });
-
-      if (!result.isConfirmed) return;
-      try {
-        setLoading(true);
-        const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/users/${user_id}`,
-          {
-            method: "DELETE",
-          }
-        );
-
-        const data = await res.json();
-        if (res.ok) {
-          setPatients(
-            patients.filter((patient) => patient.user_id !== data.user_id)
-          );
-          Swal.fire({
-            icon: "success",
-            title: "Deleted!",
-            text: "Patient account has been deleted",
-            timer: 2000,
-            showConfirmButton: false,
-          });
-        } else {
-          alert(data.error || "Error deleting patient account");
-        }
-      } catch (err) {
-        console.error("Error deleting patient", err);
-        Swal.fire({
-          icon: "error",
-          title: "Delete Failed",
-          text: data.error || "Error deleting patient account",
-          confirmButtonColor: "#3b82f6",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
     const handleAddPatient = async (e) => {
       e.preventDefault();
       try {
@@ -2655,16 +2605,6 @@ function Nurse() {
                       title="View details"
                     >
                       View
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeletePatient(patient.user_id);
-                      }}
-                      className="px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 rounded transition"
-                      title="Delete patient"
-                    >
-                      Delete
                     </button>
                   </div>
                 </button>
